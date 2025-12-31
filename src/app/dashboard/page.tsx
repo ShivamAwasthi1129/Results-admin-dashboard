@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout';
-import { Card, StatCard, Badge, Button } from '@/components/ui';
+import { Card, StatCard, Badge, Button, Input } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -30,6 +30,7 @@ import {
   ArrowPathIcon,
   SpeakerWaveIcon,
   SpeakerXMarkIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 
 interface DashboardStats {
@@ -61,6 +62,19 @@ interface WeatherData {
   icon: string;
   humidity: number;
   windSpeed: number;
+  pressure?: number;
+  visibility?: number;
+  uvIndex?: number;
+  feelsLike?: number;
+  windDirection?: number;
+  clouds?: number;
+}
+
+interface CitySearchResult {
+  city: string;
+  state: string;
+  lat: number;
+  lon: number;
 }
 
 const weatherIcons: Record<string, string> = {
@@ -98,6 +112,10 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [liveDisasterCount, setLiveDisasterCount] = useState(0);
   const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
+  const [selectedWeather, setSelectedWeather] = useState<WeatherData | null>(null);
+  const [weatherSearchQuery, setWeatherSearchQuery] = useState('');
+  const [weatherSearchResults, setWeatherSearchResults] = useState<CitySearchResult[]>([]);
+  const [showWeatherSearchResults, setShowWeatherSearchResults] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mapLoaded, setMapLoaded] = useState(false);
   
@@ -310,6 +328,51 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchWeatherForCity = async (lat: number, lon: number, city: string, state: string) => {
+    try {
+      const response = await fetch(`/api/weather?type=onecall&lat=${lat}&lon=${lon}&city=${city}&state=${state}`);
+      const data = await response.json();
+      if (data.success && data.data.current) {
+        const current = data.data.current;
+        setSelectedWeather({
+          city: current.city,
+          state: current.state,
+          temperature: current.temperature,
+          description: current.description,
+          icon: current.icon,
+          humidity: current.humidity,
+          windSpeed: current.windSpeed,
+          pressure: current.pressure,
+          visibility: current.visibility,
+          uvIndex: current.uvIndex,
+          feelsLike: current.feelsLike,
+          windDirection: current.windDirection,
+          clouds: current.clouds,
+        });
+      } else if (data.success && data.data) {
+        // Handle case where data.data is the current weather object directly (from multi endpoint)
+        const current = data.data;
+        setSelectedWeather({
+          city: current.city,
+          state: current.state,
+          temperature: current.temperature,
+          description: current.description,
+          icon: current.icon,
+          humidity: current.humidity,
+          windSpeed: current.windSpeed,
+          pressure: current.pressure,
+          visibility: current.visibility,
+          uvIndex: current.uvIndex,
+          feelsLike: current.feelsLike,
+          windDirection: current.windDirection,
+          clouds: current.clouds,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching city weather:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -339,7 +402,33 @@ export default function DashboardPage() {
       try {
         const response = await fetch('/api/weather?type=multi');
         const data = await response.json();
-        if (data.success) setWeatherData(data.data);
+        if (data.success) {
+          setWeatherData(data.data);
+          if (data.data.length > 0 && !selectedWeather) {
+            // Fetch detailed weather for the first city to get all fields
+            const firstCity = data.data[0];
+            if (firstCity.lat && firstCity.lon) {
+              await fetchWeatherForCity(firstCity.lat, firstCity.lon, firstCity.city, firstCity.state || '');
+            } else {
+              // If no lat/lon, use the data as-is but ensure all fields are present
+              setSelectedWeather({
+                city: firstCity.city,
+                state: firstCity.state,
+                temperature: firstCity.temperature,
+                description: firstCity.description,
+                icon: firstCity.icon,
+                humidity: firstCity.humidity,
+                windSpeed: firstCity.windSpeed,
+                pressure: firstCity.pressure,
+                visibility: firstCity.visibility,
+                uvIndex: firstCity.uvIndex,
+                feelsLike: firstCity.feelsLike,
+                windDirection: firstCity.windDirection,
+                clouds: firstCity.clouds,
+              });
+            }
+          }
+        }
       } catch (error) {
         console.error('Error fetching weather:', error);
       }
@@ -350,6 +439,7 @@ export default function DashboardPage() {
       fetchLiveDisasters();
       fetchWeather();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   // Chart data
@@ -385,6 +475,56 @@ export default function DashboardPage() {
     if (hour < 12) return 'Good Morning';
     if (hour < 17) return 'Good Afternoon';
     return 'Good Evening';
+  };
+
+  // Major US cities for search
+  const usCities: CitySearchResult[] = [
+    { city: 'New York', state: 'NY', lat: 40.7128, lon: -74.0060 },
+    { city: 'Los Angeles', state: 'CA', lat: 34.0522, lon: -118.2437 },
+    { city: 'Chicago', state: 'IL', lat: 41.8781, lon: -87.6298 },
+    { city: 'Houston', state: 'TX', lat: 29.7604, lon: -95.3698 },
+    { city: 'Phoenix', state: 'AZ', lat: 33.4484, lon: -112.0740 },
+    { city: 'Philadelphia', state: 'PA', lat: 39.9526, lon: -75.1652 },
+    { city: 'San Antonio', state: 'TX', lat: 29.4241, lon: -98.4936 },
+    { city: 'San Diego', state: 'CA', lat: 32.7157, lon: -117.1611 },
+    { city: 'Dallas', state: 'TX', lat: 32.7767, lon: -96.7970 },
+    { city: 'San Jose', state: 'CA', lat: 37.3382, lon: -121.8863 },
+    { city: 'Austin', state: 'TX', lat: 30.2672, lon: -97.7431 },
+    { city: 'Jacksonville', state: 'FL', lat: 30.3322, lon: -81.6557 },
+    { city: 'Fort Worth', state: 'TX', lat: 32.7555, lon: -97.3308 },
+    { city: 'Columbus', state: 'OH', lat: 39.9612, lon: -82.9988 },
+    { city: 'Charlotte', state: 'NC', lat: 35.2271, lon: -80.8431 },
+    { city: 'San Francisco', state: 'CA', lat: 37.7749, lon: -122.4194 },
+    { city: 'Indianapolis', state: 'IN', lat: 39.7684, lon: -86.1581 },
+    { city: 'Seattle', state: 'WA', lat: 47.6062, lon: -122.3321 },
+    { city: 'Denver', state: 'CO', lat: 39.7392, lon: -104.9903 },
+    { city: 'Boston', state: 'MA', lat: 42.3601, lon: -71.0589 },
+    { city: 'Miami', state: 'FL', lat: 25.7617, lon: -80.1918 },
+    { city: 'Atlanta', state: 'GA', lat: 33.7490, lon: -84.3880 },
+    { city: 'Las Vegas', state: 'NV', lat: 36.1699, lon: -115.1398 },
+    { city: 'Portland', state: 'OR', lat: 45.5152, lon: -122.6784 },
+    { city: 'New Orleans', state: 'LA', lat: 29.9511, lon: -90.0715 },
+  ];
+
+  const handleWeatherSearch = (query: string) => {
+    setWeatherSearchQuery(query);
+    if (query.length >= 2) {
+      const matchingCities = usCities.filter(c => 
+        c.city.toLowerCase().includes(query.toLowerCase()) ||
+        c.state.toLowerCase().includes(query.toLowerCase())
+      );
+      setWeatherSearchResults(matchingCities.slice(0, 5));
+      setShowWeatherSearchResults(true);
+    } else {
+      setWeatherSearchResults([]);
+      setShowWeatherSearchResults(false);
+    }
+  };
+
+  const handleCitySelect = (city: CitySearchResult) => {
+    setWeatherSearchQuery('');
+    setShowWeatherSearchResults(false);
+    fetchWeatherForCity(city.lat, city.lon, city.city, city.state);
   };
 
   return (
@@ -429,40 +569,123 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Weather Search Bar */}
+      <div className="mb-6 relative">
+        <div className="flex gap-4">
+          <div className="flex-1 relative">
+            <Input
+              icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+              placeholder="Search any US city or state (e.g., New York, Miami, Seattle)..."
+              value={weatherSearchQuery}
+              onChange={(e) => handleWeatherSearch(e.target.value)}
+              onFocus={() => weatherSearchQuery.length >= 2 && setShowWeatherSearchResults(true)}
+              onBlur={() => setTimeout(() => setShowWeatherSearchResults(false), 200)}
+            />
+            {showWeatherSearchResults && weatherSearchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto">
+                {weatherSearchResults.map((result, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleCitySelect(result)}
+                    className="w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors flex items-center gap-3 border-b border-[var(--border-color)] last:border-b-0"
+                  >
+                    <MapPinIcon className="w-5 h-5 text-[var(--text-muted)]" />
+                    <div>
+                      <p className="font-medium text-[var(--text-primary)]">{result.city}</p>
+                      <p className="text-sm text-[var(--text-muted)]">{result.state}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Main Grid - Weather + Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
         {/* Weather Widget */}
-        <Card className="lg:col-span-1 p-0 overflow-hidden">
-          <div className="bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-500 p-5 text-white relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <CloudIcon className="w-5 h-5" />
-                  <span className="text-sm font-medium">Live Weather</span>
-                </div>
-                <Link href="/dashboard/weather">
+        <Link href="/dashboard/weather" className="lg:col-span-1 block">
+          <Card className="p-0 overflow-hidden hover:shadow-xl transition-all cursor-pointer">
+            <div className="bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-500 p-5 text-white relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <CloudIcon className="w-5 h-5" />
+                    <span className="text-sm font-medium">Live Weather</span>
+                  </div>
                   <ChevronRightIcon className="w-5 h-5 hover:translate-x-1 transition-transform" />
-                </Link>
-              </div>
-              {weatherData.length > 0 && (
-                <>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-5xl font-light">{weatherData[0].temperature}°F</p>
-                      <p className="text-sm opacity-80 capitalize">{weatherData[0].description}</p>
-                      <p className="text-xs opacity-60 mt-1">{weatherData[0].city}, {weatherData[0].state}</p>
+                </div>
+                {(selectedWeather || (weatherData.length > 0 && weatherData[0])) && (
+                  <>
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <p className="text-5xl font-light">{(selectedWeather || weatherData[0]).temperature}°F</p>
+                        <p className="text-sm opacity-80 capitalize">{(selectedWeather || weatherData[0]).description}</p>
+                        <p className="text-xs opacity-60 mt-1">{(selectedWeather || weatherData[0]).city}, {(selectedWeather || weatherData[0]).state}</p>
+                        {(selectedWeather || weatherData[0]).feelsLike && (
+                          <p className="text-xs opacity-70 mt-1">Feels like {(selectedWeather || weatherData[0]).feelsLike}°F</p>
+                        )}
+                      </div>
+                      <span className="text-5xl">{weatherIcons[(selectedWeather || weatherData[0]).icon]}</span>
                     </div>
-                    <span className="text-5xl">{weatherIcons[weatherData[0].icon]}</span>
-                  </div>
-                  <div className="flex items-center gap-4 mt-4 pt-4 border-t border-white/20 text-sm">
-                    <span>💧 {weatherData[0].humidity}%</span>
-                    <span>💨 {weatherData[0].windSpeed} mph</span>
-                  </div>
-                </>
-              )}
+                    <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/20 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span>💧</span>
+                        <div>
+                          <p className="opacity-60">Humidity</p>
+                          <p className="font-semibold">{(selectedWeather || weatherData[0]).humidity}%</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span>💨</span>
+                        <div>
+                          <p className="opacity-60">Wind Speed</p>
+                          <p className="font-semibold">{(selectedWeather || weatherData[0]).windSpeed} mph</p>
+                        </div>
+                      </div>
+                      {(selectedWeather || weatherData[0]).pressure && (
+                        <div className="flex items-center gap-2">
+                          <span>📊</span>
+                          <div>
+                            <p className="opacity-60">Pressure</p>
+                            <p className="font-semibold">{(selectedWeather || weatherData[0]).pressure} hPa</p>
+                          </div>
+                        </div>
+                      )}
+                      {(selectedWeather || weatherData[0]).visibility !== undefined && (
+                        <div className="flex items-center gap-2">
+                          <span>👁️</span>
+                          <div>
+                            <p className="opacity-60">Visibility</p>
+                            <p className="font-semibold">{(selectedWeather || weatherData[0]).visibility} mi</p>
+                          </div>
+                        </div>
+                      )}
+                      {(selectedWeather || weatherData[0]).uvIndex !== undefined && (
+                        <div className="flex items-center gap-2">
+                          <span>☀️</span>
+                          <div>
+                            <p className="opacity-60">UV Index</p>
+                            <p className="font-semibold">{(selectedWeather || weatherData[0]).uvIndex}</p>
+                          </div>
+                        </div>
+                      )}
+                      {(selectedWeather || weatherData[0]).clouds !== undefined && (
+                        <div className="flex items-center gap-2">
+                          <span>☁️</span>
+                          <div>
+                            <p className="opacity-60">Clouds</p>
+                            <p className="font-semibold">{(selectedWeather || weatherData[0]).clouds}%</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
           <div className="p-4 bg-[var(--bg-card)]">
             <div className="space-y-2">
               {weatherData.slice(1, 4).map((city, i) => (
@@ -476,7 +699,8 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-        </Card>
+          </Card>
+        </Link>
 
         {/* Stats Cards */}
         <div className="lg:col-span-3 grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -540,12 +764,14 @@ export default function DashboardPage() {
           <Card className="p-5 bg-gradient-to-br from-[var(--bg-card)] to-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/40 transition-all hover:-translate-y-1">
             <div className="flex items-center justify-between mb-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/30">
-                <ClockIcon className="w-6 h-6 text-white" />
+                <ExclamationTriangleIcon className="w-6 h-6 text-white" />
               </div>
-              <Badge variant="success" size="sm">↓15%</Badge>
+              <Badge variant="info" size="sm">Today</Badge>
             </div>
-            <p className="text-3xl font-bold text-[var(--text-primary)]">12 min</p>
-            <p className="text-sm text-[var(--text-muted)]">Avg Response Time</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">
+              {(stats?.overview.pendingEmergencies || 0) + (stats?.overview.inProgressEmergencies || 0) + (stats?.overview.activeDisasters || 0)}
+            </p>
+            <p className="text-sm text-[var(--text-muted)]">Incidents Reported</p>
           </Card>
         </div>
       </div>

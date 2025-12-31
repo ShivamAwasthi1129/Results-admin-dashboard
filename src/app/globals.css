@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Cabin:wght@400;500;600;700&display=swap');
+/* Cabin font is now loaded via Next.js font optimization in layout.tsx */
 
 /* =============================================
    THEME VARIABLES - Light & Dark Mode
@@ -80,8 +80,63 @@ html {
   scroll-behavior: smooth;
 }
 
+* {
+  font-family: var(--font-cabin), 'Cabin', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+*,
+*::before,
+*::after {
+  font-family: var(--font-cabin), 'Cabin', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+input,
+textarea,
+select,
+button,
+a,
+span,
+p,
+h1, h2, h3, h4, h5, h6,
+div,
+table,
+th,
+td,
+label,
+li,
+ul,
+ol,
+code,
+pre,
+small,
+strong,
+em,
+b,
+i,
+u,
+sub,
+sup,
+blockquote,
+cite,
+abbr,
+kbd,
+samp,
+var,
+mark,
+del,
+ins,
+q {
+  font-family: var(--font-cabin), 'Cabin', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* SVG text elements */
+svg text,
+svg tspan {
+  font-family: var(--font-cabin), 'Cabin', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
 body {
-  font-family: 'Cabin', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-cabin), 'Cabin', -apple-system, BlinkMacSystemFont, sans-serif !important;
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
@@ -277,7 +332,7 @@ body {
 }
 
 .Toastify__toast-body {
-  font-family: 'Cabin', sans-serif !important;
+  font-family: var(--font-cabin), 'Cabin', sans-serif !important;
 }
 
 .Toastify__close-button {
@@ -466,6 +521,234 @@ body {
   background: var(--bg-card-hover);
 }
 
+/* Responsive Table Styles - Applied to ALL tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Ensure tables are scrollable on mobile */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-500);
+  background-clip: padding-box;
+}
+
+/* Responsive table cell padding - Only apply when not using Table component classes */
+@media (max-width: 640px) {
+  .overflow-x-auto table th:not([class*="px-"]),
+  .overflow-x-auto table td:not([class*="px-"]) {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    font-size: 0.75rem;
+    min-width: 80px;
+  }
+  
+  .overflow-x-auto table th:not([class*="text-"]) {
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+  .overflow-x-auto table th:not([class*="px-"]),
+  .overflow-x-auto table td:not([class*="px-"]) {
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Ensure table containers have proper overflow */
+.card > .overflow-x-auto,
+.overflow-x-auto {
+  position: relative;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Responsive Table Styles - Fill width on large screens, scroll on small screens */
+.responsive-table-wrapper {
+  width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+/* On large screens: table fills width */
+@media (min-width: 768px) {
+  .responsive-table {
+    width: 100% !important;
+    min-width: 100% !important;
+    table-layout: auto;
+  }
+  
+  .responsive-table th,
+  .responsive-table td {
+    white-space: nowrap;
+  }
+}
+
+/* On medium and small screens: table uses max-content for horizontal scroll */
+@media (max-width: 767px) {
+  .responsive-table {
+    min-width: max-content !important;
+    width: max-content !important;
+    table-layout: auto !important;
+  }
+  
+  .responsive-table th,
+  .responsive-table td {
+    white-space: nowrap !important;
+    min-width: 100px !important;
+  }
+}
+
+/* Table wrapper for better mobile experience - Force horizontal scroll instead of collapsing */
+.overflow-x-auto > table:not(.responsive-table) {
+  min-width: max-content !important;
+  width: max-content !important;
+  table-layout: auto !important;
+  border-collapse: separate;
+  border-spacing: 0;
+  display: table !important;
+}
+
+/* On large screens, make non-responsive tables fill width too */
+@media (min-width: 768px) {
+  .overflow-x-auto > table:not(.responsive-table) {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+}
+
+/* Prevent table cells from collapsing - Force minimum widths */
+.overflow-x-auto table th,
+.overflow-x-auto table td {
+  white-space: nowrap !important;
+  min-width: 100px !important;
+  max-width: none !important;
+}
+
+/* On large screens, allow cells to expand */
+@media (min-width: 768px) {
+  .responsive-table th,
+  .responsive-table td {
+    min-width: auto !important;
+    white-space: nowrap;
+  }
+}
+
+/* Override for empty state cells */
+.overflow-x-auto table td[colspan] {
+  white-space: normal !important;
+  min-width: auto !important;
+}
+
+/* Allow text wrapping only in specific cells with truncate class */
+.overflow-x-auto table td .truncate {
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  max-width: 300px;
+}
+
+/* Ensure all table wrappers have horizontal scroll */
+.card > .overflow-x-auto,
+.overflow-x-auto {
+  width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+/* Apply to all tables in cards - responsive behavior */
+@media (min-width: 768px) {
+  .card table {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  
+  .card table th,
+  .card table td {
+    min-width: auto !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .card table {
+    min-width: max-content !important;
+    width: max-content !important;
+  }
+  
+  .card table th,
+  .card table td {
+    white-space: nowrap !important;
+    min-width: 100px !important;
+  }
+  
+  .card table td[colspan] {
+    white-space: normal !important;
+    min-width: auto !important;
+  }
+}
+
+/* Custom Scrollbar for Tables */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-500);
+  background-clip: padding-box;
+}
+
 /* Select dropdown */
 select option {
   background: var(--bg-secondary);
@@ -544,7 +827,7 @@ select option {
 /* Leaflet Map Styles */
 .leaflet-container {
   background: #1a1a2e !important;
-  font-family: 'Cabin', sans-serif;
+  font-family: var(--font-cabin), 'Cabin', sans-serif !important;
 }
 
 [data-theme="light"] .leaflet-container {

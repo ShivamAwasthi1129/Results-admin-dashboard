@@ -61,14 +61,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, onMenuClick }) => {
           </button>
           
           <div className="flex items-center gap-4">
-            <Image 
-              src={ResultsLogo} 
-              alt="Results Logo" 
-              width={140} 
-              height={45} 
-              className="h-11 w-auto object-contain"
-              priority
-            />
+          
             <div>
               {title && (
                 <h1 className="text-2xl font-bold text-[var(--text-primary)]">
@@ -143,7 +136,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, onMenuClick }) => {
               }}
               className="flex items-center gap-3 p-2 pr-4 rounded-xl hover:bg-[var(--bg-input)] transition-colors border border-transparent hover:border-[var(--border-color)]"
             >
-              <Avatar name={user?.name || 'User'} size="md" />
+              <Avatar name={user?.name || 'User'} size="md" src={user?.avatar} />
               <div className="hidden lg:block text-left">
                 <p className="text-sm font-semibold text-[var(--text-primary)]">{user?.name}</p>
                 <p className="text-xs text-[var(--text-muted)] capitalize">{user?.role?.replace('_', ' ')}</p>
@@ -158,7 +151,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, onMenuClick }) => {
                   {/* User Info */}
                   <div className="p-5 border-b border-[var(--border-color)]">
                     <div className="flex items-center gap-4">
-                      <Avatar name={user?.name || 'User'} size="lg" />
+                      <Avatar name={user?.name || 'User'} size="lg" src={user?.avatar} />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-[var(--text-primary)] truncate">{user?.name}</p>
                         <p className="text-sm text-[var(--text-muted)] truncate">{user?.email}</p>

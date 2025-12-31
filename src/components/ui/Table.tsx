@@ -19,6 +19,7 @@ interface TableProps<T> {
   onRowClick?: (item: T, index: number) => void;
   rowKey?: keyof T | ((item: T, index: number) => string | number);
   className?: string;
+  compact?: boolean;
 }
 
 function Table<T extends Record<string, any>>({
@@ -29,6 +30,7 @@ function Table<T extends Record<string, any>>({
   onRowClick,
   rowKey,
   className = '',
+  compact = false,
 }: TableProps<T>) {
   const getRowKey = (item: T, index: number): string | number => {
     if (typeof rowKey === 'function') return rowKey(item, index);
@@ -54,31 +56,40 @@ function Table<T extends Record<string, any>>({
 
   return (
     <div className={cn('card overflow-hidden p-0', className)}>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-[var(--border-color)]">
-              {columns.map((column) => (
-                <th
-                  key={column.key as string}
-                  className={cn(
-                    'px-6 py-4 text-xs font-bold uppercase tracking-wider',
-                    'text-[var(--text-muted)] bg-[var(--bg-input)]',
-                    alignClasses[column.align || 'left'],
-                    column.className
-                  )}
-                >
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border-color)]">
+      <div className="relative w-full overflow-x-auto overflow-y-visible scrollbar-thin responsive-table-wrapper" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <table className="table-auto responsive-table">
+            <thead>
+              <tr className="border-b border-[var(--border-color)]">
+                {columns.map((column) => (
+                  <th
+                    key={column.key as string}
+                    className={cn(
+                      compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
+                      'text-xs font-bold uppercase tracking-wider whitespace-nowrap',
+                      'text-[var(--text-muted)] bg-[var(--bg-input)]',
+                      alignClasses[column.align || 'left'],
+                      column.className
+                    )}
+                    style={{ minWidth: '120px' }}
+                  >
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-color)]">
             {isLoading ? (
               [...Array(5)].map((_, i) => (
                 <tr key={i}>
                   {columns.map((column) => (
-                    <td key={column.key as string} className="px-6 py-4">
+                    <td 
+                      key={column.key as string} 
+                      className={cn(
+                        compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
+                        'whitespace-nowrap'
+                      )}
+                      style={{ minWidth: '120px', whiteSpace: 'nowrap' }}
+                    >
                       <div className="h-5 skeleton rounded" />
                     </td>
                   ))}
@@ -86,14 +97,20 @@ function Table<T extends Record<string, any>>({
               ))
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-6 py-16 text-center">
+                <td 
+                  colSpan={columns.length} 
+                  className={cn(
+                    compact ? 'px-3 py-16 sm:px-4' : 'px-3 py-16 sm:px-4 md:px-6',
+                    'text-center'
+                  )}
+                >
                   <div className="flex flex-col items-center gap-4">
-                    <div className="w-20 h-20 rounded-full bg-[var(--bg-input)] flex items-center justify-center">
-                      <svg className="w-10 h-10 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[var(--bg-input)] flex items-center justify-center">
+                      <svg className="w-8 h-8 sm:w-10 sm:h-10 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                       </svg>
                     </div>
-                    <p className="text-[var(--text-muted)] font-medium text-lg">{emptyMessage}</p>
+                    <p className="text-[var(--text-muted)] font-medium text-base sm:text-lg">{emptyMessage}</p>
                   </div>
                 </td>
               </tr>
@@ -107,23 +124,41 @@ function Table<T extends Record<string, any>>({
                   )}
                   onClick={() => onRowClick?.(item, index)}
                 >
-                  {columns.map((column) => (
-                    <td
-                      key={column.key as string}
-                      className={cn(
-                        'px-6 py-4 text-sm text-[var(--text-primary)]',
-                        alignClasses[column.align || 'left'],
-                        column.className
-                      )}
-                    >
-                      {getCellValue(item, column)}
-                    </td>
-                  ))}
+                  {columns.map((column) => {
+                    const cellValue = getCellValue(item, column);
+                    const isCustomRender = column.render !== undefined;
+                    return (
+                      <td
+                        key={column.key as string}
+                        className={cn(
+                          compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
+                          'text-xs sm:text-sm text-[var(--text-primary)]',
+                          'whitespace-nowrap',
+                          alignClasses[column.align || 'left'],
+                          column.className
+                        )}
+                        style={{ 
+                          minWidth: isCustomRender ? '150px' : '120px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {isCustomRender ? (
+                          <div style={{ whiteSpace: 'nowrap' }}>{cellValue}</div>
+                        ) : (
+                          <div className="truncate" style={{ maxWidth: '300px', display: 'inline-block' }}>
+                            {cellValue}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))
             )}
           </tbody>
         </table>
+        {/* Scroll indicator for mobile */}
+        <div className="md:hidden absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[var(--bg-card)] to-transparent pointer-events-none z-10" />
       </div>
     </div>
   );

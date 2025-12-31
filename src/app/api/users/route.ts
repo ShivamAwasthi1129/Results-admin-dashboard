@@ -4,6 +4,7 @@ import User from '@/models/User';
 import Volunteer from '@/models/Volunteer';
 import ServiceProvider from '@/models/ServiceProvider';
 import { verifyAuth, hashPassword, canPerform } from '@/lib/auth';
+import { sendEmail, emailTemplates } from '@/lib/email';
 
 // GET - List all users with pagination and filters
 export async function GET(request: NextRequest) {
@@ -56,10 +57,8 @@ export async function GET(request: NextRequest) {
       query.status = status;
     }
 
-    // Admin can only see volunteers and service providers
-    if (tokenPayload.role === 'admin') {
-      query.role = { $in: ['volunteer', 'service_provider'] };
-    }
+    // Users module only shows admin and super_admin
+    query.role = { $in: ['admin', 'super_admin'] };
 
     const skip = (page - 1) * limit;
     const sortOrder = order === 'asc' ? 1 : -1;
@@ -187,36 +186,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // If volunteer, create volunteer profile
-    if (body.role === 'volunteer') {
-      await Volunteer.create({
-        userId: user._id,
-        firstName,
-        lastName,
-        skills: [],
-        availability: 'available',
-        completedMissions: 0,
-        rating: 0,
-        bloodGroup: body.bloodGroup || 'unknown',
-        dateOfBirth: body.dateOfBirth || undefined,
-      });
-    }
-
-    // If service provider, create service provider profile
-    if (body.role === 'service_provider') {
-      await ServiceProvider.create({
-        userId: user._id,
-        businessName: `${firstName} ${lastName}`.trim() || body.name,
-        description: '',
-        category: 'other',
-        services: [],
-        verified: false,
-        isAvailableForEmergency: true,
-      });
-    }
-
     // Return user without password
     const userResponse = await User.findById(user._id).select('-password');
+
+    // Send welcome email with credentials
+    try {
+      const userName = `${firstName} ${lastName}`.trim() || body.email;
+      const emailTemplate = emailTemplates.welcome(userName, body.email.toLowerCase(), body.password);
+      await sendEmail({
+        to: body.email.toLowerCase(),
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+      });
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError);
+      // Don't fail the user creation if email fails
+    }
 
     return NextResponse.json({
       success: true,
@@ -400,15 +385,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete related profiles
-    if (user.role === 'volunteer') {
-      await Volunteer.deleteOne({ userId: id });
-    }
-    if (user.role === 'service_provider') {
-      await ServiceProvider.deleteOne({ userId: id });
-    }
-
-    // Delete user
+    // Delete user (admin and super_admin don't have related profiles)
     await User.findByIdAndDelete(id);
 
     return NextResponse.json({

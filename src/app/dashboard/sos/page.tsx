@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout';
-import { Card, Badge, Button, Modal, Input, Select } from '@/components/ui';
+import { Card, Badge, Button, Modal, Input, Select, Table } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-toastify';
 import Image from 'next/image';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   BellAlertIcon,
   PhoneIcon,
@@ -24,6 +26,9 @@ import {
   BoltIcon,
   PlusIcon,
   CameraIcon,
+  EyeIcon,
+  UserGroupIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 interface WearableDevice {
@@ -64,6 +69,15 @@ interface SOSAlert {
   };
 }
 
+interface ResponseTeam {
+  id: string;
+  name: string;
+  type: string;
+  members: number;
+  location: string;
+  status: 'available' | 'busy' | 'on_mission';
+}
+
 export default function SOSPage() {
   const { token } = useAuth();
   const [alerts, setAlerts] = useState<SOSAlert[]>([]);
@@ -71,8 +85,26 @@ export default function SOSPage() {
   const [selectedAlert, setSelectedAlert] = useState<SOSAlert | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTeam, setSelectedTeam] = useState<string>('');
+  
+  // Map refs
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+
+  // Mock response teams
+  const responseTeams: ResponseTeam[] = [
+    { id: '1', name: 'Medical Team Alpha - Houston', type: 'Medical', members: 8, location: 'Houston, TX', status: 'available' },
+    { id: '2', name: 'FEMA Response Unit B', type: 'Rescue', members: 12, location: 'Oklahoma City, OK', status: 'available' },
+    { id: '3', name: 'Red Cross Supply Unit', type: 'Supply', members: 6, location: 'New Orleans, LA', status: 'available' },
+    { id: '4', name: 'Fire Rescue Team Delta', type: 'Fire', members: 10, location: 'Los Angeles, CA', status: 'available' },
+    { id: '5', name: 'Emergency Medical Services', type: 'Medical', members: 15, location: 'Miami, FL', status: 'available' },
+    { id: '6', name: 'Search & Rescue Unit', type: 'Rescue', members: 20, location: 'National', status: 'busy' },
+  ];
 
   // Form data for adding new SOS alert
   const [formData, setFormData] = useState({
@@ -240,15 +272,109 @@ export default function SOSPage() {
     }, 500);
   }, []);
 
+  // Initialize map when map modal opens
+  useEffect(() => {
+    if (isMapModalOpen && selectedAlert && mapContainerRef.current && !mapRef.current) {
+      const { lat, lng } = selectedAlert.location;
+      
+      mapRef.current = L.map(mapContainerRef.current, {
+        center: [lat, lng],
+        zoom: 15,
+        zoomControl: true,
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(mapRef.current);
+
+      // Create custom SOS icon
+      const sosIcon = L.divIcon({
+        className: 'custom-sos-marker',
+        html: `<div style="
+          width: 50px;
+          height: 50px;
+          background: #ef4444;
+          border-radius: 50%;
+          border: 4px solid white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
+          animation: pulse 2s infinite;
+        ">
+          <svg width="24" height="24" fill="white" viewBox="0 0 24 24">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          </svg>
+        </div>`,
+        iconSize: [50, 50],
+        iconAnchor: [25, 50],
+      });
+
+      markerRef.current = L.marker([lat, lng], { icon: sosIcon }).addTo(mapRef.current);
+      
+      // Add popup with alert info
+      markerRef.current.bindPopup(`
+        <div style="padding: 8px;">
+          <strong>${selectedAlert.name}</strong><br/>
+          ${selectedAlert.location.address}<br/>
+          ${selectedAlert.location.city}, ${selectedAlert.location.state}
+        </div>
+      `).openPopup();
+
+      // Add last known location marker if available
+      if (selectedAlert.lastKnownLocation) {
+        const lastKnownIcon = L.divIcon({
+          className: 'custom-last-known-marker',
+          html: `<div style="
+            width: 40px;
+            height: 40px;
+            background: #3b82f6;
+            border-radius: 50%;
+            border: 3px solid white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.5);
+          ">
+            <svg width="20" height="20" fill="white" viewBox="0 0 24 24">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+          </div>`,
+          iconSize: [40, 40],
+          iconAnchor: [20, 40],
+        });
+
+        L.marker([selectedAlert.lastKnownLocation.lat, selectedAlert.lastKnownLocation.lng], { icon: lastKnownIcon })
+          .addTo(mapRef.current)
+          .bindPopup(`
+            <div style="padding: 8px;">
+              <strong>Last Known Location</strong><br/>
+              ${selectedAlert.lastKnownLocation.address}<br/>
+              Updated: ${getTimeSince(selectedAlert.lastKnownLocation.timestamp)}
+            </div>
+          `);
+      }
+    }
+
+    return () => {
+      if (mapRef.current && !isMapModalOpen) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        markerRef.current = null;
+      }
+    };
+  }, [isMapModalOpen, selectedAlert]);
+
   const getTypeIcon = (type: string) => {
-    const icons: Record<string, JSX.Element> = {
-      medical: <HeartIcon className="w-5 h-5" />,
-      rescue: <BellAlertIcon className="w-5 h-5" />,
-      evacuation: <MapPinIcon className="w-5 h-5" />,
-      food_water: <CubeIcon className="w-5 h-5" />,
-      shelter: <HomeModernIcon className="w-5 h-5" />,
-      fire: <BoltIcon className="w-5 h-5" />,
-      other: <PhoneIcon className="w-5 h-5" />,
+    const icons: Record<string, React.ReactElement> = {
+      medical: <HeartIcon className="w-4 h-4" />,
+      rescue: <BellAlertIcon className="w-4 h-4" />,
+      evacuation: <MapPinIcon className="w-4 h-4" />,
+      food_water: <CubeIcon className="w-4 h-4" />,
+      shelter: <HomeModernIcon className="w-4 h-4" />,
+      fire: <BoltIcon className="w-4 h-4" />,
+      other: <PhoneIcon className="w-4 h-4" />,
     };
     return icons[type] || icons.other;
   };
@@ -286,7 +412,47 @@ export default function SOSPage() {
     setAlerts(prev => prev.map(alert => 
       alert.id === alertId ? { ...alert, status: newStatus as SOSAlert['status'] } : alert
     ));
-    toast.success(`Alert status updated to ${newStatus}`);
+    toast.success(`Alert status updated to ${newStatus.replace('_', ' ')}`);
+  };
+
+  const handleAssignTeam = (alert: SOSAlert) => {
+    setSelectedAlert(alert);
+    setSelectedTeam(alert.assignedTo || '');
+    setIsAssignModalOpen(true);
+  };
+
+  const handleConfirmAssign = () => {
+    if (!selectedTeam) {
+      toast.error('Please select a response team');
+      return;
+    }
+
+    const team = responseTeams.find(t => t.id === selectedTeam);
+    if (!team) {
+      toast.error('Selected team not found');
+      return;
+    }
+
+    if (selectedAlert) {
+      setAlerts(prev => prev.map(alert => 
+        alert.id === selectedAlert.id 
+          ? { ...alert, status: 'assigned' as SOSAlert['status'], assignedTo: team.name }
+          : alert
+      ));
+      toast.success(`Alert assigned to ${team.name}`);
+      setIsAssignModalOpen(false);
+      setSelectedTeam('');
+    }
+  };
+
+  const handleViewOnMap = (alert: SOSAlert) => {
+    setSelectedAlert(alert);
+    setIsMapModalOpen(true);
+  };
+
+  const handleViewDetails = (alert: SOSAlert) => {
+    setSelectedAlert(alert);
+    setIsModalOpen(true);
   };
 
   const handleAddAlert = () => {
@@ -358,6 +524,173 @@ export default function SOSPage() {
     resolved: alerts.filter(a => a.status === 'resolved').length,
   };
 
+  // Table columns
+  const columns = [
+    {
+      key: 'name',
+      label: 'Person',
+      render: (alert: SOSAlert) => (
+        <div className="flex items-center gap-3">
+          {alert.photo ? (
+            <Image
+              src={alert.photo}
+              alt={alert.name}
+              width={40}
+              height={40}
+              className="rounded-lg object-cover"
+              unoptimized
+            />
+          ) : (
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getPriorityColor(alert.priority)}`}>
+              <UserIcon className="w-5 h-5" />
+            </div>
+          )}
+          <div>
+            <div className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              {alert.name}
+              {alert.priority === 'critical' && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded animate-pulse">
+                  URGENT
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-[var(--text-muted)] flex items-center gap-2 mt-0.5">
+              <PhoneIcon className="w-3 h-3" />
+              {alert.phone}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      render: (alert: SOSAlert) => (
+        <div>
+          <div className="font-medium text-[var(--text-primary)] flex items-center gap-1">
+            <MapPinIcon className="w-4 h-4 text-[var(--text-muted)]" />
+            {alert.location.city}, {alert.location.state}
+          </div>
+          <div className="text-xs text-[var(--text-muted)] mt-0.5">{alert.location.address}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      render: (alert: SOSAlert) => (
+        <div className="flex items-center gap-2">
+          <span className={`p-1.5 rounded-lg ${getPriorityColor(alert.priority)}`}>
+            {getTypeIcon(alert.type)}
+          </span>
+          <span className="text-sm text-[var(--text-primary)] capitalize">
+            {alert.type.replace('_', ' ')}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'priority',
+      label: 'Priority',
+      render: (alert: SOSAlert) => (
+        <Badge 
+          variant={alert.priority === 'critical' ? 'danger' : alert.priority === 'high' ? 'warning' : 'info'} 
+          size="sm"
+        >
+          {alert.priority.toUpperCase()}
+        </Badge>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (alert: SOSAlert) => (
+        <Badge variant={getStatusBadge(alert.status)} size="sm">
+          {alert.status.replace('_', ' ')}
+        </Badge>
+      ),
+    },
+    {
+      key: 'peopleCount',
+      label: 'People',
+      render: (alert: SOSAlert) => (
+        <div className="flex items-center gap-1 text-sm text-[var(--text-primary)]">
+          <UserIcon className="w-4 h-4 text-[var(--text-muted)]" />
+          {alert.peopleCount || 1}
+        </div>
+      ),
+    },
+    {
+      key: 'assignedTo',
+      label: 'Assigned To',
+      render: (alert: SOSAlert) => (
+        <div className="text-sm">
+          {alert.assignedTo ? (
+            <div className="flex items-center gap-1 text-emerald-400">
+              <CheckCircleIcon className="w-4 h-4" />
+              <span className="truncate max-w-[150px]">{alert.assignedTo}</span>
+            </div>
+          ) : (
+            <span className="text-[var(--text-muted)]">Unassigned</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Time',
+      render: (alert: SOSAlert) => (
+        <div className="flex items-center gap-1 text-sm text-[var(--text-muted)]">
+          <ClockIcon className="w-4 h-4" />
+          {getTimeSince(alert.createdAt)}
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (alert: SOSAlert) => (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<EyeIcon className="w-4 h-4" />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewDetails(alert);
+            }}
+          >
+            View
+          </Button>
+          {alert.status === 'pending' && (
+            <Button
+              variant="gradient"
+              size="sm"
+              leftIcon={<UserGroupIcon className="w-4 h-4" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAssignTeam(alert);
+              }}
+            >
+              Assign
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<MapPinIcon className="w-4 h-4" />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewOnMap(alert);
+            }}
+          >
+            Map
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <DashboardLayout title="SOS Alerts - USA" subtitle="Emergency distress signals and rescue requests across United States">
       {/* Stats Row */}
@@ -410,164 +743,16 @@ export default function SOSPage() {
         </Button>
       </div>
 
-      {/* Alerts List */}
-      <div className="space-y-4">
-        {isLoading ? (
-          [...Array(3)].map((_, i) => (
-            <Card key={i} className="p-6 animate-pulse">
-              <div className="flex gap-4">
-                <div className="w-16 h-16 bg-[var(--bg-input)] rounded-xl" />
-                <div className="flex-1 space-y-3">
-                  <div className="h-5 bg-[var(--bg-input)] rounded w-1/3" />
-                  <div className="h-4 bg-[var(--bg-input)] rounded w-2/3" />
-                  <div className="h-4 bg-[var(--bg-input)] rounded w-1/2" />
-                </div>
-              </div>
-            </Card>
-          ))
-        ) : filteredAlerts.length === 0 ? (
-          <Card className="p-12 text-center">
-            <BellAlertIcon className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
-            <p className="text-lg font-medium text-[var(--text-primary)] mb-2">No SOS Alerts</p>
-            <p className="text-[var(--text-muted)]">No alerts match your current filters</p>
-          </Card>
-        ) : (
-          filteredAlerts.map((alert) => (
-            <Card 
-              key={alert.id} 
-              className={`p-6 cursor-pointer hover:border-[var(--primary-500)]/50 transition-all hover:shadow-lg ${
-                alert.priority === 'critical' ? 'border-l-4 border-l-red-500 bg-gradient-to-r from-red-500/5 to-transparent' :
-                alert.priority === 'high' ? 'border-l-4 border-l-orange-500 bg-gradient-to-r from-orange-500/5 to-transparent' : ''
-              }`}
-              onClick={() => { setSelectedAlert(alert); setIsModalOpen(true); }}
-            >
-              <div className="flex flex-col lg:flex-row gap-4">
-                {/* Photo & Priority */}
-                <div className="flex items-start gap-4">
-                  <div className="relative">
-                    {alert.photo ? (
-                      <Image
-                        src={alert.photo}
-                        alt={alert.name}
-                        width={64}
-                        height={64}
-                        className="rounded-xl object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className={`w-16 h-16 rounded-xl flex items-center justify-center ${getPriorityColor(alert.priority)}`}>
-                        <UserIcon className="w-8 h-8" />
-                      </div>
-                    )}
-                    {alert.wearableDevice?.isOnline && (
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-2 border-[var(--bg-card)] flex items-center justify-center">
-                        <SignalIcon className="w-3 h-3 text-white" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4 mb-2">
-                    <div>
-                      <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2 text-lg">
-                        {alert.name}
-                        {alert.priority === 'critical' && (
-                          <span className="px-2 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full animate-pulse">
-                            URGENT
-                          </span>
-                        )}
-                      </h3>
-                      <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
-                        <span className="flex items-center gap-1">
-                          <PhoneIcon className="w-4 h-4" />
-                          {alert.phone}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MapPinIcon className="w-4 h-4" />
-                          {alert.location.city}, {alert.location.state}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={getStatusBadge(alert.status)} size="sm">
-                        {alert.status.replace('_', ' ')}
-                      </Badge>
-                      <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
-                        <ClockIcon className="w-4 h-4" />
-                        {getTimeSince(alert.createdAt)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-[var(--text-secondary)] mb-3 line-clamp-2">{alert.message}</p>
-
-                  <div className="flex flex-wrap items-center gap-3 text-sm">
-                    <span className="text-[var(--text-muted)] flex items-center gap-1 bg-[var(--bg-input)] px-2 py-1 rounded-lg">
-                      <UserIcon className="w-4 h-4" />
-                      {alert.peopleCount} {alert.peopleCount === 1 ? 'person' : 'people'}
-                    </span>
-                    <Badge variant="primary" size="sm">
-                      {alert.type.replace('_', ' ')}
-                    </Badge>
-                    {alert.wearableDevice && (
-                      <span className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">
-                        <DevicePhoneMobileIcon className="w-4 h-4" />
-                        {alert.wearableDevice.brand} • {alert.wearableDevice.batteryLevel}%
-                      </span>
-                    )}
-                    {alert.wearableDevice?.heartRate && (
-                      <span className="flex items-center gap-1 text-pink-400 bg-pink-500/10 px-2 py-1 rounded-lg">
-                        <HeartIcon className="w-4 h-4" />
-                        {alert.wearableDevice.heartRate} BPM
-                      </span>
-                    )}
-                  </div>
-
-                  {alert.assignedTo && (
-                    <p className="text-sm text-emerald-400 mt-3 flex items-center gap-2">
-                      <CheckCircleIcon className="w-4 h-4" />
-                      Assigned to: {alert.assignedTo}
-                    </p>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex lg:flex-col gap-2 flex-shrink-0">
-                  {alert.status === 'pending' && (
-                    <Button 
-                      variant="gradient" 
-                      size="sm"
-                      onClick={(e) => { e.stopPropagation(); handleStatusChange(alert.id, 'assigned'); }}
-                    >
-                      Assign Team
-                    </Button>
-                  )}
-                  {alert.status === 'assigned' && (
-                    <Button 
-                      variant="primary" 
-                      size="sm"
-                      onClick={(e) => { e.stopPropagation(); handleStatusChange(alert.id, 'in_progress'); }}
-                    >
-                      Start Response
-                    </Button>
-                  )}
-                  {alert.status === 'in_progress' && (
-                    <Button 
-                      variant="success" 
-                      size="sm"
-                      onClick={(e) => { e.stopPropagation(); handleStatusChange(alert.id, 'resolved'); }}
-                    >
-                      Mark Resolved
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
+      {/* Alerts Table */}
+      <Table
+        columns={columns}
+        data={filteredAlerts}
+        isLoading={isLoading}
+        emptyMessage="No SOS alerts found"
+        rowKey="id"
+        onRowClick={(alert) => handleViewDetails(alert)}
+        compact
+      />
 
       {/* Detail Modal */}
       <Modal
@@ -739,15 +924,185 @@ export default function SOSPage() {
 
             {/* Actions */}
             <div className="flex gap-3">
-              <Button variant="gradient" className="flex-1">
-                Assign Response Team
-              </Button>
-              <Button variant="secondary" className="flex-1">
-                Contact Person
-              </Button>
-              <Button variant="primary" className="flex-1">
+              {selectedAlert.status === 'pending' && (
+                <Button 
+                  variant="gradient" 
+                  className="flex-1"
+                  leftIcon={<UserGroupIcon className="w-4 h-4" />}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    handleAssignTeam(selectedAlert);
+                  }}
+                >
+                  Assign Response Team
+                </Button>
+              )}
+              <Button 
+                variant="primary" 
+                className="flex-1"
+                leftIcon={<MapPinIcon className="w-4 h-4" />}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  handleViewOnMap(selectedAlert);
+                }}
+              >
                 View on Map
               </Button>
+              <Button 
+                variant="secondary" 
+                className="flex-1"
+                leftIcon={<PhoneIcon className="w-4 h-4" />}
+                onClick={() => {
+                  window.open(`tel:${selectedAlert.phone}`, '_self');
+                }}
+              >
+                Contact Person
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Assign Team Modal */}
+      <Modal
+        isOpen={isAssignModalOpen}
+        onClose={() => {
+          setIsAssignModalOpen(false);
+          setSelectedTeam('');
+        }}
+        title="Assign Response Team"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--text-muted)] mb-4">
+            Select a response team to assign to this SOS alert
+          </p>
+          
+          <Select
+            label="Response Team"
+            options={[
+              { value: '', label: 'Select a team...' },
+              ...responseTeams
+                .filter(team => team.status === 'available')
+                .map(team => ({
+                  value: team.id,
+                  label: `${team.name} (${team.type} - ${team.members} members)`,
+                }))
+            ]}
+            value={selectedTeam}
+            onChange={setSelectedTeam}
+          />
+
+          {selectedTeam && (
+            <div className="p-4 rounded-xl bg-[var(--bg-input)]">
+              {(() => {
+                const team = responseTeams.find(t => t.id === selectedTeam);
+                return team ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-[var(--text-muted)]">Team Name:</span>
+                      <span className="font-semibold text-[var(--text-primary)]">{team.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-[var(--text-muted)]">Type:</span>
+                      <span className="text-[var(--text-primary)]">{team.type}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-[var(--text-muted)]">Members:</span>
+                      <span className="text-[var(--text-primary)]">{team.members}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-[var(--text-muted)]">Location:</span>
+                      <span className="text-[var(--text-primary)]">{team.location}</span>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <Button 
+              variant="secondary" 
+              className="flex-1" 
+              onClick={() => {
+                setIsAssignModalOpen(false);
+                setSelectedTeam('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="gradient" 
+              className="flex-1" 
+              onClick={handleConfirmAssign}
+              disabled={!selectedTeam}
+            >
+              Assign Team
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Map Modal */}
+      <Modal
+        isOpen={isMapModalOpen}
+        onClose={() => {
+          setIsMapModalOpen(false);
+          if (mapRef.current) {
+            mapRef.current.remove();
+            mapRef.current = null;
+            markerRef.current = null;
+          }
+        }}
+        title="SOS Alert Location"
+        size="xl"
+      >
+        {selectedAlert && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-[var(--bg-input)]">
+              <div className="flex items-center gap-3 mb-2">
+                {selectedAlert.photo ? (
+                  <Image
+                    src={selectedAlert.photo}
+                    alt={selectedAlert.name}
+                    width={48}
+                    height={48}
+                    className="rounded-lg object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${getPriorityColor(selectedAlert.priority)}`}>
+                    <UserIcon className="w-6 h-6" />
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-semibold text-[var(--text-primary)]">{selectedAlert.name}</h3>
+                  <p className="text-sm text-[var(--text-muted)]">{selectedAlert.location.address}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {selectedAlert.location.city}, {selectedAlert.location.state} {selectedAlert.location.zipcode}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div 
+              ref={mapContainerRef} 
+              className="w-full h-[500px] rounded-xl overflow-hidden border border-[var(--border-color)]"
+              style={{ minHeight: '500px' }}
+            />
+            
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-red-500"></div>
+                <span className="text-[var(--text-muted)]">Current Location</span>
+              </div>
+              {selectedAlert.lastKnownLocation && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+                  <span className="text-[var(--text-muted)]">Last Known Location</span>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -76,7 +76,8 @@ export default function UsersPage() {
     email: '', 
     phone: '', 
     password: '', 
-    role: 'volunteer', 
+    confirmPassword: '',
+    role: 'admin', 
     status: 'active',
     profilePhoto: '',
     street: '',
@@ -136,6 +137,19 @@ export default function UsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate password match for new users
+    if (!selectedUser) {
+      if (formData.password !== formData.confirmPassword) {
+        toast.error('Passwords do not match');
+        return;
+      }
+      if (formData.password.length < 6) {
+        toast.error('Password must be at least 6 characters');
+        return;
+      }
+    }
+    
     try {
       const url = selectedUser ? `/api/users?id=${selectedUser._id}` : '/api/users';
       const method = selectedUser ? 'PUT' : 'POST';
@@ -217,7 +231,7 @@ export default function UsersPage() {
 
   const resetForm = () => {
     setFormData({
-      firstName: '', lastName: '', email: '', phone: '', password: '', role: 'volunteer', status: 'active',
+      firstName: '', lastName: '', email: '', phone: '', password: '', confirmPassword: '', role: 'admin', status: 'active',
       profilePhoto: '', street: '', apartment: '', city: '', state: '', zipCode: '', dateOfBirth: '', gender: '',
       emergencyFirstName: '', emergencyLastName: '', emergencyPhone: '', emergencyRelation: '',
       ssnNumber: '', bloodGroup: '',
@@ -243,6 +257,7 @@ export default function UsersPage() {
       email: user.email, 
       phone: user.phone || '',
       password: '', 
+      confirmPassword: '',
       role: user.role, 
       status: user.status,
       profilePhoto: user.profilePhoto || '',
@@ -278,8 +293,7 @@ export default function UsersPage() {
   const stats = {
     total: users.length,
     admins: users.filter(u => u.role === 'admin').length,
-    volunteers: users.filter(u => u.role === 'volunteer').length,
-    providers: users.filter(u => u.role === 'service_provider').length
+    superAdmins: users.filter(u => u.role === 'super_admin').length,
   };
 
   const roleConfig: Record<string, { color: string; bg: string; icon: JSX.Element }> = {
@@ -292,11 +306,10 @@ export default function UsersPage() {
   return (
     <DashboardLayout title="Users" subtitle="Manage all users in the system">
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <StatCard title="Total Users" value={stats.total} icon={<UsersIcon className="w-6 h-6" />} variant="purple" />
         <StatCard title="Admins" value={stats.admins} icon={<ShieldCheckIcon className="w-6 h-6" />} variant="blue" />
-        <StatCard title="Volunteers" value={stats.volunteers} icon={<UserGroupIcon className="w-6 h-6" />} variant="green" />
-        <StatCard title="Providers" value={stats.providers} icon={<WrenchScrewdriverIcon className="w-6 h-6" />} variant="orange" />
+        <StatCard title="Super Admins" value={stats.superAdmins} icon={<ShieldCheckIcon className="w-6 h-6" />} variant="red" />
       </div>
 
       {/* Filters */}
@@ -318,8 +331,6 @@ export default function UsersPage() {
                 { value: 'all', label: 'All Roles' },
                 { value: 'super_admin', label: 'Super Admin' },
                 { value: 'admin', label: 'Admin' },
-                { value: 'volunteer', label: 'Volunteer' },
-                { value: 'service_provider', label: 'Service Provider' }
               ]}
             />
             {canManageUsers && (
@@ -402,20 +413,24 @@ export default function UsersPage() {
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-5">
-                      {canManageUsers && user.role !== 'super_admin' && (
+                      {canManageUsers && (
                         <div className="flex items-center justify-end gap-2">
                           <button 
                             onClick={() => openEditModal(user)} 
                             className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--info)] hover:bg-[var(--info)]/10 transition-colors"
+                            title="Edit User"
                           >
                             <PencilIcon className="w-4 h-4" />
                           </button>
-                          <button 
-                            onClick={() => { setSelectedUser(user); setShowDeleteModal(true); }} 
-                            className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
+                          {user.role !== 'super_admin' && (
+                            <button 
+                              onClick={() => { setSelectedUser(user); setShowDeleteModal(true); }} 
+                              className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors"
+                              title="Delete User"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -638,12 +653,15 @@ export default function UsersPage() {
             <h4 className="text-sm font-semibold text-[var(--primary-500)] mb-4 flex items-center gap-2">
               <ShieldCheckIcon className="w-5 h-5" /> Account Settings
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <Select 
                 label="Role" 
                 value={formData.role} 
                 onChange={(val) => setFormData({ ...formData, role: val })} 
-                options={USER_ROLES} 
+                options={[
+                  { value: 'admin', label: 'Admin' },
+                  { value: 'super_admin', label: 'Super Admin' },
+                ]} 
               />
               <Select 
                 label="Status" 
@@ -651,14 +669,35 @@ export default function UsersPage() {
                 onChange={(val) => setFormData({ ...formData, status: val })} 
                 options={USER_STATUS} 
               />
-              <Input 
-                label={selectedUser ? "New Password (optional)" : "Password *"} 
-                type="password" 
-                value={formData.password} 
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
-                required={!selectedUser}
-                placeholder={selectedUser ? "Leave blank to keep current" : "Min 6 characters"}
-              />
+              {!selectedUser && (
+                <>
+                  <Input 
+                    label="Password *" 
+                    type="password" 
+                    value={formData.password} 
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
+                    required
+                    placeholder="Min 6 characters"
+                  />
+                  <Input 
+                    label="Confirm Password *" 
+                    type="password" 
+                    value={formData.confirmPassword} 
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })} 
+                    required
+                    placeholder="Re-enter password"
+                  />
+                </>
+              )}
+              {selectedUser && (
+                <Input 
+                  label="New Password (optional)" 
+                  type="password" 
+                  value={formData.password} 
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
+                  placeholder="Leave blank to keep current"
+                />
+              )}
             </div>
           </div>
 

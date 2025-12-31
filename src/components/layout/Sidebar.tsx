@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -20,9 +20,13 @@ import {
   BellAlertIcon,
   HomeModernIcon,
   CubeIcon,
-  HeartIcon,
   DocumentChartBarIcon,
   CloudIcon,
+  DevicePhoneMobileIcon,
+  ClipboardDocumentListIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ShieldExclamationIcon,
 } from '@heroicons/react/24/outline';
 import { Avatar } from '@/components/ui';
 import ResultsLogo from '@/Results_logo.png';
@@ -32,40 +36,111 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+interface NavItem {
+  name: string;
+  href?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  roles: readonly ('super_admin' | 'admin' | 'volunteer' | 'service_provider')[];
+  badge?: string;
+  children?: NavItem[];
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
   const pathname = usePathname();
   const { user, logout, hasPermission } = useAuth();
   const { theme } = useTheme();
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const isDark = theme === 'dark';
 
-  const navigation = [
+  const navigation: NavItem[] = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const },
-    { name: 'Weather', href: '/dashboard/weather', icon: CloudIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const, badge: 'LIVE' },
-    { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, roles: ['super_admin', 'admin'] as const },
+    // { name: 'Weather', href: '/dashboard/weather', icon: CloudIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const, badge: 'LIVE' },
+   
     { name: 'Live Disasters', href: '/dashboard/live-disasters', icon: GlobeAltIcon, roles: ['super_admin', 'admin'] as const, badge: 'LIVE' },
-    { name: 'SOS Alerts', href: '/dashboard/sos', icon: BellAlertIcon, roles: ['super_admin', 'admin'] as const, badge: 'NEW' },
-    { name: 'Shelters', href: '/dashboard/shelters', icon: HomeModernIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
+    { 
+      name: 'Alert Management', 
+      icon: ShieldExclamationIcon, 
+      roles: ['super_admin', 'admin'] as const,
+      children: [
+        { name: 'Emergencies', href: '/dashboard/emergencies', icon: ExclamationTriangleIcon, roles: ['super_admin', 'admin'] as const },
+        { name: 'SOS Alerts', href: '/dashboard/sos', icon: BellAlertIcon, roles: ['super_admin', 'admin'] as const, badge: 'NEW' },
+      ]
+    },
+    { name: 'Housing & Relief', href: '/dashboard/shelters', icon: HomeModernIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
+    { name: 'Device Management', href: '/dashboard/devices', icon: DevicePhoneMobileIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'Incident Management', href: '/dashboard/incidents', icon: ClipboardDocumentListIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
     { name: 'Resources', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Donations', href: '/dashboard/donations', icon: HeartIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Reports', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Disasters', href: '/dashboard/disasters', icon: MapPinIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Emergencies', href: '/dashboard/emergencies', icon: ExclamationTriangleIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Volunteers', href: '/dashboard/volunteers', icon: UserGroupIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Service Providers', href: '/dashboard/services', icon: WrenchScrewdriverIcon, roles: ['super_admin', 'admin', 'service_provider'] as const },
+    { name: 'Vendor & Alliance Partners', href: '/dashboard/services', icon: WrenchScrewdriverIcon, roles: ['super_admin', 'admin', 'service_provider'] as const },
     { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const },
   ];
 
-  const filteredNavigation = navigation.filter(item =>
-    hasPermission(item.roles)
-  );
+  // Filter navigation based on permissions
+  const filterNavigation = (items: NavItem[]): NavItem[] => {
+    return items.filter(item => {
+      if (!hasPermission(item.roles)) return false;
+      if (item.children) {
+        const filteredChildren = filterNavigation(item.children);
+        if (filteredChildren.length === 0) return false;
+        return { ...item, children: filteredChildren };
+      }
+      return true;
+    }).map(item => {
+      if (item.children) {
+        return { ...item, children: filterNavigation(item.children) };
+      }
+      return item;
+    });
+  };
 
-  const isActive = (href: string) => {
+  const filteredNavigation = filterNavigation(navigation);
+
+  // Auto-expand parent if any child is active
+  useEffect(() => {
+    const newExpanded = new Set(expandedItems);
+    filteredNavigation.forEach(item => {
+      if (item.children) {
+        const hasActiveChild = item.children.some(child => {
+          if (!child.href) return false;
+          if (child.href === '/dashboard') {
+            return pathname === '/dashboard';
+          }
+          return pathname.startsWith(child.href);
+        });
+        if (hasActiveChild) {
+          newExpanded.add(item.name);
+        }
+      }
+    });
+    setExpandedItems(newExpanded);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  const toggleExpand = (itemName: string) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(itemName)) {
+      newExpanded.delete(itemName);
+    } else {
+      newExpanded.add(itemName);
+    }
+    setExpandedItems(newExpanded);
+  };
+
+  const isActive = (href?: string) => {
+    if (!href) return false;
     if (href === '/dashboard') {
       return pathname === '/dashboard';
     }
     return pathname.startsWith(href);
+  };
+
+  const hasActiveChild = (item: NavItem): boolean => {
+    if (!item.children) return false;
+    return item.children.some(child => isActive(child.href));
   };
 
   // Theme-based colors
@@ -128,10 +203,73 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
           <div className="space-y-1">
             {filteredNavigation.map((item) => {
               const active = isActive(item.href);
+              const isExpanded = expandedItems.has(item.name);
+              const hasActive = hasActiveChild(item);
+              
+              if (item.children) {
+                return (
+                  <div key={item.name}>
+                    <button
+                      onClick={() => toggleExpand(item.name)}
+                      className={`
+                        w-full flex items-center gap-3 px-4 py-3 rounded-xl
+                        font-medium text-sm transition-all duration-200
+                        ${hasActive
+                          ? 'bg-[#991B1B] text-white shadow-lg shadow-red-900/30'
+                          : isDark
+                            ? 'text-slate-300 hover:bg-[#334155] hover:text-white'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        }
+                      `}
+                    >
+                      <item.icon className={`w-5 h-5 ${hasActive ? 'text-white' : ''}`} />
+                      <span className="flex-1 text-left">{item.name}</span>
+                      {isExpanded ? (
+                        <ChevronDownIcon className={`w-4 h-4 ${hasActive ? 'text-white' : ''}`} />
+                      ) : (
+                        <ChevronRightIcon className={`w-4 h-4 ${hasActive ? 'text-white' : ''}`} />
+                      )}
+                    </button>
+                    {isExpanded && (
+                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-[var(--border-color)] pl-2">
+                        {item.children.map((child) => {
+                          const childActive = isActive(child.href);
+                          return (
+                            <Link
+                              key={child.name}
+                              href={child.href || '#'}
+                              onClick={onClose}
+                              className={`
+                                flex items-center gap-3 px-4 py-2.5 rounded-lg
+                                font-medium text-sm transition-all duration-200
+                                ${childActive
+                                  ? 'bg-[#991B1B] text-white shadow-md shadow-red-900/20'
+                                  : isDark
+                                    ? 'text-slate-400 hover:bg-[#334155] hover:text-white'
+                                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                                }
+                              `}
+                            >
+                              <child.icon className={`w-4 h-4 ${childActive ? 'text-white' : ''}`} />
+                              <span className="flex-1">{child.name}</span>
+                              {child.badge && (
+                                <span className="px-2 py-0.5 text-[10px] font-bold bg-[#991B1B] text-white rounded-full animate-pulse">
+                                  {child.badge}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               return (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  href={item.href || '#'}
                   onClick={onClose}
                   className={`
                     flex items-center gap-3 px-4 py-3 rounded-xl
@@ -160,7 +298,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         {/* User Profile - Fixed at bottom */}
         <div className={`p-4 border-t ${sidebarBorder} shrink-0`}>
           <div className={`flex items-center gap-3 p-3 rounded-xl ${userCardBg} mb-3`}>
-            <Avatar name={user?.name || 'User'} size="md" />
+            <Avatar name={user?.name || 'User'} size="md" src={user?.avatar} />
             <div className="flex-1 min-w-0">
               <p className={`text-sm font-semibold ${textPrimary} truncate`}>
                 {user?.name}

@@ -97,10 +97,22 @@ export const permissions = {
   viewVolunteers: ['super_admin', 'admin'] as UserRole[],
   manageVolunteers: ['super_admin', 'admin'] as UserRole[],
   
+  // Shelter Management
+  viewShelters: ['super_admin', 'admin', 'volunteer'] as UserRole[],
+  manageShelters: ['super_admin', 'admin'] as UserRole[],
+  
   // Service Provider Management
   viewServiceProviders: ['super_admin', 'admin'] as UserRole[],
   manageServiceProviders: ['super_admin', 'admin'] as UserRole[],
   verifyServiceProvider: ['super_admin', 'admin'] as UserRole[],
+  
+  // Device Management
+  viewDevices: ['super_admin', 'admin'] as UserRole[],
+  manageDevices: ['super_admin', 'admin'] as UserRole[],
+  
+  // Incident Management
+  viewIncidents: ['super_admin', 'admin', 'volunteer'] as UserRole[],
+  manageIncidents: ['super_admin', 'admin'] as UserRole[],
   
   // Own profile
   editOwnProfile: ['super_admin', 'admin', 'volunteer', 'service_provider'] as UserRole[],

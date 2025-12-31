@@ -60,7 +60,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         
         {/* Main Content - Scrollable */}
         <main className="flex-1 p-6 lg:p-8 overflow-auto">
-          <div className="max-w-7xl mx-auto animate-fade-in">
+          <div className="mx-auto animate-fade-in">
             {children}
           </div>
         </main>

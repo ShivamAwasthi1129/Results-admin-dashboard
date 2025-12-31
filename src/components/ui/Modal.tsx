@@ -9,6 +9,7 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
+  subtitle?: string;
   children: React.ReactNode;
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
@@ -18,6 +19,7 @@ const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   title,
+  subtitle,
   children,
   className,
   size = 'md',
@@ -85,9 +87,16 @@ const Modal: React.FC<ModalProps> = ({
         {/* Header - Sticky */}
         {title && (
           <div className="flex items-center justify-between p-6 md:p-8 pb-5 border-b border-[var(--border-color)] flex-shrink-0">
-            <h3 id="modal-title" className="text-xl font-bold text-[var(--text-primary)]">
-              {title}
-            </h3>
+            <div className="flex-1">
+              <h3 id="modal-title" className="text-xl font-bold text-[var(--text-primary)]">
+                {title}
+              </h3>
+              {subtitle && (
+                <p className="text-sm text-[var(--text-muted)] mt-1">
+                  {subtitle}
+                </p>
+              )}
+            </div>
             <button
               onClick={onClose}
               className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-input)] transition-all duration-200"

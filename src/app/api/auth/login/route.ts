@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
           email: user.email,
           role: user.role,
           phone: user.phone,
-          avatar: user.avatar,
+          avatar: user.profilePhoto || user.avatar,
           status: user.status,
         },
         token,

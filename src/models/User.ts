@@ -117,14 +117,6 @@ const UserSchema = new Schema<IUserDocument>(
   }
 );
 
-// Pre-save hook to set full name from firstName + lastName
-UserSchema.pre('save', function(next) {
-  if (this.firstName && this.lastName) {
-    this.name = `${this.firstName} ${this.lastName}`;
-  }
-  next();
-});
-
 // Indexes
 // Note: email index is automatically created by unique: true
 UserSchema.index({ role: 1, status: 1 });
