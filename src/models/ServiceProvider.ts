@@ -163,8 +163,7 @@ const ServiceProviderSchema = new Schema<IServiceProviderDocument>(
       default: generateProviderId,
     },
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
       required: true,
       unique: true,
     },

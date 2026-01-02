@@ -112,9 +112,13 @@ export async function POST(request: NextRequest) {
 
     // Create user account first
     const hashedPassword = await hashPassword(body.password || 'volunteer123');
+    const firstName = body.firstName || (body.name ? String(body.name).split(' ')[0] : '');
+    const lastName = body.lastName || (body.name ? String(body.name).split(' ').slice(1).join(' ') : '');
     const user = await User.create({
-      name: body.name,
-      email: body.email,
+      firstName,
+      lastName,
+      name: `${firstName} ${lastName}`.trim(),
+      email: String(body.email).toLowerCase(),
       phone: body.phone,
       password: hashedPassword,
       role: 'volunteer',
@@ -124,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     // Create volunteer profile
     const volunteer = await Volunteer.create({
-      userId: user._id,
+      userId: user._id.toString(),
       dateOfBirth: body.dateOfBirth,
       gender: body.gender,
       bloodGroup: body.bloodGroup,

@@ -229,7 +229,7 @@ export default function EmergenciesPage() {
               </div>
 
               <div className="flex flex-wrap gap-2 mb-5">
-                <Badge variant={priorityConfig[emergency.priority]?.badge || 'default'} size="sm" dot>
+                <Badge variant={(priorityConfig[emergency.priority]?.badge as any) || 'secondary'} size="sm" dot>
                   {emergency.priority}
                 </Badge>
                 <Badge 
@@ -269,7 +269,7 @@ export default function EmergenciesPage() {
                 </p>
                 <div className="flex items-center gap-3">
                   {emergency.numberOfPeople && (
-                    <Badge variant="default" size="sm">{emergency.numberOfPeople} people</Badge>
+                    <Badge variant="secondary" size="sm">{emergency.numberOfPeople} people</Badge>
                   )}
                   {canManage && (
                     <button

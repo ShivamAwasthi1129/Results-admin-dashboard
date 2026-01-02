@@ -131,7 +131,22 @@ export default function ResourcesPage() {
     if (isEditing && selectedResource) {
       setResources(prev => prev.map(r => 
         r.id === selectedResource.id 
-          ? { ...r, ...formData, quantity: Number(formData.quantity), minThreshold: Number(formData.minThreshold), status: Number(formData.quantity) === 0 ? 'out_of_stock' : Number(formData.quantity) < Number(formData.minThreshold) ? 'low_stock' : 'available' }
+          ? {
+              ...r,
+              name: formData.name,
+              category: formData.category as Resource['category'],
+              unit: formData.unit,
+              location: formData.location,
+              quantity: Number(formData.quantity),
+              minThreshold: Number(formData.minThreshold),
+              status:
+                Number(formData.quantity) === 0
+                  ? 'out_of_stock'
+                  : Number(formData.quantity) < Number(formData.minThreshold)
+                  ? 'low_stock'
+                  : 'available',
+              lastUpdated: new Date().toISOString(),
+            }
           : r
       ));
       toast.success('Resource updated successfully');
@@ -140,12 +155,15 @@ export default function ResourcesPage() {
       const threshold = Number(formData.minThreshold);
       const newResource: Resource = {
         id: Date.now().toString(),
-        ...formData,
+        name: formData.name,
+        category: formData.category as Resource['category'],
         quantity: qty,
+        unit: formData.unit,
+        location: formData.location,
         minThreshold: threshold,
         status: qty === 0 ? 'out_of_stock' : qty < threshold ? 'low_stock' : 'available',
         lastUpdated: new Date().toISOString(),
-      } as Resource;
+      };
       setResources(prev => [...prev, newResource]);
       toast.success('Resource added successfully');
     }

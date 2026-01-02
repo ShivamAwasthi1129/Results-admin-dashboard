@@ -74,31 +74,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: {
-        users,
-        pagination: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-          hasMore: skip + users.length < total,
-        },
-      },
     });
-  } catch (error) {
-    console.error('Get users error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-// POST - Create new user
-export async function POST(request: NextRequest) {
-  try {
-    const tokenPayload = await verifyAuth(request);
-
     if (!tokenPayload) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -110,14 +86,14 @@ export async function POST(request: NextRequest) {
 
     // Check permissions
     if (body.role === 'super_admin' || body.role === 'admin') {
-      if (!canPerform(tokenPayload.role, 'createAdmin')) {
+      if (!tokenPayload || !canPerform(tokenPayload?.role ?? 'volunteer', 'createAdmin')) {
         return NextResponse.json(
           { success: false, error: 'Only Super Admin can create admin users' },
           { status: 403 }
         );
       }
     } else {
-      if (!canPerform(tokenPayload.role, 'createUser')) {
+      if (!canPerform(tokenPayload?.role ?? 'volunteer', 'createUser')) {
         return NextResponse.json(
           { success: false, error: 'Permission denied' },
           { status: 403 }
@@ -153,14 +129,12 @@ export async function POST(request: NextRequest) {
     const user = await User.create({
       firstName,
       lastName,
-      name: `${firstName} ${lastName}`.trim() || body.name,
       email: body.email.toLowerCase(),
       password: hashedPassword,
       phone: body.phone || '',
       role: body.role || 'volunteer',
       status: body.status || 'active',
       profilePhoto: body.profilePhoto || '',
-      dateOfBirth: body.dateOfBirth || undefined,
       bloodGroup: body.bloodGroup || '',
       gender: body.gender || '',
       ssnNumber: body.ssnNumber || '',
@@ -178,10 +152,9 @@ export async function POST(request: NextRequest) {
       },
       address: {
         street: body.address?.street || body.street || '',
-        apartment: body.address?.apartment || body.apartment || '',
         city: body.address?.city || body.city || '',
         state: body.address?.state || body.state || '',
-        zipCode: body.address?.zipCode || body.zipCode || body.pincode || '',
+        pincode: body.address?.pincode || body.zipCode || '',
         country: body.address?.country || 'United States',
       },
     });
@@ -304,10 +277,9 @@ export async function PUT(request: NextRequest) {
       },
       address: {
         street: body.address?.street || body.street || existingUser.address?.street || '',
-        apartment: body.address?.apartment || body.apartment || existingUser.address?.apartment || '',
         city: body.address?.city || body.city || existingUser.address?.city || '',
         state: body.address?.state || body.state || existingUser.address?.state || '',
-        zipCode: body.address?.zipCode || body.zipCode || body.pincode || existingUser.address?.zipCode || '',
+        pincode: body.address?.pincode || body.zipCode || existingUser.address?.pincode || '',
         country: body.address?.country || existingUser.address?.country || 'United States',
       },
     };

@@ -47,11 +47,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate JWT token
+    const displayName = user.name || `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
     const token = generateToken({
       userId: user._id.toString(),
       email: user.email,
       role: user.role,
-      name: user.name,
+      name: displayName,
     });
 
     // Create response with token
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       data: {
         user: {
           id: user._id,
-          name: user.name,
+          name: displayName,
           email: user.email,
           role: user.role,
           phone: user.phone,

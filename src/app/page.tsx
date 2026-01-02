@@ -19,5 +19,9 @@ export default function Home() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  return <Loader fullScreen text="Loading..." />;
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader size="lg" />
+    </div>
+  );
 }

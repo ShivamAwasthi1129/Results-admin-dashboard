@@ -436,8 +436,8 @@ export default function ServicesPage() {
   const openEditModal = (provider: ServiceProvider) => {
     setSelectedProvider(provider);
     setLogoPreview(provider.logo || null);
-    setGallery(provider.gallery || []);
-    setDocuments(provider.documents || []);
+    setGallery((provider.gallery || []).map(g => ({ url: g.url, caption: g.caption ?? '' })));
+    setDocuments((provider.documents || []).map(d => ({ documentType: d.documentType, documentNumber: d.documentNumber, url: d.url ?? '' })));
     
     // Handle backward compatibility for contact person name
     let contactFirstName = provider.contactPerson?.firstName || '';
@@ -647,7 +647,7 @@ export default function ServicesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-5">
-                      <Badge variant="default" size="sm" className="capitalize">
+                      <Badge variant="secondary" size="sm" className="capitalize">
                         {categoryIcons[provider.category]} {provider.category?.replace('_', ' ')}
                       </Badge>
                     </td>
@@ -1398,7 +1398,7 @@ export default function ServicesPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={doc.required ? 'error' : 'secondary'} size="sm">
+                      <Badge variant={doc.required ? 'danger' : 'secondary'} size="sm">
                         {doc.required ? 'Required' : 'Optional'}
                       </Badge>
                       <button

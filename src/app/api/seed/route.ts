@@ -6,62 +6,30 @@ import ServiceProvider from '@/models/ServiceProvider';
 import Disaster from '@/models/Disaster';
 import Emergency from '@/models/Emergency';
 import { hashPassword } from '@/lib/auth';
+import { IServiceProvider, IDisaster } from '@/types';
 
 export async function GET() {
-  try {
-    await connectDB();
-
-    // Check if super admin already exists
-    const existingSuperAdmin = await User.findOne({ role: 'super_admin' });
-    
-    if (existingSuperAdmin) {
-      return NextResponse.json({
-        success: true,
-        message: 'Database already seeded. Super admin exists.',
+      // Create Super Admin
+      const superAdmin = await User.create({
+        name: 'Super Admin',
+        email: 'superadmin@results.com',
+        password: await hashPassword('superadmin123'),
+        role: 'super_admin',
+        status: 'active',
+        address: { city: 'Delhi', country: 'India' },
       });
-    }
 
-    // Create Super Admin
-    const superAdminPassword = await hashPassword('superadmin123');
-    const superAdmin = await User.create({
-      name: 'Super Admin',
-      email: 'superadmin@results.com',
-      password: superAdminPassword,
-      phone: '+91 9876543210',
-      role: 'super_admin',
-      status: 'active',
-      address: {
-        street: '123 Admin Street',
-        city: 'New Delhi',
-        state: 'Delhi',
-        pincode: '110001',
-        country: 'India',
-      },
-    });
-
-    // Create Admin
-    const adminPassword = await hashPassword('admin123');
-    const admin = await User.create({
-      name: 'John Admin',
-      email: 'admin@results.com',
-      password: adminPassword,
-      phone: '+91 9876543211',
-      role: 'admin',
-      status: 'active',
-      address: {
-        city: 'Mumbai',
-        state: 'Maharashtra',
-        country: 'India',
-      },
-    });
-
-    // Create Volunteers
-    const volunteerPassword = await hashPassword('volunteer123');
-    const volunteers = [];
+      // Create Admin
+      const admin = await User.create({
+        name: 'Admin',
+        email: 'admin@results.com',
+        password: await hashPassword('admin123'),
+        role: 'admin',
+        status: 'active',
+        address: { city: 'Mumbai', country: 'India' },
+      });
+  try {
     const volunteerData = [
-      { name: 'Rahul Sharma', email: 'rahul@results.com', phone: '+91 9876543212', city: 'Delhi' },
-      { name: 'Priya Patel', email: 'priya@results.com', phone: '+91 9876543213', city: 'Mumbai' },
-      { name: 'Amit Kumar', email: 'amit@results.com', phone: '+91 9876543214', city: 'Chennai' },
       { name: 'Sneha Gupta', email: 'sneha@results.com', phone: '+91 9876543215', city: 'Kolkata' },
       { name: 'Vikram Singh', email: 'vikram@results.com', phone: '+91 9876543216', city: 'Bangalore' },
     ];
@@ -75,6 +43,9 @@ export async function GET() {
       'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
     ];
 
+    // Hash password for volunteers
+    const volunteerPassword = await hashPassword('volunteer123');
+    const volunteers: any[] = [];
     for (let i = 0; i < volunteerData.length; i++) {
       const vol = volunteerData[i];
       const user = await User.create({
@@ -88,11 +59,11 @@ export async function GET() {
       });
       
       const volunteer = await Volunteer.create({
-        userId: user._id,
+        userId: user._id.toString(),
         skills: ['First Aid', 'Rescue Operations', 'Communication'],
         availability: 'available',
         currentLocation: {
-          type: 'Point',
+          type: "Point",
           coordinates: [77.2090 + Math.random() * 5, 28.6139 + Math.random() * 5],
         },
         completedMissions: Math.floor(Math.random() * 20),
@@ -141,57 +112,27 @@ export async function GET() {
     ];
 
     // Sample service images by category
-    const serviceImages: Record<string, string[]> = {
-      medical: [
-        'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=400&h=300&fit=crop',
-        'https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=400&h=300&fit=crop',
-        'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?w=400&h=300&fit=crop',
-      ],
-      transportation: [
-        'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=400&h=300&fit=crop',
-        'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop',
-        'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=400&h=300&fit=crop',
-      ],
-      shelter: [
-        'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop',
-        'https://images.unsplash.com/photo-1562619371-b67725b6fde2?w=400&h=300&fit=crop',
-        'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=400&h=300&fit=crop',
-      ],
-      food_water: [
-        'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=400&h=300&fit=crop',
-        'https://images.unsplash.com/photo-1593113598332-cd288d649433?w=400&h=300&fit=crop',
-        'https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?w=400&h=300&fit=crop',
-      ],
-    };
-
-    // Provider gallery images
-    const providerGalleryImages = [
-      { url: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=600&h=400&fit=crop', caption: 'Our Team at Work' },
-      { url: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=600&h=400&fit=crop', caption: 'Emergency Response' },
-      { url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=600&h=400&fit=crop', caption: 'Training Session' },
-    ];
-
+    const serviceImages: Record<string, string[]> = {};
+    const providerGalleryImages: string[] = [];
+    const serviceProviders: any[] = [];
     for (const sp of serviceProviderData) {
       const user = await User.create({
         name: sp.name,
         email: sp.email,
         password: serviceProviderPassword,
-        phone: '+91 ' + Math.floor(9000000000 + Math.random() * 999999999),
         role: 'service_provider',
         status: 'active',
         address: { city: sp.city, country: 'India' },
       });
-
-      const categoryImages = serviceImages[sp.category] || serviceImages.medical;
-
-      await ServiceProvider.create({
-        userId: user._id,
+      const serviceProvider = await ServiceProvider.create({
+        providerId: 'SP' + Math.floor(100000 + Math.random() * 900000).toString(),
+        userId: user._id.toString(),
         businessName: sp.businessName,
-        description: `Professional ${sp.category} services for disaster relief and emergency situations.`,
         category: sp.category,
+        description: `Service provider for ${sp.category.replace('_', ' ')}`,
         logo: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=200&h=200&fit=crop',
         coverImage: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&h=400&fit=crop',
-        gallery: providerGalleryImages,
+        gallery: [],
         services: [
           {
             name: `Emergency ${sp.category.replace('_', ' ')} Service`,
@@ -199,7 +140,6 @@ export async function GET() {
             price: 0,
             priceType: 'negotiable',
             isActive: true,
-            images: categoryImages,
           },
           {
             name: `Standard ${sp.category.replace('_', ' ')} Support`,
@@ -207,7 +147,6 @@ export async function GET() {
             price: 500,
             priceType: 'hourly',
             isActive: true,
-            images: [categoryImages[0], categoryImages[1]],
           },
         ],
         location: {
@@ -216,12 +155,17 @@ export async function GET() {
           address: '123 Service Street',
           city: sp.city,
           state: 'State',
-          pincode: '110001',
+          zipCode: '110001',
         },
         rating: 4 + Math.random(),
         verified: true,
         isAvailableForEmergency: true,
-      });
+        subcategories: [],
+        operatingHours: [],
+        totalReviews: 0,
+        documents: [],
+      } as IServiceProvider);
+      serviceProviders.push({ user, serviceProvider });
     }
 
     // Create Sample Disasters
@@ -234,7 +178,7 @@ export async function GET() {
         status: 'active',
         location: {
           type: 'Point',
-          coordinates: [85.3131, 25.5941],
+          coordinates: [85.3131, 25.5941] as [number, number],
           address: 'Patna District',
           city: 'Patna',
           state: 'Bihar',
@@ -243,9 +187,12 @@ export async function GET() {
         affectedArea: 150,
         affectedPopulation: 50000,
         casualties: { deaths: 12, injured: 45, missing: 8 },
-        resources: { volunteersDeployed: 25, serviceProvidersEngaged: 8, fundsAllocated: 5000000 },
-        reportedBy: superAdmin._id,
+        resources: { volunteersDeployed: 25, serviceProvidersEngaged: 8, fundsAllocated: 5000000, suppliesDistributed: [] },
+        reportedBy: superAdmin._id.toString(),
+        reportedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
         startedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        images: [],
+        updates: [],
       },
       {
         title: 'Earthquake in Gujarat',
@@ -255,7 +202,7 @@ export async function GET() {
         status: 'monitoring',
         location: {
           type: 'Point',
-          coordinates: [72.8777, 19.0760],
+          coordinates: [72.8777, 19.0760] as [number, number],
           address: 'Kutch District',
           city: 'Bhuj',
           state: 'Gujarat',
@@ -264,9 +211,12 @@ export async function GET() {
         affectedArea: 80,
         affectedPopulation: 15000,
         casualties: { deaths: 2, injured: 28, missing: 0 },
-        resources: { volunteersDeployed: 15, serviceProvidersEngaged: 5, fundsAllocated: 2000000 },
-        reportedBy: admin._id,
+        resources: { volunteersDeployed: 15, serviceProvidersEngaged: 5, fundsAllocated: 2000000, suppliesDistributed: [] },
+        reportedBy: admin._id.toString(),
+        reportedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
         startedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+        images: [],
+        updates: [],
       },
       {
         title: 'Cyclone Alert - Odisha Coast',
@@ -276,7 +226,7 @@ export async function GET() {
         status: 'active',
         location: {
           type: 'Point',
-          coordinates: [85.8245, 20.2961],
+          coordinates: [85.8245, 20.2961] as [number, number],
           address: 'Coastal Odisha',
           city: 'Puri',
           state: 'Odisha',
@@ -285,15 +235,18 @@ export async function GET() {
         affectedArea: 300,
         affectedPopulation: 200000,
         casualties: { deaths: 0, injured: 5, missing: 0 },
-        resources: { volunteersDeployed: 100, serviceProvidersEngaged: 25, fundsAllocated: 15000000 },
-        reportedBy: superAdmin._id,
+        resources: { volunteersDeployed: 100, serviceProvidersEngaged: 25, fundsAllocated: 15000000, suppliesDistributed: [] },
+        reportedBy: superAdmin._id.toString(),
+        reportedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
         startedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        images: [],
+        updates: [],
       },
     ];
 
-    const createdDisasters = [];
+    const createdDisasters: any[] = [];
     for (const disaster of disasters) {
-      const created = await Disaster.create(disaster);
+      const created = await Disaster.create(disaster as IDisaster);
       createdDisasters.push(created);
     }
 
@@ -307,12 +260,13 @@ export async function GET() {
         status: 'in_progress',
         disasterId: createdDisasters[0]._id,
         location: {
-          type: 'Point',
-          coordinates: [85.3131, 25.5941],
+          type: 'Point' as 'Point',
+          coordinates: [85.3131, 25.5941] as [number, number],
           address: 'Near Patna Junction, Bihar',
         },
         requestedBy: { name: 'Rajesh Kumar', phone: '+91 9876543220' },
-        assignedTo: [volunteers[0].volunteer._id],
+        assignedTo: [volunteers[0].volunteer._id.toString()],
+        notes: [],
         numberOfPeople: 5,
         specialRequirements: ['Elderly person needs wheelchair', 'Infant present'],
       },
@@ -324,12 +278,13 @@ export async function GET() {
         status: 'dispatched',
         disasterId: createdDisasters[0]._id,
         location: {
-          type: 'Point',
-          coordinates: [85.4131, 25.6941],
+          type: 'Point' as 'Point',
+          coordinates: [85.4131, 25.6941] as [number, number],
           address: 'Danapur Area, Bihar',
         },
         requestedBy: { name: 'Sunita Devi', phone: '+91 9876543221' },
-        assignedTo: [volunteers[1].volunteer._id, volunteers[2].volunteer._id],
+        assignedTo: [volunteers[1].volunteer._id.toString(), volunteers[2].volunteer._id.toString()],
+        notes: [],
         numberOfPeople: 2,
         specialRequirements: ['Oxygen cylinder needed', 'Stretcher required'],
       },
@@ -340,13 +295,15 @@ export async function GET() {
         priority: 'high',
         status: 'pending',
         location: {
-          type: 'Point',
-          coordinates: [85.2131, 25.4941],
+          type: 'Point' as 'Point',
+          coordinates: [85.2131, 25.4941] as [number, number],
           address: 'Community Hall, Darbhanga',
         },
         requestedBy: { name: 'Camp Coordinator', phone: '+91 9876543222' },
         numberOfPeople: 200,
         specialRequirements: ['Drinking water - 500L', 'Food packets - 400', 'Blankets - 100'],
+        assignedTo: [],
+        notes: [],
       },
     ];
 

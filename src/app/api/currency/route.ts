@@ -65,7 +65,7 @@ async function fetchExchangeRates(): Promise<Record<string, number>> {
   
   // Return cached rates if still valid
   if (cachedRates && (now - cacheTimestamp) < CACHE_DURATION) {
-    return cachedRates;
+    return cachedRates || {};
   }
 
   try {
@@ -82,10 +82,12 @@ async function fetchExchangeRates(): Promise<Record<string, number>> {
     cacheTimestamp = now;
     
     // Ensure USD is always 1
-    cachedRates['USD'] = 1;
+    if (cachedRates) {
+      cachedRates['USD'] = 1;
+    }
     
     console.log('Exchange rates fetched successfully from API');
-    return cachedRates;
+    return cachedRates || {};
   } catch (error) {
     console.error('Error fetching exchange rates:', error);
     // Return fallback rates

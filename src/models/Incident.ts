@@ -163,13 +163,12 @@ IncidentSchema.index({ assignedTo: 1 });
 IncidentSchema.index({ 'reportedBy.email': 1 });
 
 // Pre-save hook to generate ticket number if not provided
-IncidentSchema.pre('save', async function (next) {
+IncidentSchema.pre('save', async function () {
   if (!this.ticketNumber) {
     const year = new Date().getFullYear();
     const count = await mongoose.model('Incident').countDocuments({});
     this.ticketNumber = `TKT-${year}-${String(count + 1).padStart(5, '0')}`;
   }
-  next();
 });
 
 const Incident: Model<IIncidentDocument> = mongoose.models.Incident || mongoose.model<IIncidentDocument>('Incident', IncidentSchema);

@@ -13,7 +13,7 @@ const SearchModal: React.FC = () => {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setMounted(true);

@@ -262,7 +262,7 @@ export default function LiveDisastersPage() {
                                 {disaster.title}
                               </h4>
                               <Badge
-                                variant={disaster.severity === 'critical' ? 'danger' : disaster.severity === 'high' ? 'warning' : 'default'}
+                                variant={disaster.severity === 'critical' ? 'danger' : disaster.severity === 'high' ? 'warning' : 'secondary'}
                                 size="sm"
                               >
                                 {disaster.severity}

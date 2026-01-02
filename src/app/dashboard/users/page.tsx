@@ -296,7 +296,7 @@ export default function UsersPage() {
     superAdmins: users.filter(u => u.role === 'super_admin').length,
   };
 
-  const roleConfig: Record<string, { color: string; bg: string; icon: JSX.Element }> = {
+  const roleConfig: Record<string, { color: string; bg: string; icon: React.ReactNode }> = {
     super_admin: { color: 'text-[var(--danger)]', bg: 'bg-[var(--danger)]/20', icon: <ShieldCheckIcon className="w-4 h-4" /> },
     admin: { color: 'text-[var(--info)]', bg: 'bg-[var(--info)]/20', icon: <ShieldCheckIcon className="w-4 h-4" /> },
     volunteer: { color: 'text-[var(--success)]', bg: 'bg-[var(--success)]/20', icon: <UserGroupIcon className="w-4 h-4" /> },

@@ -43,6 +43,9 @@ export type ServiceCategory =
   | 'logistics'
   | 'counseling'
   | 'security'
+  | 'cleaning'
+  | 'equipment_rental'
+  | 'manpower'
   | 'other';
 
 // Volunteer Availability
@@ -50,6 +53,8 @@ export type VolunteerAvailability = 'available' | 'on_mission' | 'unavailable' |
 
 // User Interface
 export interface IUser {
+    firstName?: string;
+    lastName?: string;
   _id?: string;
   name: string;
   email: string;
@@ -58,6 +63,7 @@ export interface IUser {
   role: UserRole;
   status: UserStatus;
   avatar?: string;
+  profilePhoto?: string;
   address?: {
     street?: string;
     city?: string;
@@ -176,8 +182,13 @@ export interface IServiceProvider {
   userId: string;
   // Business Information
   businessName: string;
-  businessType?: 'individual' | 'partnership' | 'company' | 'ngo' | 'government' | 'other';
+  businessType?: 'individual' | 'partnership' | 'llc' | 'corporation' | 'nonprofit' | 'government' | 'other';
+  einNumber?: string;
   registrationNumber?: string;
+  stateRegistration?: {
+    state?: string;
+    registrationNumber?: string;
+  };
   gstNumber?: string;
   panNumber?: string;
   description: string;
@@ -192,6 +203,8 @@ export interface IServiceProvider {
   }[];
   // Contact
   contactPerson?: {
+    firstName?: string;
+    lastName?: string;
     name: string;
     designation?: string;
     phone: string;
@@ -229,16 +242,19 @@ export interface IServiceProvider {
     type: 'Point';
     coordinates: [number, number];
     address: string;
+    suite?: string;
     landmark?: string;
     city: string;
     state: string;
-    pincode: string;
+    zipCode?: string;
+    pincode?: string; // For backward compatibility
     country?: string;
   };
   serviceAreas?: {
     city: string;
     state: string;
-    pincode?: string;
+    zipCode?: string;
+    pincode?: string; // For backward compatibility
   }[];
   maxServiceRadius?: number;
   // Operating Hours
@@ -274,6 +290,7 @@ export interface IServiceProvider {
     name: string;
     number: string;
     issuedBy?: string;
+    state?: string;
     validTill?: Date;
     documentUrl?: string;
   }[];
@@ -293,11 +310,19 @@ export interface IServiceProvider {
   verifiedAt?: Date;
   // Documents
   documents: {
-    name?: string;
-    type?: string;
-    url: string;
+    documentType?: string;
+    documentNumber?: string;
+    documentName?: string;
+    name?: string; // For backward compatibility
+    type?: string; // For backward compatibility
+    issuedBy?: string;
+    issuedDate?: Date;
+    expiryDate?: Date;
+    url?: string;
     uploadedAt?: Date;
     verified?: boolean;
+    verifiedAt?: Date;
+    verifiedBy?: string;
   }[];
   // Stats
   totalJobsCompleted?: number;

@@ -1,7 +1,45 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
-import { IUser, UserRole, UserStatus } from '@/types';
+import { UserRole, UserStatus } from '@/types';
 
-export interface IUserDocument extends Omit<IUser, '_id'>, Document {}
+// Define the full shape used by the API and schema to avoid TypeScript create() errors
+export interface IUserDocument extends Document {
+  firstName: string;
+  lastName: string;
+  name?: string;
+  email: string;
+  password: string;
+  phone?: string;
+  role: UserRole;
+  status: UserStatus;
+  avatar?: string;
+  profilePhoto?: string;
+  dateOfBirth?: Date;
+  bloodGroup?: '' | 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-' | 'unknown';
+  gender?: '' | 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  ssnNumber?: string;
+  aadharNumber?: string; // legacy
+  driversLicense?: {
+    number?: string;
+    state?: string;
+    expiryDate?: Date;
+  };
+  emergencyContact?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    relation?: string;
+  };
+  address?: {
+    street?: string;
+    apartment?: string;
+    city?: string;
+    state?: string;
+    pincode?: string; // align with API usage
+    country?: string;
+  };
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 const UserSchema = new Schema<IUserDocument>(
   {
@@ -107,6 +145,8 @@ const UserSchema = new Schema<IUserDocument>(
       apartment: { type: String, default: '' },
       city: { type: String, default: '' },
       state: { type: String, default: '' },
+      // Use pincode to align with API payloads; keep zipCode for backward compatibility
+      pincode: { type: String, default: '' },
       zipCode: { type: String, default: '' },
       country: { type: String, default: 'United States' },
     },

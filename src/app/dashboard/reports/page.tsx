@@ -572,7 +572,7 @@ export default function ReportsAnalyticsPage() {
                         <div key={status} className="flex items-center justify-between">
                           <span className="text-[var(--text-secondary)] capitalize">{status.replace('_', ' ')}</span>
                           <Badge 
-                            variant={status === 'available' ? 'success' : status === 'on_mission' ? 'warning' : 'default'} 
+                            variant={status === 'available' ? 'success' : status === 'on_mission' ? 'warning' : 'secondary'} 
                             size="sm"
                           >
                             {count as number}
@@ -649,7 +649,7 @@ export default function ReportsAnalyticsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-5">
-                        <Badge variant="default" size="sm" className="capitalize">{report.type}</Badge>
+                        <Badge variant="secondary" size="sm" className="capitalize">{report.type}</Badge>
                       </td>
                       <td className="px-6 py-5">
                         <Badge variant={report.format === 'PDF' ? 'danger' : 'success'} size="sm">

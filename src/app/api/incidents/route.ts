@@ -216,7 +216,10 @@ export async function POST(request: NextRequest) {
       }],
     };
 
-    const incident = await Incident.create(incidentData);
+    let incident: any = await Incident.create(incidentData);
+    if (Array.isArray(incident)) {
+      incident = incident[0];
+    }
 
     return NextResponse.json({
       success: true,

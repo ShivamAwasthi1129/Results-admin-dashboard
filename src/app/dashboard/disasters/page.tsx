@@ -219,7 +219,22 @@ export default function DisastersPage() {
       {/* Content */}
       {viewMode === 'map' ? (
         <Card padding="none" className="h-[500px] overflow-hidden">
-          <DisasterMap disasters={disasters} />
+          <DisasterMap
+            disasters={disasters
+              .filter((d) => typeof d.location?.coordinates?.lat === 'number' && typeof d.location?.coordinates?.lng === 'number')
+              .map((d) => ({
+                ...d,
+                location: {
+                  address: d.location?.address || '',
+                  city: d.location?.city || '',
+                  state: d.location?.state || '',
+                  coordinates: [
+                    (d.location!.coordinates as any).lng as number,
+                    (d.location!.coordinates as any).lat as number,
+                  ] as [number, number],
+                },
+              }))}
+          />
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -274,8 +289,8 @@ export default function DisastersPage() {
                 <p className="text-sm text-[var(--text-secondary)] line-clamp-2 mb-5">{disaster.description}</p>
 
                 <div className="flex flex-wrap gap-2 mb-5">
-                  <Badge variant="default" size="sm" className="capitalize">{disaster.type}</Badge>
-                  <Badge variant={severityConfig[disaster.severity]?.badge || 'default'} size="sm" className="capitalize">
+                  <Badge variant="secondary" size="sm" className="capitalize">{disaster.type}</Badge>
+                  <Badge variant={(severityConfig[disaster.severity]?.badge as any) || 'secondary'} size="sm" className="capitalize">
                     {disaster.severity}
                   </Badge>
                 </div>

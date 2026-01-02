@@ -16,8 +16,7 @@ const VolunteerSchema = new Schema<IVolunteerDocument>(
       default: generateVolunteerId,
     },
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
       required: true,
       unique: true,
     },
@@ -125,12 +124,10 @@ const VolunteerSchema = new Schema<IVolunteerDocument>(
     },
     // Mission Stats
     assignedDisasters: [{
-      type: Schema.Types.ObjectId,
-      ref: 'Disaster',
+      type: String,
     }],
     currentMission: {
-      type: Schema.Types.ObjectId,
-      ref: 'Emergency',
+      type: String,
     },
     completedMissions: {
       type: Number,
@@ -195,8 +192,7 @@ const VolunteerSchema = new Schema<IVolunteerDocument>(
       default: 'pending',
     },
     verifiedBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
     },
     verifiedAt: {
       type: Date,

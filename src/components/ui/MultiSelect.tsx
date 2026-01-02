@@ -110,7 +110,7 @@ export function MultiSelect({
             <div className="max-h-60 overflow-y-auto">
               {options.map((option) => {
                 const isSelected = value.includes(option.value);
-                const isDisabled = maxItems && !isSelected && value.length >= maxItems;
+                const isDisabled: boolean = !!(maxItems && !isSelected && value.length >= maxItems);
                 
                 return (
                   <button

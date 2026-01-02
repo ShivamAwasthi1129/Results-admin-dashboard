@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: devices.map(device => ({
-        id: device._id.toString(),
+        id: device._id?.toString(),
         deviceId: device.deviceId,
         deviceName: device.deviceName,
         deviceType: device.deviceType,
@@ -188,12 +188,16 @@ export async function POST(request: NextRequest) {
       })) : [],
     };
 
-    const device = await Device.create(deviceData);
+    let device: any = await Device.create(deviceData);
+    // Device.create returns an array if passed an array, but a single doc if passed an object
+    if (Array.isArray(device)) {
+      device = device[0];
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        id: device._id.toString(),
+        id: device._id?.toString(),
         deviceId: device.deviceId,
         deviceName: device.deviceName,
         deviceType: device.deviceType,

@@ -88,7 +88,7 @@ export async function PUT(
 
     updateFields.forEach((field) => {
       if (body[field] !== undefined) {
-        (disaster as Record<string, unknown>)[field] = body[field];
+        (disaster as any)[field] = body[field];
       }
     });
 

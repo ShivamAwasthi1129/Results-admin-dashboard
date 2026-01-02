@@ -137,13 +137,13 @@ export async function POST(request: NextRequest) {
 
     // Ensure location has proper GeoJSON format - USA based
     const locationData = body.location ? {
-      type: 'Point',
+      type: 'Point' as 'Point',
       coordinates: body.location.coordinates || [0, 0],
       address: body.location.address || '',
-      suite: body.location.suite || '',
+      landmark: body.location.landmark || '',
       city: body.location.city || '',
       state: body.location.state || '',
-      zipCode: body.location.zipCode || '',
+      pincode: body.location.pincode || '',
       country: body.location.country || 'United States',
     } : undefined;
 
@@ -152,9 +152,7 @@ export async function POST(request: NextRequest) {
       userId,
       businessName: body.businessName,
       businessType: body.businessType,
-      einNumber: body.einNumber, // EIN Number for USA businesses
       registrationNumber: body.registrationNumber,
-      stateRegistration: body.stateRegistration,
       description: body.description,
       tagline: body.tagline,
       logo: body.logo,

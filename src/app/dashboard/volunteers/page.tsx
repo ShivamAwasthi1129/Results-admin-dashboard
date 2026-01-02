@@ -457,7 +457,7 @@ export default function VolunteersPage() {
                           <Badge key={i} variant="primary" size="sm">{skill}</Badge>
                         ))}
                         {volunteer.skills?.length > 2 && (
-                          <Badge variant="default" size="sm">+{volunteer.skills.length - 2}</Badge>
+                          <Badge variant="secondary" size="sm">+{volunteer.skills.length - 2}</Badge>
                         )}
                       </div>
                     </td>
@@ -473,7 +473,7 @@ export default function VolunteersPage() {
                     </td>
                     <td className="px-4 py-4">
                       <Badge 
-                        variant={volunteer.availability === 'available' ? 'success' : volunteer.availability === 'on_mission' ? 'warning' : 'default'} 
+                        variant={volunteer.availability === 'available' ? 'success' : volunteer.availability === 'on_mission' ? 'warning' : 'secondary'} 
                         size="sm"
                         dot
                       >

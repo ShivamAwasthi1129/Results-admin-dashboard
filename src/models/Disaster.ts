@@ -76,7 +76,7 @@ const DisasterSchema = new Schema<IDisasterDocument>(
       suppliesDistributed: [{ type: String }],
     },
     reportedBy: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId as unknown as StringConstructor,
       ref: 'User',
     },
     reportedAt: {
