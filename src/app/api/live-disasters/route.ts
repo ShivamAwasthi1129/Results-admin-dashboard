@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isInUSA, getApproximateUSAState, USA_STATES } from '@/lib/geocoding';
 
 // NASA EONET API for live natural events
 const EONET_API = 'https://eonet.gsfc.nasa.gov/api/v3/events';
@@ -73,6 +74,18 @@ export async function GET() {
         'manmade': 'other'
       };
 
+      const lat = latestGeometry?.coordinates[1] || 0;
+      const lng = latestGeometry?.coordinates[0] || 0;
+      
+      // Determine country and state from coordinates
+      let country: string | undefined;
+      let state: string | undefined;
+      
+      if (isInUSA(lat, lng)) {
+        country = 'United States';
+        state = getApproximateUSAState(lat, lng) || undefined;
+      }
+
       return {
         id: event.id,
         title: event.title,
@@ -83,9 +96,12 @@ export async function GET() {
         status: event.closed ? 'resolved' : 'active',
         location: {
           coordinates: {
-            lat: latestGeometry?.coordinates[1] || 0,
-            lng: latestGeometry?.coordinates[0] || 0
-          }
+            lat,
+            lng
+          },
+          country,
+          state,
+          region: state ? `${state}, USA` : undefined
         },
         magnitude: latestGeometry?.magnitudeValue,
         magnitudeUnit: latestGeometry?.magnitudeUnit,

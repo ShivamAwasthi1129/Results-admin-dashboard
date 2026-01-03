@@ -53,8 +53,9 @@ export function MultiSelect({
     }
   };
 
-  const removeItem = (e: React.MouseEvent, optionValue: string) => {
+  const removeItem = (e: React.MouseEvent | React.KeyboardEvent, optionValue: string) => {
     e.stopPropagation();
+    e.preventDefault();
     onChange(value.filter(v => v !== optionValue));
   };
 
@@ -68,10 +69,17 @@ export function MultiSelect({
         </label>
       )}
       <div className="relative">
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full min-h-[52px] px-4 py-3 bg-[var(--bg-input)] border-2 rounded-xl text-left flex items-center gap-2 flex-wrap transition-all ${
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setIsOpen(!isOpen);
+            }
+          }}
+          className={`w-full min-h-[52px] px-4 py-3 bg-[var(--bg-input)] border-2 rounded-xl text-left flex items-center gap-2 flex-wrap transition-all cursor-pointer ${
             isOpen 
               ? 'border-[var(--primary-500)] ring-4 ring-[var(--primary-500)]/20' 
               : error 
@@ -89,13 +97,24 @@ export function MultiSelect({
                   className="inline-flex items-center gap-1 px-2.5 py-1 bg-[var(--primary-500)]/20 text-[var(--primary-500)] rounded-lg text-sm font-medium"
                 >
                   {labelText}
-                  <button
-                    type="button"
-                    onClick={(e) => removeItem(e, value[index])}
-                    className="hover:bg-[var(--primary-500)]/30 rounded-full p-0.5 transition-colors"
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeItem(e, value[index]);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeItem(e, value[index]);
+                      }
+                    }}
+                    className="hover:bg-[var(--primary-500)]/30 rounded-full p-0.5 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)] focus:ring-offset-1"
                   >
                     <XMarkIcon className="w-3.5 h-3.5" />
-                  </button>
+                  </span>
                 </span>
               ))
             )}
@@ -103,7 +122,7 @@ export function MultiSelect({
           <ChevronDownIcon 
             className={`w-5 h-5 text-[var(--text-muted)] shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
           />
-        </button>
+        </div>
 
         {isOpen && (
           <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden">

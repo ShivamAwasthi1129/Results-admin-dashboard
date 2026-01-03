@@ -15,7 +15,10 @@ import {
   ArrowTopRightOnSquareIcon,
   ClockIcon,
   SignalIcon,
+  XMarkIcon,
+  FunnelIcon,
 } from '@heroicons/react/24/outline';
+import { USA_STATES } from '@/lib/geocoding';
 
 // Dynamic import for map to avoid SSR issues
 const LiveDisasterMap = dynamic(
@@ -34,6 +37,7 @@ interface LiveDisaster {
   location: {
     coordinates?: { lat: number; lng: number };
     country?: string;
+    state?: string;
     region?: string;
   };
   magnitude?: number;
@@ -67,6 +71,9 @@ export default function LiveDisastersPage() {
   const [selectedDisaster, setSelectedDisaster] = useState<LiveDisaster | null>(null);
   const [filterType, setFilterType] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState('all');
+  const [filterCountry, setFilterCountry] = useState('all');
+  const [filterState, setFilterState] = useState('all');
+  const [highlightedDisasterId, setHighlightedDisasterId] = useState<string | null>(null);
 
   const fetchLiveDisasters = async () => {
     setIsLoading(true);
@@ -94,6 +101,8 @@ export default function LiveDisastersPage() {
   const filteredDisasters = disasters.filter(d => {
     if (filterType !== 'all' && d.type !== filterType) return false;
     if (filterSeverity !== 'all' && d.severity !== filterSeverity) return false;
+    if (filterCountry !== 'all' && d.location?.country !== filterCountry) return false;
+    if (filterState !== 'all' && d.location?.state !== filterState) return false;
     return true;
   });
 
@@ -105,7 +114,24 @@ export default function LiveDisastersPage() {
     storms: disasters.filter(d => d.type === 'cyclone').length,
   };
 
-  const uniqueTypes = Array.from(new Set(disasters.map(d => d.type)));
+  const uniqueTypes = Array.from(new Set(disasters.map(d => d.type))).sort();
+  const uniqueCountries = Array.from(new Set(disasters.map(d => d.location?.country).filter(Boolean))).sort();
+  const uniqueStates = Array.from(new Set(
+    disasters
+      .filter(d => d.location?.country === 'United States' && d.location?.state)
+      .map(d => d.location?.state)
+      .filter(Boolean)
+  )).sort();
+  
+  // Auto-scroll to selected disaster in the list
+  useEffect(() => {
+    if (selectedDisaster) {
+      const element = document.getElementById(`disaster-${selectedDisaster.id}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [selectedDisaster]);
 
   return (
     <DashboardLayout title="Live Disasters" subtitle="Real-time global disaster monitoring">
@@ -184,9 +210,15 @@ export default function LiveDisastersPage() {
               <LiveDisasterMap
                 disasters={filteredDisasters}
                 selectedId={selectedDisaster?.id}
+                highlightedId={highlightedDisasterId}
                 onSelectDisaster={(id) => {
-                  const disaster = disasters.find(d => d.id === id);
-                  setSelectedDisaster(disaster || null);
+                  const disaster = filteredDisasters.find(d => d.id === id);
+                  if (disaster) {
+                    setSelectedDisaster(disaster);
+                    setHighlightedDisasterId(id);
+                    // Clear highlight after animation
+                    setTimeout(() => setHighlightedDisasterId(null), 2000);
+                  }
                 }}
               />
             </div>
@@ -197,12 +229,35 @@ export default function LiveDisastersPage() {
         <div className="lg:col-span-1">
           <Card padding="none" className="h-[600px] flex flex-col">
             {/* Filters */}
-            <div className="p-4 border-b border-[var(--border-color)]">
+            <div className="p-4 border-b border-[var(--border-color)] bg-[var(--bg-input)]">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                  <FunnelIcon className="w-4 h-4" />
+                  Filters
+                </h3>
+                {(filterType !== 'all' || filterSeverity !== 'all' || filterCountry !== 'all' || filterState !== 'all') && (
+                  <button
+                    onClick={() => {
+                      setFilterType('all');
+                      setFilterSeverity('all');
+                      setFilterCountry('all');
+                      setFilterState('all');
+                    }}
+                    className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                  >
+                    <XMarkIcon className="w-3 h-3" />
+                    Clear
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2 mb-3">
                 <select
                   value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)]"
+                  onChange={(e) => {
+                    setFilterType(e.target.value);
+                    setSelectedDisaster(null);
+                  }}
+                  className="px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 transition-colors flex-1 min-w-[120px]"
                 >
                   <option value="all">All Types</option>
                   {uniqueTypes.map(type => (
@@ -211,8 +266,11 @@ export default function LiveDisastersPage() {
                 </select>
                 <select
                   value={filterSeverity}
-                  onChange={(e) => setFilterSeverity(e.target.value)}
-                  className="px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)]"
+                  onChange={(e) => {
+                    setFilterSeverity(e.target.value);
+                    setSelectedDisaster(null);
+                  }}
+                  className="px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 transition-colors flex-1 min-w-[120px]"
                 >
                   <option value="all">All Severity</option>
                   <option value="low">Low</option>
@@ -220,10 +278,50 @@ export default function LiveDisastersPage() {
                   <option value="high">High</option>
                   <option value="critical">Critical</option>
                 </select>
+                <select
+                  value={filterCountry}
+                  onChange={(e) => {
+                    setFilterCountry(e.target.value);
+                    setFilterState('all'); // Reset state when country changes
+                    setSelectedDisaster(null);
+                  }}
+                  className="px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 transition-colors flex-1 min-w-[140px]"
+                >
+                  <option value="all">All Countries</option>
+                  {uniqueCountries.map(country => (
+                    <option key={country} value={country}>{country}</option>
+                  ))}
+                </select>
+                {filterCountry === 'United States' && (
+                  <select
+                    value={filterState}
+                    onChange={(e) => {
+                      setFilterState(e.target.value);
+                      setSelectedDisaster(null);
+                    }}
+                    className="px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 transition-colors flex-1 min-w-[140px]"
+                  >
+                    <option value="all">All States</option>
+                    {USA_STATES.map(state => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
+                )}
               </div>
-              <p className="text-xs text-[var(--text-muted)]">
-                Showing {filteredDisasters.length} of {disasters.length} events
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-[var(--text-muted)]">
+                  Showing <span className="font-semibold text-[var(--text-primary)]">{filteredDisasters.length}</span> of <span className="font-semibold text-[var(--text-primary)]">{disasters.length}</span> events
+                </p>
+                {selectedDisaster && (
+                  <button
+                    onClick={() => setSelectedDisaster(null)}
+                    className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                  >
+                    <XMarkIcon className="w-3 h-3" />
+                    Deselect
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Events List */}
@@ -247,10 +345,25 @@ export default function LiveDisastersPage() {
                     return (
                       <button
                         key={disaster.id}
-                        onClick={() => setSelectedDisaster(isSelected ? null : disaster)}
-                        className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-colors ${
-                          isSelected ? 'bg-[var(--bg-input)] border-l-2 border-purple-500' : ''
+                        id={`disaster-${disaster.id}`}
+                        onClick={() => {
+                          setSelectedDisaster(isSelected ? null : disaster);
+                          setHighlightedDisasterId(disaster.id);
+                          setTimeout(() => setHighlightedDisasterId(null), 2000);
+                        }}
+                        className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-all duration-200 ${
+                          isSelected 
+                            ? 'bg-[var(--bg-input)] border-l-4 border-purple-500 shadow-lg' 
+                            : highlightedDisasterId === disaster.id
+                            ? 'bg-purple-500/10 border-l-4 border-purple-400 animate-pulse'
+                            : 'border-l-4 border-transparent'
                         }`}
+                        onMouseEnter={() => setHighlightedDisasterId(disaster.id)}
+                        onMouseLeave={() => {
+                          if (highlightedDisasterId === disaster.id && !isSelected) {
+                            setHighlightedDisasterId(null);
+                          }
+                        }}
                       >
                         <div className="flex gap-3">
                           <div className={`w-10 h-10 rounded-xl ${colors.bg} flex items-center justify-center shrink-0`}>
@@ -271,6 +384,7 @@ export default function LiveDisastersPage() {
                             <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-2">
                               {disaster.category}
                               {disaster.location?.country && ` • ${disaster.location.country}`}
+                              {disaster.location?.state && ` • ${disaster.location.state}`}
                             </p>
                             <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                               <span className="flex items-center gap-1">

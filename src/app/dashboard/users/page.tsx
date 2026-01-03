@@ -516,7 +516,7 @@ export default function UsersPage() {
               <PhoneInput 
                 label="Phone" 
                 value={formData.phone} 
-                onChange={(val) => setFormData({ ...formData, phone: val })} 
+                onChange={(val) => setFormData({ ...formData, phone: val || '' })} 
                 placeholder="(555) 123-4567"
               />
               <Input 
@@ -606,7 +606,7 @@ export default function UsersPage() {
               <PhoneInput 
                 label="Phone" 
                 value={formData.emergencyPhone} 
-                onChange={(val) => setFormData({ ...formData, emergencyPhone: val })} 
+                onChange={(val) => setFormData({ ...formData, emergencyPhone: val || '' })} 
                 placeholder="(555) 987-6543"
               />
               <Select 

@@ -17,6 +17,7 @@ interface LiveDisaster {
 interface LiveDisasterMapProps {
   disasters: LiveDisaster[];
   selectedId?: string;
+  highlightedId?: string | null;
   onSelectDisaster?: (id: string) => void;
 }
 
@@ -41,6 +42,7 @@ const typeEmoji: Record<string, string> = {
 export default function LiveDisasterMap({
   disasters,
   selectedId,
+  highlightedId,
   onSelectDisaster,
 }: LiveDisasterMapProps) {
   const mapRef = useRef<L.Map | null>(null);
@@ -90,37 +92,41 @@ export default function LiveDisasterMap({
       const color = severityColors[disaster.severity] || severityColors.medium;
       const emoji = typeEmoji[disaster.type] || typeEmoji.other;
       const isSelected = selectedId === disaster.id;
+      const isHighlighted = highlightedId === disaster.id;
 
-      // Create custom icon
+      // Create custom icon with enhanced interactivity
+      const markerSize = isSelected ? 56 : isHighlighted ? 48 : 40;
       const icon = L.divIcon({
         className: 'custom-disaster-marker',
         html: `
           <div style="
             position: relative;
-            width: ${isSelected ? '48px' : '40px'};
-            height: ${isSelected ? '48px' : '40px'};
+            width: ${markerSize}px;
+            height: ${markerSize}px;
             display: flex;
             align-items: center;
             justify-content: center;
             background: ${color};
             border-radius: 50%;
-            border: 4px solid white;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-            font-size: ${isSelected ? '22px' : '18px'};
+            border: ${isSelected ? '5px' : '4px'} solid white;
+            box-shadow: 0 ${isSelected ? '6px' : '4px'} ${isSelected ? '20px' : '16px'} rgba(0,0,0,0.${isSelected ? '5' : '4'});
+            font-size: ${isSelected ? '24px' : isHighlighted ? '20px' : '18px'};
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
+            z-index: ${isSelected ? '1000' : isHighlighted ? '999' : '1'};
             ${disaster.severity === 'critical' ? 'animation: pulse-marker 1.5s infinite;' : ''}
+            ${isHighlighted ? 'animation: highlight-marker 0.6s ease-in-out;' : ''}
           ">
             ${emoji}
           </div>
-          ${isSelected ? `
+          ${(isSelected || isHighlighted) ? `
             <div style="
               position: absolute;
               top: 50%;
               left: 50%;
               transform: translate(-50%, -50%);
-              width: 70px;
-              height: 70px;
+              width: ${isSelected ? '80px' : '70px'};
+              height: ${isSelected ? '80px' : '70px'};
               border: 3px solid ${color};
               border-radius: 50%;
               opacity: 0.5;
@@ -132,14 +138,18 @@ export default function LiveDisasterMap({
               0%, 100% { transform: scale(1); }
               50% { transform: scale(1.15); }
             }
+            @keyframes highlight-marker {
+              0%, 100% { transform: scale(1); }
+              50% { transform: scale(1.2); }
+            }
             @keyframes ripple-marker {
               0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
               100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
             }
           </style>
         `,
-        iconSize: [isSelected ? 48 : 40, isSelected ? 48 : 40],
-        iconAnchor: [isSelected ? 24 : 20, isSelected ? 24 : 20],
+        iconSize: [markerSize, markerSize],
+        iconAnchor: [markerSize / 2, markerSize / 2],
       });
 
       const marker = L.marker([lat, lng], { icon })
@@ -198,6 +208,19 @@ export default function LiveDisasterMap({
         if (onSelectDisaster) {
           onSelectDisaster(disaster.id);
         }
+        // Open popup on click
+        marker.openPopup();
+      });
+
+      // Add hover effect
+      marker.on('mouseover', () => {
+        marker.setZIndexOffset(1000);
+      });
+
+      marker.on('mouseout', () => {
+        if (selectedId !== disaster.id) {
+          marker.setZIndexOffset(0);
+        }
       });
     });
 
@@ -211,7 +234,7 @@ export default function LiveDisasterMap({
         mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 5 });
       }
     }
-  }, [disasters, selectedId, onSelectDisaster]);
+  }, [disasters, selectedId, highlightedId, onSelectDisaster]);
 
   // Pan to selected disaster
   useEffect(() => {

@@ -851,14 +851,14 @@ export default function ServicesPage() {
                     <PhoneInput 
                       label="Phone *" 
                       value={formData.contactPhone} 
-                      onChange={(val) => setFormData({ ...formData, contactPhone: val })} 
+                      onChange={(val) => setFormData({ ...formData, contactPhone: val || '' })} 
                       required
                       placeholder="(555) 123-4567"
                     />
                     <PhoneInput 
                       label="Alternate Phone" 
                       value={formData.contactAlternatePhone} 
-                      onChange={(val) => setFormData({ ...formData, contactAlternatePhone: val })} 
+                      onChange={(val) => setFormData({ ...formData, contactAlternatePhone: val || '' })} 
                       placeholder="(555) 987-6543"
                     />
                     <Input 
