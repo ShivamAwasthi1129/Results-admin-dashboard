@@ -60,7 +60,7 @@ const Modal: React.FC<ModalProps> = ({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-start justify-center py-8 px-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[10000] flex items-start justify-center py-8 px-4 overflow-y-auto">
       {/* Overlay - No blur */}
       <div
         className="fixed inset-0 bg-black/70 transition-opacity"

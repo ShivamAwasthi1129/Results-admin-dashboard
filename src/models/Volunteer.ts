@@ -124,7 +124,30 @@ const VolunteerSchema = new Schema<IVolunteerDocument>(
     },
     // Mission Stats
     assignedDisasters: [{
-      type: String,
+      disasterId: {
+        type: String,
+        required: true,
+      },
+      assignedAt: {
+        type: Date,
+        default: Date.now,
+      },
+      assignedBy: {
+        type: String,
+      },
+      fromDate: {
+        type: Date,
+        required: true,
+      },
+      toDate: {
+        type: Date,
+        required: true,
+      },
+      status: {
+        type: String,
+        enum: ['assigned', 'active', 'completed', 'cancelled'],
+        default: 'assigned',
+      },
     }],
     currentMission: {
       type: String,
@@ -211,6 +234,11 @@ const VolunteerSchema = new Schema<IVolunteerDocument>(
       type: String,
       default: '',
     },
+    // Team Assignment
+    teamId: {
+      type: String,
+      ref: 'VolunteerTeam',
+    },
   },
   {
     timestamps: true,
@@ -226,16 +254,17 @@ VolunteerSchema.index({ availability: 1 });
 VolunteerSchema.index({ status: 1 });
 VolunteerSchema.index({ 'address.city': 1 });
 VolunteerSchema.index({ skills: 1 });
+VolunteerSchema.index({ teamId: 1 });
 
 // Pre-save hook to ensure unique volunteerId
 VolunteerSchema.pre('save', async function() {
-  if (this.isNew && !this.volunteerId) {
+  if (this.isNew && !(this as any).volunteerId) {
     let isUnique = false;
     while (!isUnique) {
       const newId = generateVolunteerId();
       const existing = await mongoose.models.Volunteer.findOne({ volunteerId: newId });
       if (!existing) {
-        this.volunteerId = newId;
+        (this as any).volunteerId = newId;
         isUnique = true;
       }
     }

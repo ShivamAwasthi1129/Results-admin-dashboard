@@ -132,7 +132,14 @@ export interface IVolunteer {
   willingToTravel?: boolean;
   maxTravelDistance?: number;
   // Mission Stats
-  assignedDisasters: string[];
+  assignedDisasters?: {
+    disasterId: string;
+    assignedAt: Date;
+    assignedBy?: string;
+    fromDate: Date;
+    toDate: Date;
+    status: 'assigned' | 'active' | 'completed' | 'cancelled';
+  }[];
   currentMission?: string;
   completedMissions: number;
   totalHoursServed?: number;
@@ -167,6 +174,8 @@ export interface IVolunteer {
   verificationStatus?: string;
   verifiedBy?: string;
   verifiedAt?: Date;
+  // Team Assignment
+  teamId?: string;
   // Timestamps
   joinedAt: Date;
   lastActiveAt?: Date;
@@ -374,6 +383,12 @@ export interface IDisaster {
     fundsAllocated: number;
     suppliesDistributed: string[];
   };
+  assignedVolunteers?: {
+    volunteerId: string;
+    assignedAt: Date;
+    assignedBy?: string;
+    status: 'pending' | 'accepted' | 'rejected' | 'completed';
+  }[];
   reportedBy: string;
   reportedAt: Date;
   startedAt: Date;

@@ -27,6 +27,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   ShieldExclamationIcon,
+  IdentificationIcon,
 } from '@heroicons/react/24/outline';
 import { Avatar } from '@/components/ui';
 import ResultsLogo from '@/Results_logo.png';
@@ -73,8 +74,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Disasters', href: '/dashboard/disasters', icon: MapPinIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Volunteers', href: '/dashboard/volunteers', icon: UserGroupIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const },
+    { 
+      name: 'Volunteers', 
+      icon: UserGroupIcon, 
+      roles: ['super_admin', 'admin'] as const,
+      children: [
+        { name: 'Volunteers', href: '/dashboard/volunteers', icon: UserGroupIcon, roles: ['super_admin', 'admin'] as const },
+        { name: 'Team Management', href: '/dashboard/volunteer-teams', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
+      ]
+    },
     { name: 'Vendor & Alliance Partners', href: '/dashboard/services', icon: WrenchScrewdriverIcon, roles: ['super_admin', 'admin', 'service_provider'] as const },
     { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const },
   ];

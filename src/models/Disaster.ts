@@ -75,6 +75,25 @@ const DisasterSchema = new Schema<IDisasterDocument>(
       fundsAllocated: { type: Number, default: 0 },
       suppliesDistributed: [{ type: String }],
     },
+    assignedVolunteers: [{
+      volunteerId: {
+        type: Schema.Types.ObjectId as unknown as StringConstructor,
+        ref: 'Volunteer',
+      },
+      assignedAt: {
+        type: Date,
+        default: Date.now,
+      },
+      assignedBy: {
+        type: Schema.Types.ObjectId as unknown as StringConstructor,
+        ref: 'User',
+      },
+      status: {
+        type: String,
+        enum: ['assigned', 'active', 'completed', 'removed'],
+        default: 'assigned',
+      },
+    }],
     reportedBy: {
       type: Schema.Types.ObjectId as unknown as StringConstructor,
       ref: 'User',

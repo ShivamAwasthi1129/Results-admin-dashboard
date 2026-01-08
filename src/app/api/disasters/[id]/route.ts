@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Disaster from '@/models/Disaster';
+import Volunteer from '@/models/Volunteer'; // Import to register schema for population
 import { verifyAuth, canPerform } from '@/lib/auth';
 
 // GET - Get single disaster
@@ -23,7 +24,15 @@ export async function GET(
 
     const disaster = await Disaster.findById(id)
       .populate('reportedBy', 'name email')
-      .populate('updates.updatedBy', 'name');
+      .populate('updates.updatedBy', 'name')
+      .populate({
+        path: 'assignedVolunteers.volunteerId',
+        select: 'volunteerId userId',
+        populate: {
+          path: 'userId',
+          select: 'firstName lastName name email',
+        },
+      });
 
     if (!disaster) {
       return NextResponse.json(
@@ -93,13 +102,22 @@ export async function PUT(
     });
 
     if (body.location) {
+      // Handle coordinates - convert from {lat, lng} to [lng, lat] if needed
+      let coordinates = body.location.coordinates || disaster.location.coordinates;
+      if (coordinates && !Array.isArray(coordinates)) {
+        // Convert {lat, lng} to [lng, lat] (GeoJSON format)
+        if (coordinates.lat !== undefined && coordinates.lng !== undefined) {
+          coordinates = [coordinates.lng, coordinates.lat];
+        }
+      }
+      
       disaster.location = {
         type: 'Point',
-        coordinates: body.location.coordinates || disaster.location.coordinates,
-        address: body.location.address || disaster.location.address,
-        city: body.location.city || disaster.location.city,
-        state: body.location.state || disaster.location.state,
-        country: body.location.country || disaster.location.country,
+        coordinates: coordinates,
+        address: body.location.address !== undefined ? body.location.address : disaster.location.address,
+        city: body.location.city !== undefined ? body.location.city : disaster.location.city,
+        state: body.location.state !== undefined ? body.location.state : disaster.location.state,
+        country: body.location.country !== undefined ? (body.location.country || 'USA') : disaster.location.country,
       };
     }
 

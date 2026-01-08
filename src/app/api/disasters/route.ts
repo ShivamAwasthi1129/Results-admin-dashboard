@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Disaster from '@/models/Disaster';
+import Volunteer from '@/models/Volunteer'; // Import to register schema for population
 import { verifyAuth, canPerform } from '@/lib/auth';
 
 // GET - List all disasters
@@ -47,7 +48,15 @@ export async function GET(request: NextRequest) {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('reportedBy', 'name email'),
+        .populate('reportedBy', 'name email')
+        .populate({
+          path: 'assignedVolunteers.volunteerId',
+          select: 'volunteerId userId',
+          populate: {
+            path: 'userId',
+            select: 'firstName lastName name email phone',
+          },
+        }),
       Disaster.countDocuments(query),
     ]);
 
@@ -115,11 +124,11 @@ export async function POST(request: NextRequest) {
       status: status || 'active',
       location: {
         type: 'Point',
-        coordinates: location.coordinates,
+        coordinates: location.coordinates ? (Array.isArray(location.coordinates) ? location.coordinates : [location.coordinates.lng, location.coordinates.lat]) : undefined,
         address: location.address,
         city: location.city,
         state: location.state,
-        country: location.country || 'India',
+        country: location.country || 'USA',
       },
       affectedArea: affectedArea || 0,
       affectedPopulation: affectedPopulation || 0,
