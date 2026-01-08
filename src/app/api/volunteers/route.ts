@@ -24,7 +24,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await connectDB();
+    try {
+      await connectDB();
+    } catch (dbError: any) {
+      console.error('Database connection error:', dbError);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Database connection failed',
+          details: process.env.NODE_ENV === 'development' ? dbError.message : undefined
+        },
+        { status: 500 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -38,17 +50,18 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     // First, update volunteers whose assignment periods have ended
-    const now = new Date();
-    const volunteersToUpdate = await Volunteer.find({
-      availability: 'on_mission',
-      assignedDisasters: { $exists: true, $ne: [] }
-    }).lean();
-    
-    for (const vol of volunteersToUpdate) {
-      const volunteer = await Volunteer.findById(vol._id);
-      if (volunteer) {
-        const volunteerDoc = volunteer as any;
-        const hasActiveAssignments = volunteerDoc.assignedDisasters?.some(
+    // Optimize: Only check if we have volunteers with on_mission status
+    // This is done in background to avoid blocking the main query
+    try {
+      const now = new Date();
+      const volunteersToUpdate = await Volunteer.find({
+        availability: 'on_mission',
+        assignedDisasters: { $exists: true, $ne: [] }
+      }).select('_id assignedDisasters availability').lean();
+      
+      // Batch update instead of individual saves
+      const updatePromises = volunteersToUpdate.map(async (vol: any) => {
+        const hasActiveAssignments = vol.assignedDisasters?.some(
           (ad: any) => {
             const toDate = new Date(ad.toDate);
             const status = ad.status;
@@ -57,11 +70,19 @@ export async function GET(request: NextRequest) {
         );
         
         // If no active assignments, change status back to 'available'
-        if (!hasActiveAssignments && volunteerDoc.availability === 'on_mission') {
-          volunteerDoc.availability = 'available';
-          await volunteerDoc.save();
+        if (!hasActiveAssignments) {
+          return Volunteer.findByIdAndUpdate(vol._id, { availability: 'available' }, { new: false });
         }
-      }
+        return null;
+      });
+      
+      // Don't await - let it run in background
+      Promise.all(updatePromises).catch(err => {
+        console.error('Background volunteer status update error:', err);
+      });
+    } catch (updateError) {
+      // Don't fail the main request if status update fails
+      console.error('Volunteer status update error:', updateError);
     }
 
     let volunteers = await Volunteer.find(query)
@@ -71,33 +92,74 @@ export async function GET(request: NextRequest) {
       .lean();
 
     // Manually populate userId since it's stored as String, not ObjectId reference
+    // Optimize: Batch fetch users and teams to reduce database queries
+    const userIds = [...new Set(volunteers.map((v: any) => v.userId).filter(Boolean))];
+    const teamIds = [...new Set(volunteers.map((v: any) => v.teamId).filter(Boolean))];
+    
+    // Batch fetch users
+    const usersMap = new Map();
+    if (userIds.length > 0) {
+      const users = await User.find({ _id: { $in: userIds } })
+        .select('firstName lastName name email phone status address')
+        .lean();
+      users.forEach((user: any) => {
+        usersMap.set(user._id.toString(), user);
+      });
+    }
+    
+    // Batch fetch teams
+    const teamsMap = new Map();
+    if (teamIds.length > 0) {
+      const teams = await VolunteerTeam.find({ _id: { $in: teamIds } })
+        .select('_id teamId name specialization status')
+        .lean();
+      teams.forEach((team: any) => {
+        teamsMap.set(team._id.toString(), team);
+      });
+    }
+    
+    // Batch fetch disasters for all assignments
+    const disasterIds = new Set<string>();
+    volunteers.forEach((v: any) => {
+      if (v.assignedDisasters && Array.isArray(v.assignedDisasters)) {
+        v.assignedDisasters.forEach((ad: any) => {
+          if (ad.disasterId) disasterIds.add(ad.disasterId);
+        });
+      }
+    });
+    
+    const disastersMap = new Map();
+    if (disasterIds.size > 0) {
+      const Disaster = (await import('@/models/Disaster')).default;
+      const disasters = await Disaster.find({ _id: { $in: Array.from(disasterIds) } })
+        .select('title type severity status')
+        .lean();
+      disasters.forEach((disaster: any) => {
+        disastersMap.set(disaster._id.toString(), disaster);
+      });
+    }
+    
+    // Populate data from maps
     for (const volunteer of volunteers) {
       if ((volunteer as any).userId) {
-        const user = await User.findById((volunteer as any).userId)
-          .select('firstName lastName name email phone status address')
-          .lean();
-        (volunteer as any).userId = user || { firstName: '', lastName: '', name: 'Unknown', email: '', phone: '' };
+        const userId = String((volunteer as any).userId);
+        (volunteer as any).userId = usersMap.get(userId) || { firstName: '', lastName: '', name: 'Unknown', email: '', phone: '' };
       }
       
       // Populate team information
       if ((volunteer as any).teamId) {
-        const team = await VolunteerTeam.findById((volunteer as any).teamId)
-          .select('_id teamId name specialization status')
-          .lean();
-        (volunteer as any).team = team || null;
+        const teamId = String((volunteer as any).teamId);
+        (volunteer as any).team = teamsMap.get(teamId) || null;
       } else {
         (volunteer as any).team = null;
       }
       
       // Populate assigned disasters
       if ((volunteer as any).assignedDisasters && Array.isArray((volunteer as any).assignedDisasters)) {
-        const Disaster = (await import('@/models/Disaster')).default;
         for (const assignment of (volunteer as any).assignedDisasters) {
           if (assignment.disasterId) {
-            const disaster = await Disaster.findById(assignment.disasterId)
-              .select('title type severity status')
-              .lean();
-            assignment.disaster = disaster || null;
+            const disasterId = String(assignment.disasterId);
+            assignment.disaster = disastersMap.get(disasterId) || null;
           }
         }
       }
@@ -139,10 +201,14 @@ export async function GET(request: NextRequest) {
         },
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get volunteers error:', error);
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { 
+        success: false, 
+        error: error.message || 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
