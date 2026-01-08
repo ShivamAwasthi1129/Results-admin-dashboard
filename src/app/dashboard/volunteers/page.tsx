@@ -1,4 +1,5 @@
 import { getServerAuth } from '@/lib/server-auth';
+import { getApiUrl } from '@/lib/server-api';
 import VolunteersClient from './VolunteersClient';
 
 interface DisasterAssignment {
@@ -64,10 +65,10 @@ async function fetchVolunteers(token: string | null): Promise<Volunteer[]> {
   try {
     if (!token) return [];
     
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/volunteers?limit=100`, {
+    const response = await fetch(getApiUrl('/api/volunteers?limit=100'), {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
+      next: { revalidate: 0 },
     });
     
     if (!response.ok) {
@@ -91,10 +92,10 @@ async function fetchDisasters(token: string | null): Promise<Disaster[]> {
   try {
     if (!token) return [];
     
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/disasters?limit=100`, {
+    const response = await fetch(getApiUrl('/api/disasters?limit=100'), {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
+      next: { revalidate: 0 },
     });
     
     if (!response.ok) {
@@ -117,7 +118,7 @@ async function fetchDisasters(token: string | null): Promise<Disaster[]> {
 export default async function VolunteersPage() {
   const { token } = await getServerAuth();
   
-  // Fetch all data in parallel
+  // Fetch all data in parallel - this is already optimized
   const [volunteers, disasters] = await Promise.all([
     fetchVolunteers(token),
     fetchDisasters(token),

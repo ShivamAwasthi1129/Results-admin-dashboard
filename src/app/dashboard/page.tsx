@@ -1,4 +1,5 @@
 import { getServerAuth } from '@/lib/server-auth';
+import { getApiUrl } from '@/lib/server-api';
 import DashboardClient from './DashboardClient';
 
 interface DashboardStats {
@@ -75,7 +76,6 @@ interface WeatherData {
 
 async function fetchDashboardStats(token: string | null): Promise<DashboardStats | null> {
   try {
-    // Use relative URL for server-side fetch in Next.js
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
@@ -83,8 +83,7 @@ async function fetchDashboardStats(token: string | null): Promise<DashboardStats
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/dashboard/stats`, {
+    const response = await fetch(getApiUrl('/api/dashboard/stats'), {
       headers,
       cache: 'no-store',
     });
@@ -104,8 +103,7 @@ async function fetchDashboardStats(token: string | null): Promise<DashboardStats
 
 async function fetchLiveDisasters(): Promise<LiveDisaster[]> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/live-disasters`, {
+    const response = await fetch(getApiUrl('/api/live-disasters'), {
       cache: 'no-store',
     });
     
@@ -220,8 +218,7 @@ async function fetchUsers(): Promise<DashboardUser[]> {
 
 async function fetchWeatherData(): Promise<WeatherData[]> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/weather?type=multi`, {
+    const response = await fetch(getApiUrl('/api/weather?type=multi'), {
       cache: 'no-store',
     });
     

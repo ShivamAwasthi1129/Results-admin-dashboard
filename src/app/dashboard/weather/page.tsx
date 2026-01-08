@@ -1,11 +1,11 @@
+import { getApiUrl } from '@/lib/server-api';
 import WeatherClient from './WeatherClient';
 
 // Use any type for API response since we'll pass it directly to client
 // The client component will handle the proper typing
 async function fetchMultiCityWeather(): Promise<any[]> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/weather?type=multi`, {
+    const response = await fetch(getApiUrl('/api/weather?type=multi'), {
       cache: 'no-store',
     });
     
@@ -28,8 +28,7 @@ async function fetchMultiCityWeather(): Promise<any[]> {
 
 async function fetchAlerts(): Promise<any[]> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/weather?type=alerts`, {
+    const response = await fetch(getApiUrl('/api/weather?type=alerts'), {
       cache: 'no-store',
     });
     
