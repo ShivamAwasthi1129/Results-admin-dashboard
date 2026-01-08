@@ -100,6 +100,7 @@ export default function VolunteersClient({
   const { token, hasPermission, user: currentUser } = useAuth();
   const [volunteers, setVolunteers] = useState<Volunteer[]>(initialVolunteers);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(initialVolunteers.length === 0);
   const [search, setSearch] = useState('');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
@@ -107,6 +108,7 @@ export default function VolunteersClient({
   const [selectedVolunteer, setSelectedVolunteer] = useState<Volunteer | null>(null);
   const [activeTab, setActiveTab] = useState('basic');
   const [disasters, setDisasters] = useState<Disaster[]>(initialDisasters);
+  const [isLoadingDisasters, setIsLoadingDisasters] = useState(false);
   const [showAssignDisasterModal, setShowAssignDisasterModal] = useState(false);
   const [selectedVolunteerForDisaster, setSelectedVolunteerForDisaster] = useState<Volunteer | null>(null);
   const [disasterAssignment, setDisasterAssignment] = useState({
@@ -209,21 +211,43 @@ export default function VolunteersClient({
 
   const fetchDisasters = async () => {
     try {
+      setIsLoadingDisasters(true);
       const response = await fetch('/api/disasters?limit=100', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();
       if (data.success) {
         setDisasters(data.data.disasters || []);
+      } else {
+        console.error('Failed to fetch disasters:', data.error);
+        toast.error('Failed to load disasters');
       }
     } catch (error) {
       console.error('Failed to fetch disasters:', error);
+      toast.error('Failed to load disasters');
+    } finally {
+      setIsLoadingDisasters(false);
     }
   };
 
-  // Fetch volunteers when search or filter changes (client-side filtering for now)
+  // Fetch initial data on mount
   useEffect(() => {
     if (token) {
+      // Fetch volunteers if not provided initially
+      if (initialVolunteers.length === 0) {
+        setIsInitialLoading(true);
+        fetchVolunteers().finally(() => setIsInitialLoading(false));
+      }
+      // Always fetch disasters to ensure they're up to date
+      if (initialDisasters.length === 0) {
+        fetchDisasters();
+      }
+    }
+  }, [token]);
+
+  // Fetch volunteers when search or filter changes (client-side filtering for now)
+  useEffect(() => {
+    if (token && !isInitialLoading) {
       const timeoutId = setTimeout(() => {
         fetchVolunteers();
       }, 500); // Debounce search
@@ -493,7 +517,7 @@ export default function VolunteersClient({
 
       {/* Volunteers List View */}
       <Card>
-        {isLoading ? (
+        {isLoading || isInitialLoading ? (
           <div className="space-y-4">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse p-4 border-b border-[var(--border-color)] last:border-b-0">
@@ -648,7 +672,7 @@ export default function VolunteersClient({
                         {canManage && (
                           <>
                             <button
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
                                 // Check if volunteer is on mission
                                 const now = new Date();
@@ -668,6 +692,8 @@ export default function VolunteersClient({
                                 
                                 setSelectedVolunteerForDisaster(volunteer);
                                 setDisasterAssignment({ disasterId: '', fromDate: '', toDate: '' });
+                                // Fetch disasters before opening modal to ensure they're loaded
+                                await fetchDisasters();
                                 setShowAssignDisasterModal(true);
                               }}
                               className="p-2 rounded-lg text-[var(--text-muted)] hover:text-purple-400 hover:bg-purple-400/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1195,28 +1221,35 @@ export default function VolunteersClient({
               <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                 Select Disaster <span className="text-red-400">*</span>
               </label>
-              <select
-                value={disasterAssignment.disasterId}
-                onChange={(e) => setDisasterAssignment({ ...disasterAssignment, disasterId: e.target.value })}
-                className="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="">-- Select Disaster --</option>
-                {disasters.length === 0 ? (
-                  <option value="" disabled>No disasters available</option>
-                ) : (
-                  disasters
-                    .filter(d => !selectedVolunteerForDisaster.assignedDisasters?.some(ad => ad.disasterId === d._id))
-                    .map(disaster => (
-                      <option key={disaster._id} value={disaster._id}>
-                        {disaster.title} ({disaster.type} - {disaster.severity})
-                      </option>
-                    ))
-                )}
-              </select>
-              {disasters.length === 0 && (
+              {isLoadingDisasters ? (
+                <div className="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                  <span className="ml-2 text-sm text-[var(--text-muted)]">Loading disasters...</span>
+                </div>
+              ) : (
+                <select
+                  value={disasterAssignment.disasterId}
+                  onChange={(e) => setDisasterAssignment({ ...disasterAssignment, disasterId: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">-- Select Disaster --</option>
+                  {disasters.length === 0 ? (
+                    <option value="" disabled>No disasters available</option>
+                  ) : (
+                    disasters
+                      .filter(d => !selectedVolunteerForDisaster.assignedDisasters?.some(ad => ad.disasterId === d._id))
+                      .map(disaster => (
+                        <option key={disaster._id} value={disaster._id}>
+                          {disaster.title} ({disaster.type} - {disaster.severity})
+                        </option>
+                      ))
+                  )}
+                </select>
+              )}
+              {!isLoadingDisasters && disasters.length === 0 && (
                 <p className="text-xs text-[var(--text-muted)] mt-2">No disasters found in database. Please add disasters first.</p>
               )}
-              {disasters.length > 0 && disasters.filter(d => !selectedVolunteerForDisaster.assignedDisasters?.some(ad => ad.disasterId === d._id)).length === 0 && (
+              {!isLoadingDisasters && disasters.length > 0 && disasters.filter(d => !selectedVolunteerForDisaster.assignedDisasters?.some(ad => ad.disasterId === d._id)).length === 0 && (
                 <p className="text-xs text-[var(--text-muted)] mt-2">All available disasters are already assigned to this volunteer.</p>
               )}
             </div>

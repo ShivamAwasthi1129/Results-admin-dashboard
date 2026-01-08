@@ -1761,15 +1761,10 @@ export default function LiveDisastersClient() {
                   toast.success('Volunteer assigned successfully!');
                   await fetchDatabaseDisasters();
                   await fetchVolunteers();
+                  // Close the assign volunteer modal
                   setShowAssignVolunteerModal(false);
                   setSelectedDisasterForAssign(null);
                   setSelectedVolunteerId('');
-                  // Open volunteers modal to show updated list
-                  const updatedDisaster = databaseDisasters.find(d => d._id === selectedDisasterForAssign._id);
-                  if (updatedDisaster) {
-                    setSelectedDisasterForVolunteers(updatedDisaster);
-                    setShowVolunteersModal(true);
-                  }
                 } else {
                   toast.error(data.error || 'Failed to assign volunteer');
                 }
