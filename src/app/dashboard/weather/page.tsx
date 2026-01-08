@@ -1,64 +1,7 @@
-import { getApiUrl } from '@/lib/server-api';
+'use client';
+
 import WeatherClient from './WeatherClient';
 
-// Use any type for API response since we'll pass it directly to client
-// The client component will handle the proper typing
-async function fetchMultiCityWeather(): Promise<any[]> {
-  try {
-    const response = await fetch(getApiUrl('/api/weather?type=multi'), {
-      cache: 'no-store',
-    });
-    
-    if (!response.ok) {
-      console.error('Failed to fetch multi-city weather');
-      return [];
-    }
-    
-    const data = await response.json();
-    if (!data.success) {
-      return [];
-    }
-    
-    return data.data || [];
-  } catch (error) {
-    console.error('Error fetching multi-city weather:', error);
-    return [];
-  }
-}
-
-async function fetchAlerts(): Promise<any[]> {
-  try {
-    const response = await fetch(getApiUrl('/api/weather?type=alerts'), {
-      cache: 'no-store',
-    });
-    
-    if (!response.ok) {
-      console.error('Failed to fetch weather alerts');
-      return [];
-    }
-    
-    const data = await response.json();
-    if (!data.success) {
-      return [];
-    }
-    
-    return data.data || [];
-  } catch (error) {
-    console.error('Error fetching weather alerts:', error);
-    return [];
-  }
-}
-
-export default async function WeatherPage() {
-  const [multiCityWeather, alerts] = await Promise.all([
-    fetchMultiCityWeather(),
-    fetchAlerts(),
-  ]);
-  
-  return (
-    <WeatherClient
-      initialMultiCityWeather={multiCityWeather}
-      initialAlerts={alerts}
-    />
-  );
+export default function WeatherPage() {
+  return <WeatherClient />;
 }

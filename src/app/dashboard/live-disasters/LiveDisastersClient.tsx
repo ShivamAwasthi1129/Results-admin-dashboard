@@ -133,26 +133,15 @@ interface Volunteer {
   assignedDisasters?: any[];
 }
 
-interface LiveDisastersClientProps {
-  initialLiveDisasters: LiveDisaster[];
-  initialLastUpdated: Date | null;
-  initialDatabaseDisasters: ManagedDisaster[];
-  initialVolunteers: Volunteer[];
-}
-
-export default function LiveDisastersClient({
-  initialLiveDisasters,
-  initialLastUpdated,
-  initialDatabaseDisasters,
-  initialVolunteers,
-}: LiveDisastersClientProps) {
+export default function LiveDisastersClient() {
   const { token, hasPermission } = useAuth();
-  const [liveDisasters, setLiveDisasters] = useState<LiveDisaster[]>(initialLiveDisasters);
-  const [databaseDisasters, setDatabaseDisasters] = useState<ManagedDisaster[]>(initialDatabaseDisasters);
+  const [liveDisasters, setLiveDisasters] = useState<LiveDisaster[]>([]);
+  const [databaseDisasters, setDatabaseDisasters] = useState<ManagedDisaster[]>([]);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [allDisasters, setAllDisasters] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDatabase, setIsLoadingDatabase] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(initialLastUpdated);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedDisaster, setSelectedDisaster] = useState<any | null>(null);
   const [filterType, setFilterType] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState('all');
@@ -164,7 +153,7 @@ export default function LiveDisastersClient({
   const [selectedManagedDisaster, setSelectedManagedDisaster] = useState<ManagedDisaster | null>(null);
   const [showVolunteersModal, setShowVolunteersModal] = useState(false);
   const [selectedDisasterForVolunteers, setSelectedDisasterForVolunteers] = useState<ManagedDisaster | null>(null);
-  const [volunteers, setVolunteers] = useState<any[]>(initialVolunteers);
+  const [volunteers, setVolunteers] = useState<any[]>([]);
   const [showAssignVolunteerModal, setShowAssignVolunteerModal] = useState(false);
   const [selectedDisasterForAssign, setSelectedDisasterForAssign] = useState<ManagedDisaster | null>(null);
   const [selectedVolunteerId, setSelectedVolunteerId] = useState<string>('');
@@ -406,6 +395,28 @@ export default function LiveDisastersClient({
       setIsLoadingDatabase(false);
     }
   };
+
+  // Fetch initial data on mount
+  useEffect(() => {
+    if (token) {
+      const loadInitialData = async () => {
+        setIsInitialLoading(true);
+        try {
+          // Fetch all data in parallel
+          await Promise.all([
+            fetchLiveDisasters(),
+            fetchDatabaseDisasters(),
+            fetchVolunteers(),
+          ]);
+        } catch (error) {
+          console.error('Error loading initial data:', error);
+        } finally {
+          setIsInitialLoading(false);
+        }
+      };
+      loadInitialData();
+    }
+  }, [token]);
 
   // Update combined disasters when either live or database disasters change
   useEffect(() => {

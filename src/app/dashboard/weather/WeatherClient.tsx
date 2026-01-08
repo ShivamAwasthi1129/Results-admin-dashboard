@@ -134,18 +134,13 @@ const usCities = [
   { city: 'New Orleans', state: 'LA', lat: 29.9511, lon: -90.0715 },
 ];
 
-interface WeatherClientProps {
-  initialMultiCityWeather: CurrentWeather[];
-  initialAlerts: WeatherAlert[];
-}
-
-export default function WeatherClient({ initialMultiCityWeather, initialAlerts }: WeatherClientProps) {
-  const [multiCityWeather, setMultiCityWeather] = useState<CurrentWeather[]>(initialMultiCityWeather);
-  const [selectedCity, setSelectedCity] = useState<CurrentWeather | null>(initialMultiCityWeather[0] || null);
+export default function WeatherClient() {
+  const [multiCityWeather, setMultiCityWeather] = useState<CurrentWeather[]>([]);
+  const [selectedCity, setSelectedCity] = useState<CurrentWeather | null>(null);
   const [hourlyForecast, setHourlyForecast] = useState<HourlyForecast[]>([]);
   const [dailyForecast, setDailyForecast] = useState<DailyForecast[]>([]);
-  const [alerts, setAlerts] = useState<WeatherAlert[]>(initialAlerts);
-  const [isLoading, setIsLoading] = useState(false);
+  const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ city: string; state: string; lat: number; lon: number }[]>([]);
@@ -180,6 +175,11 @@ export default function WeatherClient({ initialMultiCityWeather, initialAlerts }
       setIsLoading(false);
     }
   };
+
+  // Fetch initial data on mount
+  useEffect(() => {
+    fetchWeatherData();
+  }, []);
 
   const fetchCityWeather = async (lat: number, lon: number, city: string, state: string) => {
     try {

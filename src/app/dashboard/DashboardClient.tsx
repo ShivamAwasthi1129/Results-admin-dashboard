@@ -152,24 +152,14 @@ interface DashboardUser {
   phoneVerified: boolean;
 }
 
-interface DashboardClientProps {
-  initialStats: DashboardStats | null;
-  initialLiveDisasters: LiveDisaster[];
-  initialUsers: DashboardUser[];
-  initialWeatherData: WeatherData[];
-}
-
-export default function DashboardClient({
-  initialStats,
-  initialLiveDisasters,
-  initialUsers,
-  initialWeatherData,
-}: DashboardClientProps) {
-  const [stats, setStats] = useState<DashboardStats | null>(initialStats);
-  const [liveDisasters, setLiveDisasters] = useState<LiveDisaster[]>(initialLiveDisasters);
-  const [users, setUsers] = useState<DashboardUser[]>(initialUsers);
-  const [weatherData, setWeatherData] = useState<WeatherData[]>(initialWeatherData);
-  const [selectedWeather, setSelectedWeather] = useState<WeatherData | null>(initialWeatherData[0] || null);
+export default function DashboardClient() {
+  const { token } = useAuth();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [liveDisasters, setLiveDisasters] = useState<LiveDisaster[]>([]);
+  const [users, setUsers] = useState<DashboardUser[]>([]);
+  const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedWeather, setSelectedWeather] = useState<WeatherData | null>(null);
   const [weatherSearchQuery, setWeatherSearchQuery] = useState('');
   const [weatherSearchResults, setWeatherSearchResults] = useState<CitySearchResult[]>([]);
   const [showWeatherSearchResults, setShowWeatherSearchResults] = useState(false);
@@ -181,6 +171,136 @@ export default function DashboardClient({
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
+
+  // Fetch all data on mount
+  useEffect(() => {
+    const fetchAllData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch dashboard stats
+        const statsResponse = await fetch('/api/dashboard/stats', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          if (statsData.success) {
+            setStats(statsData.data);
+          }
+        }
+
+        // Fetch live disasters
+        const disastersResponse = await fetch('/api/live-disasters');
+        if (disastersResponse.ok) {
+          const disastersData = await disastersResponse.json();
+          if (disastersData.success) {
+            const disasters = disastersData.data.disasters || [];
+            const usaDisasters = disasters
+              .filter((d: any) => {
+                const hasCoordinates = d.location?.coordinates || (d.location?.lat && d.location?.lng);
+                if (!hasCoordinates) return false;
+                
+                const country = d.location?.country || '';
+                const isUSA = country.toLowerCase().includes('united states') || 
+                             country.toLowerCase().includes('usa') || 
+                             country.toLowerCase().includes('u.s.') ||
+                             country.toLowerCase() === 'us';
+                
+                let coordinates;
+                if (d.location?.coordinates) {
+                  coordinates = d.location.coordinates;
+                } else if (d.location?.lat && d.location?.lng) {
+                  coordinates = { lat: d.location.lat, lng: d.location.lng };
+                }
+                
+                const isInUSABounds = coordinates && 
+                  coordinates.lat >= 24 && coordinates.lat <= 49 &&
+                  coordinates.lng >= -125 && coordinates.lng <= -66;
+                
+                return isUSA || isInUSABounds;
+              })
+              .map((d: any) => {
+                let coordinates;
+                if (d.location?.coordinates) {
+                  coordinates = d.location.coordinates;
+                } else if (d.location?.lat && d.location?.lng) {
+                  coordinates = { lat: d.location.lat, lng: d.location.lng };
+                }
+                
+                return {
+                  id: d.id || `disaster-${Math.random()}`,
+                  title: d.title || 'Unknown Disaster',
+                  type: d.type || 'other',
+                  severity: d.severity || 'medium',
+                  description: d.description,
+                  category: d.category || d.type,
+                  date: d.date,
+                  magnitude: d.magnitude,
+                  magnitudeUnit: d.magnitudeUnit,
+                  source: d.source,
+                  location: {
+                    coordinates: coordinates,
+                    country: d.location?.country,
+                    state: d.location?.state,
+                  }
+                };
+              });
+            setLiveDisasters(usaDisasters);
+          }
+        }
+
+        // Fetch users
+        try {
+          const usersResponse = await fetch('https://dms-rust-omega.vercel.app/api/admin/users', {
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (usersResponse.ok) {
+            const usersData = await usersResponse.json();
+            if (usersData.success && usersData.data?.users) {
+              const mappedUsers = usersData.data.users.slice(0, 50).map((u: any) => ({
+                id: u.id,
+                fullName: u.fullName,
+                username: u.username,
+                email: u.email,
+                phoneNumber: u.phoneNumber,
+                city: u.city,
+                state: u.state,
+                country: u.country,
+                role: u.role,
+                isActive: u.isActive,
+                isVerified: u.isVerified,
+                isSubscriber: u.isSubscriber,
+                emailVerified: u.emailVerified,
+                phoneVerified: u.phoneVerified,
+              }));
+              setUsers(mappedUsers);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching users:', error);
+        }
+
+        // Fetch weather data
+        const weatherResponse = await fetch('/api/weather?type=multi');
+        if (weatherResponse.ok) {
+          const weatherData = await weatherResponse.json();
+          if (weatherData.success && weatherData.data) {
+            setWeatherData(weatherData.data);
+            if (weatherData.data.length > 0) {
+              setSelectedWeather(weatherData.data[0]);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (token) {
+      fetchAllData();
+    }
+  }, [token]);
 
   useEffect(() => {
     // Update time every minute
