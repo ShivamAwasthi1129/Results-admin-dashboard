@@ -318,10 +318,19 @@ async function fetchCurrentWeatherFree(lat: number, lon: number) {
     return null;
   }
   
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+  
   try {
     // Current weather API 2.5 (free tier)
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=imperial`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Results-Admin-Dashboard/1.0',
+      }
+    });
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       console.error('Weather API 2.5 error:', response.status, response.statusText);
@@ -329,7 +338,12 @@ async function fetchCurrentWeatherFree(lat: number, lon: number) {
     }
     
     return await response.json();
-  } catch (error) {
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.error('Weather API request timed out');
+      return null;
+    }
     console.error('Failed to fetch current weather:', error);
     return null;
   }
@@ -341,9 +355,18 @@ async function fetchForecastFree(lat: number, lon: number) {
     return null;
   }
   
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+  
   try {
     const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=imperial`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Results-Admin-Dashboard/1.0',
+      }
+    });
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       console.error('Forecast API error:', response.status, response.statusText);
@@ -351,7 +374,12 @@ async function fetchForecastFree(lat: number, lon: number) {
     }
     
     return await response.json();
-  } catch (error) {
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.error('Forecast API request timed out');
+      return null;
+    }
     console.error('Failed to fetch forecast:', error);
     return null;
   }

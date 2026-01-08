@@ -23,13 +23,31 @@ interface EONETEvent {
 
 export async function GET() {
   try {
-    // Fetch live events from NASA EONET
-    const response = await fetch(`${EONET_API}?status=open&limit=50`, {
-      next: { revalidate: 300 } // Cache for 5 minutes
-    });
+    // Fetch live events from NASA EONET with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    let response: Response;
+    try {
+      response = await fetch(`${EONET_API}?status=open&limit=50`, {
+        next: { revalidate: 300 }, // Cache for 5 minutes
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Results-Admin-Dashboard/1.0',
+        }
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.error('EONET API request timed out');
+        throw new Error('Request timeout');
+      }
+      throw fetchError;
+    }
 
     if (!response.ok) {
-      throw new Error('Failed to fetch from EONET');
+      throw new Error(`EONET API returned ${response.status}`);
     }
 
     const data = await response.json();
@@ -114,10 +132,29 @@ export async function GET() {
     // Also fetch some additional data from ReliefWeb API for context
     let reliefWebData: any[] = [];
     try {
-      const reliefWebResponse = await fetch(
-        'https://api.reliefweb.int/v1/disasters?appname=results-admin&limit=10&preset=latest',
-        { next: { revalidate: 300 } }
-      );
+      const reliefWebController = new AbortController();
+      const reliefWebTimeout = setTimeout(() => reliefWebController.abort(), 10000);
+      
+      let reliefWebResponse: Response;
+      try {
+        reliefWebResponse = await fetch(
+          'https://api.reliefweb.int/v1/disasters?appname=results-admin&limit=10&preset=latest',
+          { 
+            next: { revalidate: 300 },
+            signal: reliefWebController.signal,
+            headers: {
+              'User-Agent': 'Results-Admin-Dashboard/1.0',
+            }
+          }
+        );
+        clearTimeout(reliefWebTimeout);
+      } catch (reliefWebError: any) {
+        clearTimeout(reliefWebTimeout);
+        if (reliefWebError.name === 'AbortError') {
+          console.error('ReliefWeb API request timed out');
+        }
+        throw reliefWebError;
+      }
       
       if (reliefWebResponse.ok) {
         const rwData = await reliefWebResponse.json();

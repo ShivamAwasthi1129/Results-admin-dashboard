@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Disaster from '@/models/Disaster';
-import Volunteer from '@/models/Volunteer'; // Import to register schema for population
+// Import Volunteer model to ensure schema is registered before populate
+import Volunteer from '@/models/Volunteer';
+// Ensure model is registered by accessing it
+void Volunteer;
 import { verifyAuth, canPerform } from '@/lib/auth';
 
 // GET - List all disasters
