@@ -1,22 +1,70 @@
+import { getServerAuth } from '@/lib/server-auth';
+import { getApiUrl } from '@/lib/server-api';
 import UserManagementClient from './UserManagementClient';
 
-async function fetchUsers() {
+async function fetchUsers(token: string | null) {
   try {
-    const response = await fetch('https://dms-rust-omega.vercel.app/api/admin/users', {
-      next: { revalidate: 60 }, // Revalidate every 60 seconds
-      headers: {
+    // Fetch from external API
+    const externalApiUrl = 'https://dms-rust-omega.vercel.app/api/admin/users';
+    console.log(`[fetchUsers] Fetching from external API: ${externalApiUrl}`);
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for external API
+    
+    const response = await fetch(externalApiUrl, {
+      headers: { 
         'Content-Type': 'application/json',
       },
+      cache: 'no-store',
+      signal: controller.signal,
     });
-
+    
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
-      throw new Error('Failed to fetch users');
+      console.error(`[fetchUsers] Failed to fetch users: ${response.status} ${response.statusText}`);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`[fetchUsers] Error response: ${errorText}`);
+      return {
+        success: false,
+        data: { users: [], pagination: { page: 1, limit: 20, total: 0, pages: 1 } },
+        error: 'Failed to fetch users',
+      };
     }
-
+    
     const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching users:', error);
+    if (!data.success) {
+      console.error(`[fetchUsers] API returned success: false`, data.error || 'Unknown error');
+      return {
+        success: false,
+        data: { users: [], pagination: { page: 1, limit: 20, total: 0, pages: 1 } },
+        error: data.error || 'Failed to fetch users',
+      };
+    }
+    
+    // The external API already returns data in the correct format
+    const users = data.data?.users || [];
+    const pagination = data.data?.pagination || { page: 1, limit: 20, total: users.length, pages: 1 };
+    
+    console.log(`[fetchUsers] Successfully fetched ${users.length} users`);
+    return {
+      success: true,
+      data: {
+        users: users,
+        pagination: {
+          page: pagination.page || 1,
+          limit: pagination.limit || 20,
+          total: pagination.total || users.length,
+          pages: pagination.pages || Math.ceil((pagination.total || users.length) / (pagination.limit || 20)),
+        },
+      },
+    };
+  } catch (error: any) {
+    console.error('[fetchUsers] Error fetching users:', error);
+    if (error.name === 'AbortError') {
+      console.error('[fetchUsers] Request timed out');
+    }
     return {
       success: false,
       data: { users: [], pagination: { page: 1, limit: 20, total: 0, pages: 1 } },
@@ -26,7 +74,8 @@ async function fetchUsers() {
 }
 
 export default async function UserManagementPage() {
-  const initialData = await fetchUsers();
+  const { token } = await getServerAuth();
+  const initialData = await fetchUsers(token);
 
   return <UserManagementClient initialData={initialData} />;
 }

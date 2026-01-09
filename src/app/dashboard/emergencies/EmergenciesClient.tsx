@@ -162,40 +162,69 @@ export default function EmergenciesClient({ initialEmergencies }: EmergenciesCli
         <StatCard title="Critical" value={stats.critical} icon={<ExclamationTriangleIcon className="w-6 h-6" />} variant="red" />
       </div>
 
-      {/* Filters */}
-      <Card className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-5">
-          <div className="flex-1">
-            <Input
-              placeholder="Search emergencies..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <Select value={priorityFilter} onChange={(value) => setPriorityFilter(value)} options={[
-              { value: 'all', label: 'All Priority' },
-              { value: 'critical', label: '🔴 Critical' },
-              { value: 'high', label: '🟠 High' },
-              { value: 'medium', label: '🟡 Medium' },
-              { value: 'low', label: '🟢 Low' }
-            ]} />
-            <Select value={statusFilter} onChange={(value) => setStatusFilter(value)} options={[
-              { value: 'all', label: 'All Status' },
-              { value: 'pending', label: 'Pending' },
-              { value: 'in_progress', label: 'In Progress' },
-              { value: 'dispatched', label: 'Dispatched' },
-              { value: 'resolved', label: 'Resolved' }
-            ]} />
-            {canManage && (
-              <Button onClick={() => { setSelectedEmergency(null); resetForm(); setShowModal(true); }} leftIcon={<PlusIcon className="w-4 h-4" />} variant="gradient">
-                Add Emergency
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
+      {/* Filters & Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    placeholder="Search emergencies..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+  />
+</div>
+
+{/* Priority Filter */}
+<div className="w-full">
+  <Select
+    value={priorityFilter}
+    onChange={(value) => setPriorityFilter(value)}
+    options={[
+      { value: 'all', label: 'All Priority' },
+      { value: 'critical', label: '🔴 Critical' },
+      { value: 'high', label: '🟠 High' },
+      { value: 'medium', label: '🟡 Medium' },
+      { value: 'low', label: '🟢 Low' }
+    ]}
+  />
+</div>
+
+{/* Status Filter */}
+<div className="w-full">
+  <Select
+    value={statusFilter}
+    onChange={(value) => setStatusFilter(value)}
+    options={[
+      { value: 'all', label: 'All Status' },
+      { value: 'pending', label: 'Pending' },
+      { value: 'in_progress', label: 'In Progress' },
+      { value: 'dispatched', label: 'Dispatched' },
+      { value: 'resolved', label: 'Resolved' }
+    ]}
+  />
+</div>
+
+{/* Add Emergency */}
+{canManage && (
+  <div className="w-full">
+    <Button
+      onClick={() => {
+        setSelectedEmergency(null)
+        resetForm()
+        setShowModal(true)
+      }}
+      leftIcon={<PlusIcon className="w-4 h-4" />}
+      variant="gradient"
+      className="w-full"
+    >
+      Add Emergency
+    </Button>
+  </div>
+)}
+
+</div>
+
 
       {/* Emergencies Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

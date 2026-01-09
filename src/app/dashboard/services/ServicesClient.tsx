@@ -557,31 +557,43 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
         <StatCard title="Avg Rating" value={stats.avgRating} icon={<StarIcon className="w-6 h-6" />} variant="teal" />
       </div>
 
-      {/* Filters */}
-      <Card className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center gap-5">
-          <div className="flex-1">
-            <Input
-              placeholder="Search by name, ID, category..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <Select 
-              value={categoryFilter} 
-              onChange={(value) => setCategoryFilter(value)} 
-              options={[{ value: 'all', label: 'All Categories' }, ...SERVICE_CATEGORIES]} 
-            />
-            {canManage && (
-              <Button onClick={() => { setSelectedProvider(null); resetForm(); setShowModal(true); }} leftIcon={<PlusIcon className="w-4 h-4" />} variant="gradient">
-                Add Provider
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
+      {/* Filters & Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    placeholder="Search by name, ID, category..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+  />
+</div>
+
+{/* Category Filter */}
+<div className="w-full">
+  <Select 
+    value={categoryFilter} 
+    onChange={(value) => setCategoryFilter(value)} 
+    options={[{ value: 'all', label: 'All Categories' }, ...SERVICE_CATEGORIES]} 
+  />
+</div>
+
+{/* Add Provider */}
+{canManage && (
+  <div className="w-full">
+    <Button 
+      onClick={() => { setSelectedProvider(null); resetForm(); setShowModal(true); }} 
+      leftIcon={<PlusIcon className="w-4 h-4" />} 
+      variant="gradient"
+      className="w-full"
+    >
+      Add Provider
+    </Button>
+  </div>
+)}
+
+</div>
 
       {/* Providers List View */}
       <Card padding="none">

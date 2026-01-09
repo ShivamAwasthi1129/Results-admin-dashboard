@@ -105,10 +105,11 @@ export default function UserMap({ user, showPath = false, height = '400px' }: Us
       .addTo(mapRef.current);
 
     // Add popup
+    const usernameDisplay = user.username ? `@${user.username}` : (user.email || 'No username');
     currentMarker.bindPopup(`
       <div style="padding: 8px; min-width: 200px;">
         <strong style="font-size: 14px; color: #1f2937;">${user.fullName || 'Unknown User'}</strong><br/>
-        <span style="font-size: 12px; color: #6b7280;">@${user.username}</span><br/>
+        <span style="font-size: 12px; color: #6b7280;">${usernameDisplay}</span><br/>
         ${user.city && user.state ? `<span style="font-size: 12px; color: #6b7280;">📍 ${user.city}, ${user.state}</span>` : ''}
         ${user.phoneNumber ? `<br/><span style="font-size: 12px; color: #6b7280;">📞 ${user.phoneNumber}</span>` : ''}
       </div>

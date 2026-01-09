@@ -487,33 +487,49 @@ export default function VolunteersClient({
         <StatCard title="Avg Rating" value={stats.avgRating} icon={<StarIcon className="w-6 h-6" />} variant="teal" />
       </div>
 
-      {/* Filters */}
-      <Card className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center gap-5">
-          <div className="flex-2">
-            <Input
-              placeholder="Search by name, ID, skills..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <Select value={availabilityFilter} onChange={(value) => setAvailabilityFilter(value)} options={[
-              { value: 'all', label: 'All Status' },
-              { value: 'available', label: '🟢 Available' },
-              { value: 'on_mission', label: '🟠 On Mission' },
-              { value: 'unavailable', label: '🔴 Unavailable' },
-              { value: 'on_leave', label: '⚪ On Leave' }
-            ]} />
-            {canManage && (
-              <Button onClick={() => { setSelectedVolunteer(null); resetForm(); setShowModal(true); }} leftIcon={<PlusIcon className="w-4 h-4" />} variant="gradient">
-                Register Volunteer
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
+      {/* Filters & Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    placeholder="Search by name, ID, skills..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+  />
+</div>
+
+{/* Availability Filter */}
+<div className="w-full">
+  <Select 
+    value={availabilityFilter} 
+    onChange={(value) => setAvailabilityFilter(value)} 
+    options={[
+      { value: 'all', label: 'All Status' },
+      { value: 'available', label: '🟢 Available' },
+      { value: 'on_mission', label: '🟠 On Mission' },
+      { value: 'unavailable', label: '🔴 Unavailable' },
+      { value: 'on_leave', label: '⚪ On Leave' }
+    ]} 
+  />
+</div>
+
+{/* Register Volunteer */}
+{canManage && (
+  <div className="w-full">
+    <Button 
+      onClick={() => { setSelectedVolunteer(null); resetForm(); setShowModal(true); }} 
+      leftIcon={<PlusIcon className="w-4 h-4" />} 
+      variant="gradient"
+      className="w-full"
+    >
+      Register Volunteer
+    </Button>
+  </div>
+)}
+
+</div>
 
       {/* Volunteers List View */}
       <Card>

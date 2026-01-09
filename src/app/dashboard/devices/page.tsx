@@ -3,21 +3,23 @@ import { getApiUrl } from '@/lib/server-api';
 import DevicesClient from './DevicesClient';
 
 interface ApiDevice {
-  _id: string;
+  id: string;
   deviceId: string;
+  deviceName: string;
   deviceType: string;
-  name: string;
   status: string;
   location?: {
-    coordinates?: [number, number];
+    coordinates?: {
+      lat: number;
+      lng: number;
+    };
     address?: string;
     city?: string;
     state?: string;
     zipCode?: string;
   };
-  familyId?: string;
   firmwareVersion?: string;
-  lastSeen?: string;
+  lastSynced?: string;
   batteryLevel?: number;
   signalStrength?: number;
   ownerName?: string;
@@ -35,6 +37,7 @@ interface ApiDevice {
   };
   familyMembers?: any[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 interface Device {
@@ -75,14 +78,18 @@ interface Device {
 }
 
 function transformDevice(apiDevice: ApiDevice): Device {
+  // Handle coordinates - API returns { lat, lng } object
   const coordinates = apiDevice.location?.coordinates 
-    ? { lat: apiDevice.location.coordinates[1], lng: apiDevice.location.coordinates[0] }
+    ? { 
+        lat: typeof apiDevice.location.coordinates.lat === 'number' ? apiDevice.location.coordinates.lat : 0,
+        lng: typeof apiDevice.location.coordinates.lng === 'number' ? apiDevice.location.coordinates.lng : 0
+      }
     : { lat: 0, lng: 0 };
   
   return {
-    id: apiDevice._id,
-    deviceId: apiDevice.deviceId || apiDevice._id,
-    deviceName: apiDevice.name || 'Unknown Device',
+    id: apiDevice.id || '',
+    deviceId: apiDevice.deviceId || '',
+    deviceName: apiDevice.deviceName || 'Unknown Device',
     deviceType: (apiDevice.deviceType === 'watch_pro' || apiDevice.deviceType === 'watch_lite' || apiDevice.deviceType === 'tracker')
       ? apiDevice.deviceType
       : 'tracker',
@@ -95,10 +102,10 @@ function transformDevice(apiDevice: ApiDevice): Device {
       zipCode: apiDevice.location?.zipCode || '',
       coordinates,
     },
-    batteryLevel: apiDevice.batteryLevel || 0,
-    signalStrength: apiDevice.signalStrength || 0,
+    batteryLevel: apiDevice.batteryLevel ?? 0,
+    signalStrength: apiDevice.signalStrength ?? 0,
     firmwareVersion: apiDevice.firmwareVersion || '1.0.0',
-    lastSynced: apiDevice.lastSeen || new Date().toISOString(),
+    lastSynced: apiDevice.lastSynced || apiDevice.createdAt || new Date().toISOString(),
     status: (apiDevice.status === 'active' || apiDevice.status === 'inactive' || apiDevice.status === 'offline' || apiDevice.status === 'maintenance')
       ? apiDevice.status
       : 'inactive',
@@ -111,7 +118,7 @@ function transformDevice(apiDevice: ApiDevice): Device {
     primaryOwner: {
       name: apiDevice.primaryOwner?.name || apiDevice.ownerName || 'Unknown',
       role: apiDevice.primaryOwner?.role || 'Owner',
-      avatar: apiDevice.primaryOwner?.avatar,
+      avatar: apiDevice.primaryOwner?.avatar || '',
     },
     familyMembers: apiDevice.familyMembers || [],
     createdAt: apiDevice.createdAt || new Date().toISOString(),
@@ -120,27 +127,50 @@ function transformDevice(apiDevice: ApiDevice): Device {
 
 async function fetchDevices(token: string | null): Promise<Device[]> {
   try {
-    if (!token) return [];
+    if (!token) {
+      console.warn('[fetchDevices] No token provided');
+      return [];
+    }
     
-    const response = await fetch(getApiUrl('/api/devices'), {
-      headers: { Authorization: `Bearer ${token}` },
+    const apiUrl = getApiUrl('/api/devices');
+    console.log(`[fetchDevices] Fetching from: ${apiUrl}`);
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(apiUrl, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
       cache: 'no-store',
+      signal: controller.signal,
     });
     
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
-      console.error('Failed to fetch devices');
+      console.error(`[fetchDevices] Failed to fetch devices: ${response.status} ${response.statusText}`);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`[fetchDevices] Error response: ${errorText}`);
       return [];
     }
     
     const data = await response.json();
     if (!data.success) {
+      console.error(`[fetchDevices] API returned success: false`, data.error || 'Unknown error');
       return [];
     }
     
     const apiDevices: ApiDevice[] = data.data || [];
+    console.log(`[fetchDevices] Successfully fetched ${apiDevices.length} devices`);
     return apiDevices.map(transformDevice);
-  } catch (error) {
-    console.error('Error fetching devices:', error);
+  } catch (error: any) {
+    console.error('[fetchDevices] Error fetching devices:', error);
+    if (error.name === 'AbortError') {
+      console.error('[fetchDevices] Request timed out');
+    }
     return [];
   }
 }

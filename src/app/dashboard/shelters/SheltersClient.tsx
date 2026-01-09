@@ -56,6 +56,7 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
   const { token } = useAuth();
   const [shelters, setShelters] = useState<Shelter[]>(initialShelters);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(initialShelters.length === 0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -91,6 +92,7 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
   const fetchShelters = async () => {
     try {
       setIsLoading(true);
+      setIsInitialLoading(true);
       const response = await fetch('/api/shelters', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -123,11 +125,18 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
       toast.error('Failed to fetch shelters');
     } finally {
       setIsLoading(false);
+      setIsInitialLoading(false);
     }
   };
 
-  // Initial data is loaded from server via props
-  // Only refresh when needed (after mutations, etc.)
+  // Fetch on mount if no initial data
+  useEffect(() => {
+    if (initialShelters.length === 0 && token) {
+      fetchShelters();
+    } else {
+      setIsInitialLoading(false);
+    }
+  }, []);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, { variant: 'success' | 'danger' | 'warning' | 'info'; dot: string }> = {
@@ -481,48 +490,104 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
       </div>
 
       {/* Filters & Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="">
-          <Input
-            icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            placeholder="Search shelters..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <Select
-          options={[
-            { value: 'all', label: 'All Status' },
-            { value: 'active', label: 'Active' },
-            { value: 'full', label: 'Full' },
-            { value: 'closed', label: 'Closed' },
-            { value: 'maintenance', label: 'Maintenance' },
-          ]}
-          value={filterStatus}
-          onChange={setFilterStatus}
-          icon={<FunnelIcon className="w-5 h-5" />}
-        />
-        <Button 
-          variant="gradient" 
-          leftIcon={<PlusIcon className="w-5 h-5" />}
-          onClick={() => { resetForm(); setIsModalOpen(true); }}
-        >
-          Add Shelter
-        </Button>
-      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+    placeholder="Search shelters..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+  />
+</div>
+
+{/* Status Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Status' },
+      { value: 'active', label: 'Active' },
+      { value: 'full', label: 'Full' },
+      { value: 'closed', label: 'Closed' },
+      { value: 'maintenance', label: 'Maintenance' },
+    ]}
+    value={filterStatus}
+    onChange={setFilterStatus}
+    icon={<FunnelIcon className="w-5 h-5" />}
+  />
+</div>
+
+{/* Add Shelter */}
+<div className="w-full">
+  <Button
+    variant="gradient"
+    leftIcon={<PlusIcon className="w-5 h-5" />}
+    onClick={() => {
+      resetForm()
+      setIsModalOpen(true)
+    }}
+    className="w-full"
+  >
+    Add Shelter
+  </Button>
+</div>
+
+</div>
+
 
       {/* Shelters List View */}
       <Card className="overflow-hidden">
-        {isLoading ? (
-          <div className="p-6">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="animate-pulse mb-4 pb-4 border-b border-[var(--border-color)] last:border-b-0">
-                <div className="h-6 bg-[var(--bg-input)] rounded w-1/4 mb-2" />
-                <div className="h-4 bg-[var(--bg-input)] rounded w-1/2" />
-              </div>
-            ))}
+        {isLoading || isInitialLoading ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[var(--bg-input)] border-b border-[var(--border-color)]">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Shelter Name</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Location</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Capacity</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Occupancy</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Contact</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-color)]">
+                {[...Array(5)].map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--border-color)]/50">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 skeleton rounded-lg" />
+                        <div className="space-y-2">
+                          <div className="h-4 skeleton rounded w-32" />
+                          <div className="h-3 skeleton rounded w-20" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-4 skeleton rounded w-24" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-4 skeleton rounded w-16" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-4 skeleton rounded w-20" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-4 skeleton rounded w-28" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-6 skeleton rounded-full w-20" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-8 skeleton rounded w-20" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ) : filteredShelters.length === 0 ? (
+        ) : !isInitialLoading && filteredShelters.length === 0 ? (
           <div className="p-12 text-center">
             <HomeModernIcon className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
             <p className="text-lg font-medium text-[var(--text-primary)] mb-2">No Shelters Found</p>

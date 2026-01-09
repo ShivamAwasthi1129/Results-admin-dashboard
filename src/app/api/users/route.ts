@@ -74,7 +74,77 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      data: {
+        users: users.map(user => {
+          const fullName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
+          const username = user.email?.split('@')[0] || `user_${user._id.toString().slice(-6)}`;
+          
+          return {
+            id: user._id.toString(),
+            _id: user._id.toString(),
+            firstName: user.firstName,
+            lastName: user.lastName,
+            name: fullName,
+            fullName: fullName,
+            username: username,
+            email: user.email,
+            phone: user.phone,
+            phoneNumber: user.phone || '',
+            role: user.role?.toUpperCase() || 'MEMBER',
+            status: user.status,
+            profilePhoto: user.profilePhoto,
+            profilePictureUrl: user.profilePhoto || null,
+            dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toISOString() : null,
+            gender: user.gender || null,
+            bloodGroup: user.bloodGroup || null,
+            address: user.address?.street || null,
+            city: user.address?.city || null,
+            state: user.address?.state || null,
+            country: user.address?.country || 'United States',
+            pincode: user.address?.pincode || null,
+            emergencyContactName: user.emergencyContact?.firstName && user.emergencyContact?.lastName 
+              ? `${user.emergencyContact.firstName} ${user.emergencyContact.lastName}`.trim()
+              : null,
+            emergencyContactPhone: user.emergencyContact?.phone || null,
+            authProvider: 'email',
+            providerId: null,
+            isVerified: user.status === 'active',
+            isActive: user.status === 'active',
+            emailVerified: user.status === 'active',
+            phoneVerified: false,
+            planLimit: 0,
+            isSubscriber: false,
+            roleAssignedBy: null,
+            roleAssignedAt: null,
+            lastLoginAt: null,
+            deletedAt: null,
+            createdAt: user.createdAt ? user.createdAt.toISOString() : new Date().toISOString(),
+            updatedAt: user.updatedAt ? user.updatedAt.toISOString() : new Date().toISOString(),
+            adminGroups: [],
+            memberGroups: [],
+          };
+        }),
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      },
     });
+  } catch (error: any) {
+    console.error('Get users error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST - Create new user
+export async function POST(request: NextRequest) {
+  try {
+    const tokenPayload = await verifyAuth(request);
     if (!tokenPayload) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },

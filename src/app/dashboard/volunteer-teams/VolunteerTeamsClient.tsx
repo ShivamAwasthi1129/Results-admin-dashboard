@@ -233,32 +233,48 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
         <StatCard title="Total Members" value={stats.totalMembers} icon={<UsersIcon className="w-6 h-6" />} variant="teal" />
       </div>
 
-      {/* Filters */}
-      <Card className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center gap-5">
-          <div className="flex-1">
-            <Input
-              placeholder="Search by team name, ID, specialization..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <Select value={statusFilter} onChange={(value) => setStatusFilter(value)} options={[
-              { value: 'all', label: 'All Status' },
-              { value: 'active', label: '🟢 Active' },
-              { value: 'on_mission', label: '🟠 On Mission' },
-              { value: 'inactive', label: '⚪ Inactive' },
-            ]} />
-            {canManage && (
-              <Button onClick={() => { setSelectedTeam(null); resetForm(); setShowModal(true); }} leftIcon={<PlusIcon className="w-4 h-4" />} variant="gradient">
-                Create Team
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
+      {/* Filters & Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    placeholder="Search by team name, ID, specialization..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+  />
+</div>
+
+{/* Status Filter */}
+<div className="w-full">
+  <Select 
+    value={statusFilter} 
+    onChange={(value) => setStatusFilter(value)} 
+    options={[
+      { value: 'all', label: 'All Status' },
+      { value: 'active', label: '🟢 Active' },
+      { value: 'on_mission', label: '🟠 On Mission' },
+      { value: 'inactive', label: '⚪ Inactive' },
+    ]} 
+  />
+</div>
+
+{/* Create Team */}
+{canManage && (
+  <div className="w-full">
+    <Button 
+      onClick={() => { setSelectedTeam(null); resetForm(); setShowModal(true); }} 
+      leftIcon={<PlusIcon className="w-4 h-4" />} 
+      variant="gradient"
+      className="w-full"
+    >
+      Create Team
+    </Button>
+  </div>
+)}
+
+</div>
 
       {/* Teams List */}
       <Card>

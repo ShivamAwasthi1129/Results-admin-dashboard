@@ -69,6 +69,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
   const { token, hasPermission } = useAuth();
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(initialUsers.length === 0);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
@@ -107,6 +108,8 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
   const fetchUsers = async () => {
     try {
+      setIsLoading(true);
+      setIsInitialLoading(true);
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (roleFilter !== 'all') params.append('role', roleFilter);
@@ -119,12 +122,22 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
       toast.error('Failed to fetch users');
     } finally {
       setIsLoading(false);
+      setIsInitialLoading(false);
     }
   };
 
+  // Fetch on mount if no initial data
+  useEffect(() => {
+    if (initialUsers.length === 0 && token) {
+      fetchUsers();
+    } else {
+      setIsInitialLoading(false);
+    }
+  }, []);
+
   // Fetch users when search or filter changes (debounced)
   useEffect(() => {
-    if (token) {
+    if (token && !isInitialLoading) {
       const timeoutId = setTimeout(() => {
         fetchUsers();
       }, 500); // Debounce search
@@ -322,39 +335,47 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
         <StatCard title="Super Admins" value={stats.superAdmins} icon={<ShieldCheckIcon className="w-6 h-6" />} variant="red" />
       </div>
 
-      {/* Filters */}
-      <Card padding="lg" className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center gap-5">
-          <div className="flex-1">
-            <Input
-              placeholder="Search users by name or email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <Select
-              value={roleFilter}
-              onChange={(val) => setRoleFilter(val)}
-              options={[
-                { value: 'all', label: 'All Roles' },
-                { value: 'super_admin', label: 'Super Admin' },
-                { value: 'admin', label: 'Admin' },
-              ]}
-            />
-            {canManageUsers && (
-              <Button 
-                onClick={() => { setSelectedUser(null); resetForm(); setShowModal(true); }} 
-                leftIcon={<PlusIcon className="w-4 h-4" />} 
-                variant="gradient"
-              >
-                Add User
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
+      {/* Filters & Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    placeholder="Search users by name or email..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+  />
+</div>
+
+{/* Role Filter */}
+<div className="w-full">
+  <Select
+    value={roleFilter}
+    onChange={(val) => setRoleFilter(val)}
+    options={[
+      { value: 'all', label: 'All Roles' },
+      { value: 'super_admin', label: 'Super Admin' },
+      { value: 'admin', label: 'Admin' },
+    ]}
+  />
+</div>
+
+{/* Add User */}
+{canManageUsers && (
+  <div className="w-full">
+    <Button 
+      onClick={() => { setSelectedUser(null); resetForm(); setShowModal(true); }} 
+      leftIcon={<PlusIcon className="w-4 h-4" />} 
+      variant="gradient"
+      className="w-full"
+    >
+      Add User
+    </Button>
+  </div>
+)}
+
+</div>
 
       {/* Users Table */}
       <Card padding="none">
@@ -370,7 +391,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
+              {isLoading || isInitialLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i} className="border-b border-[var(--border-color)]">
                     <td className="px-6 py-5">
@@ -388,7 +409,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                     <td className="px-6 py-5"><div className="h-9 skeleton rounded w-20 ml-auto" /></td>
                   </tr>
                 ))
-              ) : users.length === 0 ? (
+              ) : !isInitialLoading && users.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="text-center py-16">
                     <UsersIcon className="w-14 h-14 mx-auto text-[var(--text-muted)] mb-4" />

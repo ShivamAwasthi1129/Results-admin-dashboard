@@ -122,7 +122,7 @@ export default function AllUsersMap({ users, showPaths = false, height = '600px'
             </div>
             <div>
               <strong style="font-size: 14px; color: #1f2937; display: block;">${user.fullName || 'Unknown User'}</strong>
-              <span style="font-size: 12px; color: #6b7280;">@${user.username}</span>
+              ${user.username ? `<span style="font-size: 12px; color: #6b7280;">@${user.username}</span>` : user.email ? `<span style="font-size: 12px; color: #6b7280;">${user.email}</span>` : ''}
             </div>
           </div>
           ${user.city && user.state ? `<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">📍 ${user.city}, ${user.state}</div>` : ''}
@@ -162,9 +162,15 @@ export default function AllUsersMap({ users, showPaths = false, height = '600px'
                 <div style="font-size: 14px; font-weight: 600; color: #1f2937; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                   ${user.fullName || 'Unknown User'}
                 </div>
-                <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                  @${user.username}
-                </div>
+                ${user.username ? `
+                  <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    @${user.username}
+                  </div>
+                ` : user.email ? `
+                  <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${user.email}
+                  </div>
+                ` : ''}
               </div>
             </div>
             <div style="space-y: 6px;">

@@ -714,34 +714,59 @@ export default function SOSPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="flex-1">
-          <Input
-            icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            placeholder="Search by name, city, or address..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <Select
-          options={[
-            { value: 'all', label: 'All Status' },
-            { value: 'pending', label: 'Pending' },
-            { value: 'assigned', label: 'Assigned' },
-            { value: 'in_progress', label: 'In Progress' },
-            { value: 'resolved', label: 'Resolved' },
-          ]}
-          value={filter}
-          onChange={setFilter}
-          icon={<FunnelIcon className="w-5 h-5" />}
-        />
-        <Button variant="secondary" leftIcon={<ArrowPathIcon className="w-4 h-4" />}>
-          Refresh
-        </Button>
-        <Button variant="gradient" leftIcon={<PlusIcon className="w-4 h-4" />} onClick={() => setIsAddModalOpen(true)}>
-          New Alert
-        </Button>
-      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+    placeholder="Search by name, city, or address..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+  />
+</div>
+
+{/* Status Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Status' },
+      { value: 'pending', label: 'Pending' },
+      { value: 'assigned', label: 'Assigned' },
+      { value: 'in_progress', label: 'In Progress' },
+      { value: 'resolved', label: 'Resolved' },
+    ]}
+    value={filter}
+    onChange={setFilter}
+    icon={<FunnelIcon className="w-5 h-5" />}
+  />
+</div>
+
+{/* Refresh */}
+<div className="w-full">
+  <Button
+    variant="secondary"
+    leftIcon={<ArrowPathIcon className="w-4 h-4" />}
+    className="w-full"
+  >
+    Refresh
+  </Button>
+</div>
+
+{/* New Alert */}
+<div className="w-full">
+  <Button
+    variant="gradient"
+    leftIcon={<PlusIcon className="w-4 h-4" />}
+    onClick={() => setIsAddModalOpen(true)}
+    className="w-full"
+  >
+    New Alert
+  </Button>
+</div>
+
+</div>
+
 
       {/* Alerts Table */}
       <Table

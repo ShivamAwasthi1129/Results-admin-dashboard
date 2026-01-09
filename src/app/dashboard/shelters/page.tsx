@@ -6,26 +6,50 @@ import SheltersClient from './SheltersClient';
 // The client component will handle the proper typing
 async function fetchShelters(token: string | null): Promise<any[]> {
   try {
-    if (!token) return [];
+    if (!token) {
+      console.warn('[fetchShelters] No token provided');
+      return [];
+    }
     
-    const response = await fetch(getApiUrl('/api/shelters'), {
-      headers: { Authorization: `Bearer ${token}` },
+    const apiUrl = getApiUrl('/api/shelters');
+    console.log(`[fetchShelters] Fetching from: ${apiUrl}`);
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(apiUrl, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
       cache: 'no-store',
+      signal: controller.signal,
     });
     
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
-      console.error('Failed to fetch shelters');
+      console.error(`[fetchShelters] Failed to fetch shelters: ${response.status} ${response.statusText}`);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`[fetchShelters] Error response: ${errorText}`);
       return [];
     }
     
     const data = await response.json();
     if (!data.success) {
+      console.error(`[fetchShelters] API returned success: false`, data.error || 'Unknown error');
       return [];
     }
     
-    return data.data || [];
-  } catch (error) {
-    console.error('Error fetching shelters:', error);
+    const shelters = data.data || [];
+    console.log(`[fetchShelters] Successfully fetched ${shelters.length} shelters`);
+    return shelters;
+  } catch (error: any) {
+    console.error('[fetchShelters] Error fetching shelters:', error);
+    if (error.name === 'AbortError') {
+      console.error('[fetchShelters] Request timed out');
+    }
     return [];
   }
 }

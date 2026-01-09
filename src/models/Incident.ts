@@ -155,7 +155,7 @@ const IncidentSchema = new Schema<IIncidentDocument>(
 );
 
 // Indexes
-IncidentSchema.index({ ticketNumber: 1 });
+// ticketNumber index is automatically created by unique: true
 IncidentSchema.index({ status: 1 });
 IncidentSchema.index({ priority: 1 });
 IncidentSchema.index({ type: 1 });

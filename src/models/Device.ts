@@ -194,7 +194,7 @@ const DeviceSchema = new Schema<IDeviceDocument>(
 );
 
 // Indexes
-DeviceSchema.index({ deviceId: 1 });
+// deviceId index is automatically created by unique: true
 DeviceSchema.index({ ownerName: 1 });
 DeviceSchema.index({ status: 1 });
 DeviceSchema.index({ 'location.coordinates': '2dsphere' });

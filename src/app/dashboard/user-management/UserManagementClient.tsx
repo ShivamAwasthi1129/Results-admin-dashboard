@@ -41,9 +41,10 @@ const DynamicAllUsersMap = dynamic(() => import('@/components/user-management/Al
 
 export interface User {
   id: string;
+  _id?: string;
   phoneNumber: string;
-  email: string;
-  username: string;
+  email: string | null;
+  username: string | null;
   fullName: string;
   dateOfBirth: string;
   gender: string;
@@ -100,6 +101,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const [users, setUsers] = useState<User[]>(initialData.data?.users || []);
   const [pagination, setPagination] = useState<Pagination>(initialData.data?.pagination || { page: 1, limit: 20, total: 0, pages: 1 });
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(!initialData.success || initialData.data?.users?.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -113,8 +115,9 @@ export default function UserManagementClient({ initialData }: UserManagementClie
 
   const fetchUsers = async () => {
     setIsLoading(true);
+    setIsInitialLoading(true);
     try {
-      const response = await fetch('https://dms-rust-omega.vercel.app/api/admin/users', {
+      const response = await fetch('/api/users?limit=1000', {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -124,10 +127,16 @@ export default function UserManagementClient({ initialData }: UserManagementClie
         throw new Error('Failed to fetch users');
       }
 
-      const data: ApiResponse = await response.json();
+      const data = await response.json();
       if (data.success) {
-        setUsers(data.data.users);
-        setPagination(data.data.pagination);
+        setUsers(data.data?.users || []);
+        const total = data.data?.pagination?.total || (data.data?.users?.length || 0);
+        setPagination({
+          page: data.data?.pagination?.page || 1,
+          limit: data.data?.pagination?.limit || 20,
+          total: total,
+          pages: Math.ceil(total / (data.data?.pagination?.limit || 20)),
+        });
       } else {
         toast.error(data.error || 'Failed to fetch users');
       }
@@ -136,8 +145,18 @@ export default function UserManagementClient({ initialData }: UserManagementClie
       toast.error('Failed to fetch users');
     } finally {
       setIsLoading(false);
+      setIsInitialLoading(false);
     }
   };
+  
+  // Fetch users on mount if initial data failed
+  useEffect(() => {
+    if (!initialData.success || initialData.data?.users?.length === 0) {
+      fetchUsers();
+    } else {
+      setIsInitialLoading(false);
+    }
+  }, []);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
@@ -290,93 +309,108 @@ export default function UserManagementClient({ initialData }: UserManagementClie
         </Card>
       </div>
 
-      {/* Filters */}
-     <div className="flex flex-col lg:flex-row gap-4 mb-6">
-  {/* Search + Filters */}
-  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
-    <Input
-      icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-      placeholder="Search by name, email, username, or phone..."
-      value={searchQuery}
-      onChange={(e) => setSearchQuery(e.target.value)}
-    />
+      {/* Filters & Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6 items-center">
 
-    <Select
-      options={[
-        { value: 'all', label: 'All Roles' },
-        ...uniqueRoles.map((role) => ({
-          value: role,
-          label: role.replace('_', ' '),
-        })),
-      ]}
-      value={roleFilter}
-      onChange={setRoleFilter}
-      icon={<FunnelIcon className="w-5 h-5" />}
-    />
+{/* Search */}
+<div className="w-full">
+  <Input
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+    placeholder="Search by name, email, username, or phone..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+  />
+</div>
 
-    <Select
-      options={[
-        { value: 'all', label: 'All Status' },
-        { value: 'active', label: 'Active' },
-        { value: 'inactive', label: 'Inactive' },
-        { value: 'deleted', label: 'Deleted' },
-      ]}
-      value={statusFilter}
-      onChange={setStatusFilter}
-      icon={<FunnelIcon className="w-5 h-5" />}
-    />
-  </div>
+{/* Role Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Roles' },
+      ...uniqueRoles.map((role) => ({
+        value: role,
+        label: role.replace('_', ' '),
+      })),
+    ]}
+    value={roleFilter}
+    onChange={setRoleFilter}
+    icon={<FunnelIcon className="w-5 h-5" />}
+  />
+</div>
 
-  {/* View + Refresh */}
-  <div className="flex items-center gap-2">
-    <div className="flex items-center border border-[var(--border-color)] rounded-lg overflow-hidden">
-      <button
-        onClick={() => setViewMode('table')}
-        className={`p-2 transition-colors ${
-          viewMode === 'table'
-            ? 'bg-[var(--primary-500)] text-white'
-            : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
-        }`}
-      >
-        <TableCellsIcon className="w-4 h-4" />
-      </button>
+{/* Status Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Status' },
+      { value: 'active', label: 'Active' },
+      { value: 'inactive', label: 'Inactive' },
+      { value: 'deleted', label: 'Deleted' },
+    ]}
+    value={statusFilter}
+    onChange={setStatusFilter}
+    icon={<FunnelIcon className="w-5 h-5" />}
+  />
+</div>
 
-      <button
-        onClick={() => setViewMode('grid')}
-        className={`p-2 transition-colors ${
-          viewMode === 'grid'
-            ? 'bg-[var(--primary-500)] text-white'
-            : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
-        }`}
-      >
-        <Squares2X2Icon className="w-4 h-4" />
-      </button>
-
-      <button
-        onClick={() => setViewMode('map')}
-        className={`p-2 transition-colors ${
-          viewMode === 'map'
-            ? 'bg-[var(--primary-500)] text-white'
-            : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
-        }`}
-      >
-        <MapIcon className="w-4 h-4" />
-      </button>
-    </div>
-
-    <Button
-      variant="secondary"
-      onClick={fetchUsers}
-      leftIcon={
-        <ArrowPathIcon
-          className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
-        />
-      }
-      disabled={isLoading}
+{/* View Mode Toggle */}
+<div className="w-full">
+  <div className="flex items-center border border-[var(--border-color)] rounded-lg overflow-hidden w-full">
+    <button
+      onClick={() => setViewMode('table')}
+      className={`flex-1 p-2 transition-colors ${
+        viewMode === 'table'
+          ? 'bg-[var(--primary-500)] text-white'
+          : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+      }`}
+      title="Table View"
     >
-      Refresh
-    </Button>
+      <TableCellsIcon className="w-4 h-4 mx-auto" />
+    </button>
+
+    <button
+      onClick={() => setViewMode('grid')}
+      className={`flex-1 p-2 transition-colors ${
+        viewMode === 'grid'
+          ? 'bg-[var(--primary-500)] text-white'
+          : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+      }`}
+      title="Grid View"
+    >
+      <Squares2X2Icon className="w-4 h-4 mx-auto" />
+    </button>
+
+    <button
+      onClick={() => setViewMode('map')}
+      className={`flex-1 p-2 transition-colors ${
+        viewMode === 'map'
+          ? 'bg-[var(--primary-500)] text-white'
+          : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+      }`}
+      title="Map View"
+    >
+      <MapIcon className="w-4 h-4 mx-auto" />
+    </button>
   </div>
+</div>
+
+{/* Refresh */}
+<div className="w-full">
+  <Button
+    variant="secondary"
+    onClick={fetchUsers}
+    leftIcon={
+      <ArrowPathIcon
+        className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
+      />
+    }
+    disabled={isLoading}
+    className="w-full"
+  >
+    Refresh
+  </Button>
+</div>
+
 </div>
 
 
@@ -411,7 +445,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-color)]">
-                {isLoading ? (
+                {isLoading || isInitialLoading ? (
                   [...Array(5)].map((_, i) => (
                     <tr key={i} className="animate-pulse">
                       <td className="px-6 py-4">
@@ -437,7 +471,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       </td>
                     </tr>
                   ))
-                ) : filteredUsers.length === 0 ? (
+                ) : !isInitialLoading && filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-12 text-center">
                       <UsersIcon className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
@@ -446,8 +480,8 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                     </td>
                   </tr>
                 ) : (
-                  filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-[var(--bg-input)] transition-colors">
+                  filteredUsers.map((user, index) => (
+                    <tr key={user.id || user._id || `user-${index}`} className="hover:bg-[var(--bg-input)] transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
@@ -465,7 +499,12 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                           </div>
                           <div className="min-w-0">
                             <p className="font-semibold text-sm text-[var(--text-primary)]">{user.fullName || 'N/A'}</p>
-                            <p className="text-xs text-[var(--text-muted)]">@{user.username}</p>
+                            {user.username && (
+                              <p className="text-xs text-[var(--text-muted)]">@{user.username}</p>
+                            )}
+                            {!user.username && user.email && (
+                              <p className="text-xs text-[var(--text-muted)]">{user.email}</p>
+                            )}
                             {user.dateOfBirth && (
                               <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 mt-1">
                                 <CalendarDaysIcon className="w-3.5 h-3.5" />
@@ -477,13 +516,15 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm">
-                          <p className="text-[var(--text-primary)] flex items-center gap-2 mb-1">
-                            <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
-                            <span className="truncate max-w-[200px]">{user.email}</span>
-                            {user.emailVerified && (
-                              <CheckCircleIcon className="w-4 h-4 text-emerald-400 flex-shrink-0" title="Email Verified" />
-                            )}
-                          </p>
+                          {user.email && (
+                            <p className="text-[var(--text-primary)] flex items-center gap-2 mb-1">
+                              <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
+                              <span className="truncate max-w-[200px]">{user.email}</span>
+                              {user.emailVerified && (
+                                <CheckCircleIcon className="w-4 h-4 text-emerald-400 flex-shrink-0" title="Email Verified" />
+                              )}
+                            </p>
+                          )}
                           <p className="text-[var(--text-secondary)] flex items-center gap-2 mb-1">
                             <PhoneIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
                             <span>{user.phoneNumber || 'N/A'}</span>
@@ -697,7 +738,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {isLoading ? (
+          {isLoading || isInitialLoading ? (
             [...Array(6)].map((_, i) => (
               <Card key={i} className="p-4 animate-pulse">
                 <div className="h-20 bg-[var(--bg-input)] rounded mb-3"></div>
@@ -705,7 +746,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                 <div className="h-4 bg-[var(--bg-input)] rounded w-1/2"></div>
               </Card>
             ))
-          ) : filteredUsers.length === 0 ? (
+          ) : !isInitialLoading && filteredUsers.length === 0 ? (
             <div className="col-span-full">
               <Card className="p-12 text-center">
                 <UsersIcon className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
@@ -714,8 +755,8 @@ export default function UserManagementClient({ initialData }: UserManagementClie
               </Card>
             </div>
           ) : (
-            filteredUsers.map((user) => (
-              <Card key={user.id} className="p-4 hover:shadow-lg transition-all cursor-pointer" onClick={() => handleViewUser(user)}>
+            filteredUsers.map((user, index) => (
+              <Card key={user.id || user._id || `user-${index}`} className="p-4 hover:shadow-lg transition-all cursor-pointer" onClick={() => handleViewUser(user)}>
                 <div className="flex items-start gap-3 mb-3">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
                     {user.profilePictureUrl ? (
@@ -732,7 +773,12 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-[var(--text-primary)] truncate mb-1">{user.fullName || 'N/A'}</p>
-                    <p className="text-xs text-[var(--text-muted)] truncate mb-2">@{user.username}</p>
+                    {user.username && (
+                      <p className="text-xs text-[var(--text-muted)] truncate mb-2">@{user.username}</p>
+                    )}
+                    {!user.username && user.email && (
+                      <p className="text-xs text-[var(--text-muted)] truncate mb-2">{user.email}</p>
+                    )}
                     <div className="flex flex-wrap gap-1">
                       <Badge variant={getRoleBadgeVariant(user.role)} size="sm" className="text-[10px]">
                         {user.role.replace('_', ' ')}
@@ -746,10 +792,12 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                   </div>
                 </div>
                 <div className="space-y-2 text-xs border-t border-[var(--border-color)] pt-3">
-                  <div className="flex items-center gap-2">
-                    <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
-                    <p className="text-[var(--text-primary)] truncate">{user.email}</p>
-                  </div>
+                  {user.email && (
+                    <div className="flex items-center gap-2">
+                      <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
+                      <p className="text-[var(--text-primary)] truncate">{user.email}</p>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <PhoneIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
                     <p className="text-[var(--text-secondary)] truncate">{user.phoneNumber || 'N/A'}</p>
@@ -836,7 +884,11 @@ export default function UserManagementClient({ initialData }: UserManagementClie
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold text-[var(--text-primary)]">{selectedUser.fullName}</h3>
-                <p className="text-sm text-[var(--text-muted)]">@{selectedUser.username}</p>
+                {selectedUser.username ? (
+                  <p className="text-sm text-[var(--text-muted)]">@{selectedUser.username}</p>
+                ) : selectedUser.email ? (
+                  <p className="text-sm text-[var(--text-muted)]">{selectedUser.email}</p>
+                ) : null}
                 <div className="flex flex-wrap gap-2 mt-2">
                   <Badge variant={getRoleBadgeVariant(selectedUser.role)} size="sm">
                     {selectedUser.role.replace('_', ' ')}
@@ -871,18 +923,20 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                 Contact Information
               </h4>
               <div className="bg-[var(--bg-input)] p-4 rounded-lg space-y-2">
-                <div className="flex items-center gap-3">
-                  <EnvelopeIcon className="w-5 h-5 text-[var(--text-muted)]" />
-                  <div>
-                    <p className="text-xs text-[var(--text-muted)]">Email</p>
-                    <p className="text-[var(--text-primary)]">{selectedUser.email}</p>
-                    {selectedUser.emailVerified && (
-                      <Badge variant="success" size="sm" className="mt-1">
-                        Verified
-                      </Badge>
-                    )}
+                {selectedUser.email && (
+                  <div className="flex items-center gap-3">
+                    <EnvelopeIcon className="w-5 h-5 text-[var(--text-muted)]" />
+                    <div>
+                      <p className="text-xs text-[var(--text-muted)]">Email</p>
+                      <p className="text-[var(--text-primary)]">{selectedUser.email}</p>
+                      {selectedUser.emailVerified && (
+                        <Badge variant="success" size="sm" className="mt-1">
+                          Verified
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="flex items-center gap-3">
                   <PhoneIcon className="w-5 h-5 text-[var(--text-muted)]" />
                   <div>
@@ -997,10 +1051,12 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                   <p className="text-xs text-[var(--text-muted)]">User ID</p>
                   <p className="text-[var(--text-primary)] text-xs font-mono break-all">{selectedUser.id}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-[var(--text-muted)]">Username</p>
-                  <p className="text-[var(--text-primary)]">@{selectedUser.username}</p>
-                </div>
+                {selectedUser.username && (
+                  <div>
+                    <p className="text-xs text-[var(--text-muted)]">Username</p>
+                    <p className="text-[var(--text-primary)]">@{selectedUser.username}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs text-[var(--text-muted)]">Auth Provider</p>
                   <p className="text-[var(--text-primary)] capitalize">{selectedUser.authProvider}</p>

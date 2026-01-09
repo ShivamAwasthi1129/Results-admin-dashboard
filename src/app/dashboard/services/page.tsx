@@ -13,10 +13,10 @@ async function fetchServiceProviders(token: string | null): Promise<any[]> {
       cache: 'no-store',
     });
     
-    if (!response.ok) {
-      console.error('Failed to fetch service providers');
-      return [];
-    }
+    // if (!response.ok) {
+    //   console.error('Failed to fetch service providers');
+    //   return [];
+    // }
     
     const data = await response.json();
     if (!data.success) {

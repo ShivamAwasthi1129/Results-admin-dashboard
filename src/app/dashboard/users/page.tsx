@@ -20,10 +20,21 @@ async function fetchUsers(token: string | null): Promise<any[]> {
     
     const data = await response.json();
     if (!data.success) {
+      console.error('[fetchUsers] API returned success: false', data.error || 'Unknown error');
       return [];
     }
     
-    return data.data.users || [];
+    // Handle response structure - API returns { success: true, data: { users: [...], pagination: {...} } }
+    if (data.data) {
+      if (data.data.users && Array.isArray(data.data.users)) {
+        return data.data.users;
+      } else if (Array.isArray(data.data)) {
+        return data.data;
+      }
+    }
+    
+    console.warn('[fetchUsers] Unexpected data structure:', data);
+    return [];
   } catch (error) {
     console.error('Error fetching users:', error);
     return [];

@@ -75,6 +75,7 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
   const { token } = useAuth();
   const [devices, setDevices] = useState<Device[]>(initialDevices);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(initialDevices.length === 0);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isFirmwareModalOpen, setIsFirmwareModalOpen] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
@@ -96,6 +97,7 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
   const fetchDevices = async () => {
     try {
       setIsLoading(true);
+      setIsInitialLoading(true);
       const response = await fetch('/api/devices', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -103,10 +105,21 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
       });
       const data = await response.json();
       if (data.success) {
-        setDevices(data.data);
+        // Ensure all devices have required fields, especially 'id'
+        const transformedDevices = (data.data || []).map((device: any) => ({
+          ...device,
+          id: device.id || device._id || '',
+          deviceName: device.deviceName || device.name || 'Unknown Device',
+          deviceId: device.deviceId || device.id || '',
+          location: {
+            ...device.location,
+            coordinates: device.location?.coordinates || { lat: 0, lng: 0 },
+          },
+        }));
+        setDevices(transformedDevices);
         
         // Auto-seed if no devices exist
-        if (data.data.length === 0) {
+        if (transformedDevices.length === 0) {
           try {
             const seedResponse = await fetch('/api/devices/seed', { method: 'POST' });
             const seedData = await seedResponse.json();
@@ -126,8 +139,18 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
       toast.error('Failed to fetch devices');
     } finally {
       setIsLoading(false);
+      setIsInitialLoading(false);
     }
   };
+  
+  // Fetch on mount if no initial data
+  useEffect(() => {
+    if (initialDevices.length === 0 && token) {
+      fetchDevices();
+    } else {
+      setIsInitialLoading(false);
+    }
+  }, []);
 
   // Initial data is loaded from server via props
   // Only refresh when needed (after mutations, etc.)
@@ -135,10 +158,17 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
   // Initialize map when location tab is opened
   useEffect(() => {
     if (activeTab === 'location' && selectedDevice && mapContainerRef.current && !mapRef.current) {
-      const { lat, lng } = selectedDevice.location.coordinates;
+      // Check if location and coordinates exist, with fallback to default USA coordinates
+      const coordinates = selectedDevice.location?.coordinates;
+      const lat = coordinates?.lat ?? 39.8283; // Default to USA center
+      const lng = coordinates?.lng ?? -98.5795; // Default to USA center
+      
+      // Validate coordinates are numbers
+      const validLat = typeof lat === 'number' && !isNaN(lat) ? lat : 39.8283;
+      const validLng = typeof lng === 'number' && !isNaN(lng) ? lng : -98.5795;
       
       mapRef.current = L.map(mapContainerRef.current, {
-        center: [lat, lng],
+        center: [validLat, validLng],
         zoom: 13,
         zoomControl: true,
       });
@@ -170,7 +200,7 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
         iconAnchor: [20, 40],
       });
 
-      markerRef.current = L.marker([lat, lng], { icon: customIcon }).addTo(mapRef.current);
+      markerRef.current = L.marker([validLat, validLng], { icon: customIcon }).addTo(mapRef.current);
     }
 
     return () => {
@@ -192,17 +222,33 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
     setIsFirmwareModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string | undefined) => {
+    if (!id) {
+      toast.error('Device ID is missing');
+      console.error('Device ID is undefined');
+      return;
+    }
+    
     if (!window.confirm('Are you sure you want to delete this device?')) {
       return;
     }
+    
+    // Validate ObjectId format (MongoDB ObjectId is 24 hex characters)
+    if (typeof id !== 'string' || !/^[0-9a-fA-F]{24}$/.test(id)) {
+      toast.error('Invalid device ID format');
+      console.error('Invalid device ID format:', id);
+      return;
+    }
+    
     try {
-      const response = await fetch(`/api/devices?id=${id}`, {
+      const response = await fetch(`/api/devices?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
+      
       const data = await response.json();
       if (data.success) {
         toast.success('Device deleted successfully');
@@ -411,15 +457,6 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
     lowBattery: devices.filter(d => d.batteryLevel < 30).length,
   };
 
-  if (isLoading) {
-    return (
-      <DashboardLayout title="Device Management" subtitle="Manage and monitor all devices">
-        <div className="flex items-center justify-center h-64">
-          <p className="text-[var(--text-muted)]">Loading devices...</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
 
   return (
     <DashboardLayout title="Device Management" subtitle="Manage and monitor all devices">
@@ -444,41 +481,61 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
       </div>
 
       {/* Filters & Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="flex-1">
-          <Input
-            icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            placeholder="Search devices..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <Select
-          options={[
-            { value: 'all', label: 'All Status' },
-            { value: 'active', label: 'Active' },
-            { value: 'inactive', label: 'Inactive' },
-            { value: 'offline', label: 'Offline' },
-            { value: 'maintenance', label: 'Maintenance' },
-          ]}
-          value={filterStatus}
-          onChange={(val) => setFilterStatus(val)}
-        />
-        <Select
-          options={[
-            { value: 'all', label: 'All Types' },
-            { value: 'watch_pro', label: 'Watch Pro' },
-            { value: 'watch_lite', label: 'Watch Lite' },
-            { value: 'tracker', label: 'Tracker' },
-          ]}
-          value={filterDeviceType}
-          onChange={(val) => setFilterDeviceType(val)}
-        />
-        <Button onClick={handleFirmwareUpdate} variant="primary">
-          <Cog6ToothIcon className="w-4 h-4 mr-2" />
-          Firmware Update
-        </Button>
-      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+    placeholder="Search devices..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+  />
+</div>
+
+{/* Status Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Status' },
+      { value: 'active', label: 'Active' },
+      { value: 'inactive', label: 'Inactive' },
+      { value: 'offline', label: 'Offline' },
+      { value: 'maintenance', label: 'Maintenance' },
+    ]}
+    value={filterStatus}
+    onChange={(val) => setFilterStatus(val)}
+  />
+</div>
+
+{/* Device Type Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Types' },
+      { value: 'watch_pro', label: 'Watch Pro' },
+      { value: 'watch_lite', label: 'Watch Lite' },
+      { value: 'tracker', label: 'Tracker' },
+    ]}
+    value={filterDeviceType}
+    onChange={(val) => setFilterDeviceType(val)}
+  />
+</div>
+
+{/* Firmware Update */}
+<div className="w-full">
+  <Button
+    onClick={handleFirmwareUpdate}
+    variant="primary"
+    className="w-full"
+  >
+    <Cog6ToothIcon className="w-4 h-4 mr-2" />
+    Firmware Update
+  </Button>
+</div>
+
+</div>
+
 
       {/* Devices Table - Redesigned */}
       <Card className="overflow-hidden border border-[var(--border-color)] shadow-lg">
@@ -497,20 +554,55 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-color)] bg-[var(--bg-primary)]">
-              {filteredDevices.length === 0 ? (
+              {isInitialLoading || isLoading ? (
+                [...Array(5)].map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--border-color)]/50">
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 skeleton rounded" />
+                        <div className="space-y-1">
+                          <div className="h-4 skeleton rounded w-24" />
+                          <div className="h-3 skeleton rounded w-32" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-20" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-24" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-16" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-16" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-20" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-6 skeleton rounded-full w-20" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-8 skeleton rounded w-16 ml-auto" />
+                    </td>
+                  </tr>
+                ))
+              ) : filteredDevices.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-3 py-8 text-center text-[var(--text-muted)]">
                     No devices found
                   </td>
                 </tr>
               ) : (
-                filteredDevices.map((device) => {
+                filteredDevices.map((device, index) => {
                   const statusColor = getStatusColor(device.status);
                   const isEditing = editingField?.deviceId === device.id;
                   const isEditingField = (field: string) => isEditing && editingField?.field === field;
 
                   return (
-                    <tr key={device.id} className="hover:bg-[var(--bg-secondary)]/60 transition-all duration-200 group border-b border-[var(--border-color)]/50">
+                    <tr key={device.id || device.deviceId || `device-${index}`} className="hover:bg-[var(--bg-secondary)]/60 transition-all duration-200 group border-b border-[var(--border-color)]/50">
                       {/* Device Column - Non-editable */}
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
@@ -668,7 +760,14 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(device.id)}
+                            onClick={() => {
+                              if (!device.id) {
+                                console.error('Device ID is missing:', device);
+                                toast.error('Device ID is missing. Cannot delete device.');
+                                return;
+                              }
+                              handleDelete(device.id);
+                            }}
                             title="Delete Device"
                             className="hover:bg-red-500/10 hover:text-red-500"
                           >
@@ -825,8 +924,8 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
                   {selectedDevice.familyMembers.length === 0 ? (
                     <p className="text-sm text-[var(--text-muted)] text-center py-4">No family members added</p>
                   ) : (
-                    selectedDevice.familyMembers.map((member, index) => (
-                      <Card key={index} className="p-4">
+                    selectedDevice.familyMembers.map((member, memberIndex) => (
+                      <Card key={member.name ? `${member.name}-${memberIndex}` : `member-${memberIndex}`} className="p-4">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 font-semibold">
                             {getInitials(member.name)}
@@ -853,13 +952,27 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
                   <h3 className="font-semibold text-[var(--text-primary)]">Current Location</h3>
                 </div>
                 <Card className="p-4">
-                  <p className="text-[var(--text-primary)] mb-2">
-                    {selectedDevice.location.address}, {selectedDevice.location.city}, {selectedDevice.location.state} {selectedDevice.location.zipCode}
-                  </p>
-                  <div className="text-sm text-[var(--text-muted)] space-y-1">
-                    <p>Latitude: {selectedDevice.location.coordinates.lat}</p>
-                    <p>Longitude: {selectedDevice.location.coordinates.lng}</p>
-                  </div>
+                  {selectedDevice.location && (
+                    <>
+                      <p className="text-[var(--text-primary)] mb-2">
+                        {selectedDevice.location.address || 'N/A'}, {selectedDevice.location.city || 'N/A'}, {selectedDevice.location.state || 'N/A'} {selectedDevice.location.zipCode || ''}
+                      </p>
+                      {selectedDevice.location.coordinates && (
+                        <div className="text-sm text-[var(--text-muted)] space-y-1">
+                          <p>Latitude: {selectedDevice.location.coordinates.lat ?? 'N/A'}</p>
+                          <p>Longitude: {selectedDevice.location.coordinates.lng ?? 'N/A'}</p>
+                        </div>
+                      )}
+                      {!selectedDevice.location.coordinates && (
+                        <div className="text-sm text-[var(--text-muted)]">
+                          <p>Coordinates not available</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {!selectedDevice.location && (
+                    <p className="text-[var(--text-muted)]">Location information not available</p>
+                  )}
                 </Card>
               </div>
 

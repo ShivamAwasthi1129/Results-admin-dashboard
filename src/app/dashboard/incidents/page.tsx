@@ -39,26 +39,50 @@ interface Incident {
 
 async function fetchIncidents(token: string | null): Promise<Incident[]> {
   try {
-    if (!token) return [];
+    if (!token) {
+      console.warn('[fetchIncidents] No token provided');
+      return [];
+    }
     
-    const response = await fetch(getApiUrl('/api/incidents'), {
-      headers: { Authorization: `Bearer ${token}` },
+    const apiUrl = getApiUrl('/api/incidents');
+    console.log(`[fetchIncidents] Fetching from: ${apiUrl}`);
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(apiUrl, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
       cache: 'no-store',
+      signal: controller.signal,
     });
     
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
-      console.error('Failed to fetch incidents');
+      console.error(`[fetchIncidents] Failed to fetch incidents: ${response.status} ${response.statusText}`);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`[fetchIncidents] Error response: ${errorText}`);
       return [];
     }
     
     const data = await response.json();
     if (!data.success) {
+      console.error(`[fetchIncidents] API returned success: false`, data.error || 'Unknown error');
       return [];
     }
     
-    return data.data || [];
-  } catch (error) {
-    console.error('Error fetching incidents:', error);
+    const incidents = data.data || [];
+    console.log(`[fetchIncidents] Successfully fetched ${incidents.length} incidents`);
+    return incidents;
+  } catch (error: any) {
+    console.error('[fetchIncidents] Error fetching incidents:', error);
+    if (error.name === 'AbortError') {
+      console.error('[fetchIncidents] Request timed out');
+    }
     return [];
   }
 }

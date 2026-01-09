@@ -148,7 +148,6 @@ const StockEntrySchema = new Schema<IStockEntryDocument>(
         type: String,
         required: [true, 'Item category is required'],
         trim: true,
-        index: true,
       },
       sku: {
         type: String,
@@ -167,7 +166,6 @@ const StockEntrySchema = new Schema<IStockEntryDocument>(
         type: String,
         required: [true, 'Warehouse ID is required'],
         trim: true,
-        index: true,
       },
       name: {
         type: String,
@@ -247,7 +245,6 @@ const StockEntrySchema = new Schema<IStockEntryDocument>(
       type: String,
       enum: ['In-Stock', 'Low Stock', 'Critical', 'Depleted', 'Expired'],
       default: 'In-Stock',
-      index: true,
     },
     batches: {
       type: [BatchSchema],
@@ -264,7 +261,6 @@ const StockEntrySchema = new Schema<IStockEntryDocument>(
     tags: {
       type: [String],
       default: [],
-      index: true,
     },
     lastUpdated: {
       type: Date,

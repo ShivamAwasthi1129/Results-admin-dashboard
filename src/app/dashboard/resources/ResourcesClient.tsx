@@ -104,6 +104,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
   const { token } = useAuth();
   const [stockEntries, setStockEntries] = useState<StockEntry[]>(initialStockEntries);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(initialStockEntries.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -205,6 +206,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
   const fetchStockEntries = async () => {
     try {
       setIsLoading(true);
+      setIsInitialLoading(true);
       const response = await fetch('/api/inventory/stock', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -217,8 +219,18 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
       toast.error('Failed to fetch stock entries');
     } finally {
       setIsLoading(false);
+      setIsInitialLoading(false);
     }
   };
+
+  // Fetch on mount if no initial data
+  useEffect(() => {
+    if (initialStockEntries.length === 0 && token) {
+      fetchStockEntries();
+    } else {
+      setIsInitialLoading(false);
+    }
+  }, []);
 
   // Seed data
   const handleSeed = async () => {
@@ -714,57 +726,72 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
       </div>
 
       {/* Filters & Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6 items-center">
 
-<Input
-  icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-  placeholder="Search by item name, SKU, or location..."
-  value={searchQuery}
-  onChange={(e) => setSearchQuery(e.target.value)}
-/>
+{/* Search */}
+<div className="w-full">
+  <Input
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+    placeholder="Search by item name, SKU, or location..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+  />
+</div>
 
-<Select
-  options={[
-    { value: 'all', label: 'All Categories' },
-    ...categories.map(cat => ({ value: cat, label: cat })),
-  ]}
-  value={filterCategory}
-  onChange={setFilterCategory}
-/>
+{/* Category Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Categories' },
+      ...categories.map(cat => ({ value: cat, label: cat })),
+    ]}
+    value={filterCategory}
+    onChange={setFilterCategory}
+  />
+</div>
 
-<Select
-  options={[
-    { value: 'all', label: 'All Status' },
-    { value: 'In-Stock', label: 'In-Stock' },
-    { value: 'Low Stock', label: 'Low Stock' },
-    { value: 'Critical', label: 'Critical' },
-    { value: 'Depleted', label: 'Depleted' },
-    { value: 'Expired', label: 'Expired' },
-  ]}
-  value={filterStatus}
-  onChange={setFilterStatus}
-/>
+{/* Status Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Status' },
+      { value: 'In-Stock', label: 'In-Stock' },
+      { value: 'Low Stock', label: 'Low Stock' },
+      { value: 'Critical', label: 'Critical' },
+      { value: 'Depleted', label: 'Depleted' },
+      { value: 'Expired', label: 'Expired' },
+    ]}
+    value={filterStatus}
+    onChange={setFilterStatus}
+  />
+</div>
 
-<Select
-  options={[
-    { value: 'all', label: 'All Warehouses' },
-    ...warehouses.map(wh => ({ value: wh, label: wh })),
-  ]}
-  value={filterWarehouse}
-  onChange={setFilterWarehouse}
-/>
+{/* Warehouse Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Warehouses' },
+      ...warehouses.map(wh => ({ value: wh, label: wh })),
+    ]}
+    value={filterWarehouse}
+    onChange={setFilterWarehouse}
+  />
+</div>
 
-<Button
-  variant="gradient"
-  className="w-full h-full"
-  leftIcon={<PlusIcon className="w-5 h-5" />}
-  onClick={() => {
-    resetStockForm();
-    setIsStockModalOpen(true);
-  }}
->
-  Add New Stock Entry
-</Button>
+{/* Add New Stock Entry */}
+<div className="w-full">
+  <Button
+    variant="gradient"
+    className="w-full"
+    leftIcon={<PlusIcon className="w-5 h-5" />}
+    onClick={() => {
+      resetStockForm();
+      setIsStockModalOpen(true);
+    }}
+  >
+    Add New Stock Entry
+  </Button>
+</div>
 
 </div>
 
@@ -784,15 +811,37 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
+              {isLoading || isInitialLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i} className="border-b border-[var(--border-color)]">
-                    <td colSpan={6} className="px-6 py-4">
-                      <div className="h-8 bg-[var(--bg-input)] rounded animate-pulse" />
+                    <td className="px-6 py-4">
+                      <div className="space-y-2">
+                        <div className="h-4 skeleton rounded w-32" />
+                        <div className="h-3 skeleton rounded w-24" />
+                        <div className="h-3 skeleton rounded w-20" />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        <div className="h-4 skeleton rounded w-28" />
+                        <div className="h-3 skeleton rounded w-32" />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-4 skeleton rounded w-20" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-6 skeleton rounded-full w-16" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-4 skeleton rounded w-16" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-8 skeleton rounded w-20 ml-auto" />
                     </td>
                   </tr>
                 ))
-              ) : filteredEntries.length === 0 ? (
+              ) : !isInitialLoading && filteredEntries.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <CubeIcon className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-3" />

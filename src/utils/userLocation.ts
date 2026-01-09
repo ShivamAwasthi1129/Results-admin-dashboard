@@ -71,6 +71,7 @@ const userCoordinatesCache = new Map<string, Coordinates>();
 
 /**
  * Generate random coordinates for a user based on their location data
+ * ALWAYS generates USA coordinates regardless of user's actual country
  * Uses consistent hashing to ensure same user always gets same coordinates
  */
 export function generateUserCoordinates(
@@ -91,7 +92,8 @@ export function generateUserCoordinates(
   const seed1 = (hash * 17) % 1000;
   const seed2 = (hash * 23) % 1000;
 
-  // Use city if available
+  // ALWAYS use USA coordinates - ignore actual country
+  // Use city if available (try to match with USA cities)
   if (city) {
     const cityKey = Object.keys(cityCoordinates).find(
       c => c.toLowerCase() === city.toLowerCase()
@@ -106,7 +108,7 @@ export function generateUserCoordinates(
         lng: base.lng + offsetLng,
       };
     } else {
-      // City not in list, generate near a random major city
+      // City not in USA list, generate near a random major USA city
       const cities = Object.values(cityCoordinates);
       const cityIndex = hash % cities.length;
       const base = cities[cityIndex];
@@ -118,7 +120,7 @@ export function generateUserCoordinates(
       };
     }
   } else if (state) {
-    // Use state if available
+    // Use state if available (try to match with USA states)
     const stateKey = Object.keys(stateCoordinates).find(
       s => s.toLowerCase() === state.toLowerCase()
     );
@@ -132,7 +134,7 @@ export function generateUserCoordinates(
         lng: base.lng + offsetLng,
       };
     } else {
-      // State not in list, use USA center with larger offset
+      // State not in USA list, use USA center with larger offset
       const offsetLat = ((seed1 / 1000) - 0.5) * 15;
       const offsetLng = ((seed2 / 1000) - 0.5) * 25;
       coordinates = {
@@ -142,7 +144,7 @@ export function generateUserCoordinates(
     }
   } else {
     // Default: distribute across USA with consistent hashing
-    // Use hash to create varied but consistent positions
+    // Use hash to create varied but consistent positions within USA bounds
     const latRange = 25; // USA latitude span (approximately)
     const lngRange = 50; // USA longitude span (approximately)
     const normalizedHash1 = (seed1 / 1000); // 0-1
@@ -153,6 +155,11 @@ export function generateUserCoordinates(
       lng: -98.5795 + (normalizedHash2 - 0.5) * lngRange, // USA center
     };
   }
+
+  // Ensure coordinates are within USA bounds
+  // USA approximate bounds: lat 24.396308 to 49.384358, lng -125.0 to -66.93457
+  coordinates.lat = Math.max(24.396308, Math.min(49.384358, coordinates.lat));
+  coordinates.lng = Math.max(-125.0, Math.min(-66.93457, coordinates.lng));
 
   // Cache the coordinates
   userCoordinatesCache.set(userId, coordinates);

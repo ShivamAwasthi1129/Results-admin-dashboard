@@ -79,6 +79,7 @@ export default function IncidentsClient({ initialIncidents }: IncidentsClientPro
   const { token, user } = useAuth();
   const [incidents, setIncidents] = useState<Incident[]>(initialIncidents);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(initialIncidents.length === 0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -108,6 +109,7 @@ export default function IncidentsClient({ initialIncidents }: IncidentsClientPro
   const fetchIncidents = async () => {
     try {
       setIsLoading(true);
+      setIsInitialLoading(true);
       const response = await fetch('/api/incidents', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -138,16 +140,18 @@ export default function IncidentsClient({ initialIncidents }: IncidentsClientPro
       toast.error('Failed to fetch incidents');
     } finally {
       setIsLoading(false);
+      setIsInitialLoading(false);
     }
   };
 
-  // Refresh incidents periodically or on demand
+  // Fetch on mount if no initial data
   useEffect(() => {
-    if (token) {
-      // Initial data is already loaded from server
-      // Only refresh on user action or periodically
+    if (initialIncidents.length === 0 && token) {
+      fetchIncidents();
+    } else {
+      setIsInitialLoading(false);
     }
-  }, [token]);
+  }, []);
 
   const toggleRow = (id: string) => {
     setExpandedRows(prev => {
@@ -452,56 +456,79 @@ export default function IncidentsClient({ initialIncidents }: IncidentsClientPro
         </Card>
       </div>
 
-      {/* Search & Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="flex-1">
-          <Input
-            icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            placeholder="Search by ticket number, title, or reporter..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <Select
-          options={[
-            { value: 'all', label: 'All Types' },
-            { value: 'insurance_support', label: 'Insurance Support' },
-            { value: 'finance_management', label: 'Finance Management' },
-            { value: 'legal_assistance', label: 'Legal Assistance' },
-            { value: 'housing', label: 'Housing' },
-            { value: 'medical', label: 'Medical' },
-            { value: 'other', label: 'Other' },
-          ]}
-          value={filterType}
-          onChange={(val) => setFilterType(val)}
-        />
-        <Select
-          options={[
-            { value: 'all', label: 'All Statuses' },
-            { value: 'open', label: 'Open' },
-            { value: 'in_progress', label: 'In Progress' },
-            { value: 'resolved', label: 'Resolved' },
-            { value: 'closed', label: 'Closed' },
-          ]}
-          value={filterStatus}
-          onChange={(val) => setFilterStatus(val)}
-        />
-        <Select
-          options={[
-            { value: 'all', label: 'All Priorities' },
-            { value: 'low', label: 'Low' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'high', label: 'High' },
-            { value: 'critical', label: 'Critical' },
-          ]}
-          value={filterPriority}
-          onChange={(val) => setFilterPriority(val)}
-        />
-        <Button onClick={() => { setIsEditing(false); resetForm(); setIsModalOpen(true); }} variant="primary">
-          <PlusIcon className="w-4 h-4 mr-2" />
-          New Incident
-        </Button>
-      </div>
+      {/* Filters & Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6 items-center">
+
+{/* Search */}
+<div className="w-full">
+  <Input
+    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+    placeholder="Search by ticket number, title, or reporter..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+  />
+</div>
+
+{/* Type Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Types' },
+      { value: 'insurance_support', label: 'Insurance Support' },
+      { value: 'finance_management', label: 'Finance Management' },
+      { value: 'legal_assistance', label: 'Legal Assistance' },
+      { value: 'housing', label: 'Housing' },
+      { value: 'medical', label: 'Medical' },
+      { value: 'other', label: 'Other' },
+    ]}
+    value={filterType}
+    onChange={(val) => setFilterType(val)}
+  />
+</div>
+
+{/* Status Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Statuses' },
+      { value: 'open', label: 'Open' },
+      { value: 'in_progress', label: 'In Progress' },
+      { value: 'resolved', label: 'Resolved' },
+      { value: 'closed', label: 'Closed' },
+    ]}
+    value={filterStatus}
+    onChange={(val) => setFilterStatus(val)}
+  />
+</div>
+
+{/* Priority Filter */}
+<div className="w-full">
+  <Select
+    options={[
+      { value: 'all', label: 'All Priorities' },
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+      { value: 'critical', label: 'Critical' },
+    ]}
+    value={filterPriority}
+    onChange={(val) => setFilterPriority(val)}
+  />
+</div>
+
+{/* New Incident */}
+<div className="w-full">
+  <Button 
+    onClick={() => { setIsEditing(false); resetForm(); setIsModalOpen(true); }} 
+    variant="primary"
+    className="w-full"
+  >
+    <PlusIcon className="w-4 h-4 mr-2" />
+    New Incident
+  </Button>
+</div>
+
+</div>
 
       {/* Incidents Table */}
       <Card className="overflow-hidden border border-[var(--border-color)] shadow-lg">
@@ -522,7 +549,42 @@ export default function IncidentsClient({ initialIncidents }: IncidentsClientPro
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-color)] bg-[var(--bg-primary)]">
-              {filteredIncidents.length === 0 ? (
+              {isInitialLoading || isLoading ? (
+                [...Array(5)].map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--border-color)]/50">
+                    <td className="px-3 py-2">
+                      <div className="h-6 skeleton rounded w-6" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-20" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-24" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-32" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-24" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-20" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-6 skeleton rounded-full w-16" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-6 skeleton rounded-full w-20" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-4 skeleton rounded w-24" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="h-8 skeleton rounded w-20" />
+                    </td>
+                  </tr>
+                ))
+              ) : !isInitialLoading && filteredIncidents.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-3 py-8 text-center text-[var(--text-muted)]">
                     No incidents found
