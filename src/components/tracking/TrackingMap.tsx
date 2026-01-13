@@ -17,6 +17,17 @@ if (typeof document !== 'undefined') {
       margin-top: -15px !important;
       max-width: 320px !important;
       font-family: system-ui, -apple-system, sans-serif !important;
+      z-index: 99999 !important;
+      position: relative !important;
+    }
+    .leaflet-tooltip.custom-location-tooltip {
+      z-index: 99999 !important;
+    }
+    .leaflet-tooltip-top.custom-location-tooltip::before,
+    .leaflet-tooltip-bottom.custom-location-tooltip::before,
+    .leaflet-tooltip-left.custom-location-tooltip::before,
+    .leaflet-tooltip-right.custom-location-tooltip::before {
+      z-index: 99998 !important;
     }
     .custom-location-tooltip::before {
       border-top-color: white !important;

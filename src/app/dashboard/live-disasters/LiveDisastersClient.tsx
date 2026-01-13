@@ -156,7 +156,9 @@ export default function LiveDisastersClient() {
   const [volunteers, setVolunteers] = useState<any[]>([]);
   const [showAssignVolunteerModal, setShowAssignVolunteerModal] = useState(false);
   const [selectedDisasterForAssign, setSelectedDisasterForAssign] = useState<ManagedDisaster | null>(null);
-  const [selectedVolunteerId, setSelectedVolunteerId] = useState<string>('');
+  const [selectedVolunteerIds, setSelectedVolunteerIds] = useState<string[]>([]);
+  const [assignmentFromDate, setAssignmentFromDate] = useState<string>('');
+  const [assignmentToDate, setAssignmentToDate] = useState<string>('');
   const [expandedVolunteers, setExpandedVolunteers] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     title: '',
@@ -165,14 +167,17 @@ export default function LiveDisastersClient() {
     severity: 'medium',
     status: 'active',
     address: '',
-    city: '',
-    state: '',
+    locationType: 'local', // 'local' or 'widespread'
+    range: '', // Range of disaster
     country: 'USA',
     lat: '',
     lng: '',
-    affectedArea: '',
     estimatedAffectedPeople: '',
+    selectedNasaDisasterId: '', // ID of selected NASA disaster
+    useCustomDisaster: false, // Whether to use custom disaster fields
   });
+  const [nasaDisasters, setNasaDisasters] = useState<LiveDisaster[]>([]);
+  const [isLoadingNasaDisasters, setIsLoadingNasaDisasters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const canManage = hasPermission(['super_admin', 'admin']);
@@ -281,6 +286,23 @@ export default function LiveDisastersClient() {
       console.error('Failed to fetch live disasters:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Fetch NASA EONET disasters for the dropdown
+  const fetchNasaDisasters = async () => {
+    setIsLoadingNasaDisasters(true);
+    try {
+      const response = await fetch('/api/live-disasters');
+      const data = await response.json();
+      if (data.success) {
+        // Get all disasters (not just USA) for selection
+        setNasaDisasters(data.data.disasters || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch NASA disasters:', error);
+    } finally {
+      setIsLoadingNasaDisasters(false);
     }
   };
 
@@ -487,8 +509,66 @@ export default function LiveDisastersClient() {
     }
   }, [searchQuery]);
 
+  // Load Google Maps Places API for autocomplete when modal opens and locationType is widespread
+  useEffect(() => {
+    if (showAddModal && formData.locationType === 'widespread') {
+      // Load Google Maps Places API script
+      const scriptId = 'google-maps-places-script';
+      if (!document.getElementById(scriptId)) {
+        const script = document.createElement('script');
+        script.id = scriptId;
+        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+        if (apiKey) {
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+          script.async = true;
+          script.defer = true;
+          script.onload = () => {
+            // Initialize autocomplete after script loads
+            setTimeout(() => {
+              const addressInput = document.getElementById('disaster-address-input') as HTMLInputElement;
+              if (addressInput && (window as any).google?.maps?.places) {
+                const autocomplete = new (window as any).google.maps.places.Autocomplete(addressInput, {
+                  types: ['address'],
+                  componentRestrictions: { country: 'us' },
+                });
+                
+                autocomplete.addListener('place_changed', () => {
+                  const place = autocomplete.getPlace();
+                  if (place.geometry) {
+                    setFormData({
+                      ...formData,
+                      address: place.formatted_address || formData.address,
+                      lat: place.geometry.location.lat().toString(),
+                      lng: place.geometry.location.lng().toString(),
+                    });
+                  }
+                });
+              }
+            }, 100);
+          };
+          document.head.appendChild(script);
+        }
+      }
+    }
+  }, [showAddModal, formData.locationType]);
+
   const handleSubmitDisaster = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.title) {
+      toast.error('Title is required');
+      return;
+    }
+    if (!formData.address) {
+      toast.error('Address is required');
+      return;
+    }
+    if (!formData.range) {
+      toast.error('Range of disaster is required');
+      return;
+    }
+    
     try {
       const url = selectedManagedDisaster ? `/api/disasters/${selectedManagedDisaster._id}` : '/api/disasters';
       const method = selectedManagedDisaster ? 'PUT' : 'POST';
@@ -503,6 +583,19 @@ export default function LiveDisastersClient() {
         }
       }
       
+      // Extract city and state from address if available
+      let city = '';
+      let state = '';
+      if (formData.address) {
+        const addressParts = formData.address.split(',').map(p => p.trim());
+        if (addressParts.length >= 2) {
+          city = addressParts[0];
+          state = addressParts[1];
+        } else if (addressParts.length === 1) {
+          city = addressParts[0];
+        }
+      }
+
       const body = {
         title: formData.title,
         type: formData.type,
@@ -511,12 +604,12 @@ export default function LiveDisastersClient() {
         status: formData.status,
         location: {
           address: formData.address || '',
-          city: formData.city || '',
-          state: formData.state || '',
+          city: city,
+          state: state,
           country: formData.country || 'USA',
           coordinates: coordinates,
         },
-        affectedArea: formData.affectedArea ? parseFloat(formData.affectedArea) : 0,
+        affectedArea: 0, // Removed field
         affectedPopulation: formData.estimatedAffectedPeople ? parseInt(formData.estimatedAffectedPeople) : 0,
       };
       
@@ -532,8 +625,9 @@ export default function LiveDisastersClient() {
         setSelectedManagedDisaster(null);
         setFormData({
           title: '', type: 'flood', description: '', severity: 'medium', status: 'active',
-          address: '', city: '', state: '', country: 'USA',
-          lat: '', lng: '', affectedArea: '', estimatedAffectedPeople: '',
+          address: '', locationType: 'local', range: '', country: 'USA',
+          lat: '', lng: '', estimatedAffectedPeople: '',
+          selectedNasaDisasterId: '', useCustomDisaster: false,
         });
         // Refresh both live and database disasters
         await fetchDatabaseDisasters();
@@ -549,7 +643,7 @@ export default function LiveDisastersClient() {
   };
 
   const handleDeleteDisaster = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this disaster?')) return;
+    if (!confirm('Are you sure you want to delete this disaster? This will also remove all assigned volunteers from this disaster.')) return;
     try {
       const response = await fetch(`/api/disasters/${id}`, {
         method: 'DELETE',
@@ -557,11 +651,23 @@ export default function LiveDisastersClient() {
       });
       const data = await response.json();
       if (data.success) {
-        toast.success('Disaster deleted!');
-        fetchDatabaseDisasters();
-      } else toast.error(data.error);
+        const volunteersCount = data.data?.removedVolunteersCount || 0;
+        if (volunteersCount > 0) {
+          toast.success(`Disaster deleted! ${volunteersCount} volunteer(s) have been removed and updated.`);
+        } else {
+          toast.success('Disaster deleted!');
+        }
+        // Refresh disasters and volunteers to update the UI
+        await Promise.all([
+          fetchDatabaseDisasters(),
+          fetchVolunteers(),
+        ]);
+      } else {
+        toast.error(data.error || 'Failed to delete disaster');
+      }
     } catch (error) {
-      toast.error('Delete failed');
+      console.error('Error deleting disaster:', error);
+      toast.error('Delete failed. Please try again.');
     }
   };
 
@@ -1007,14 +1113,24 @@ export default function LiveDisastersClient() {
           </div>
           {canManage && (
             <Button
-              onClick={() => {
-                setSelectedManagedDisaster(null);
-                setFormData({
-                  title: '', type: 'flood', description: '', severity: 'medium', status: 'active',
-                  address: '', city: '', state: '', country: 'USA',
-                  lat: '', lng: '', affectedArea: '', estimatedAffectedPeople: '',
-                });
-                setShowAddModal(true);
+              onClick={async () => {
+                try {
+                  setSelectedManagedDisaster(null);
+                  setFormData({
+                    title: '', type: 'flood', description: '', severity: 'medium', status: 'active',
+                    address: '', locationType: 'local', range: '', country: 'USA',
+                    lat: '', lng: '', estimatedAffectedPeople: '',
+                    selectedNasaDisasterId: '', useCustomDisaster: false,
+                  });
+                  // Open modal first, then fetch NASA disasters in background
+                  setShowAddModal(true);
+                  // Fetch NASA disasters when opening modal (non-blocking)
+                  await fetchNasaDisasters();
+                } catch (error) {
+                  console.error('Error opening add disaster modal:', error);
+                  // Still open the modal even if fetch fails
+                  setShowAddModal(true);
+                }
               }}
               leftIcon={<PlusIcon className="w-4 h-4" />}
               variant="gradient"
@@ -1245,15 +1361,19 @@ export default function LiveDisastersClient() {
                                 severity: disaster.severity,
                                 status: disaster.status,
                                 address: disaster.location?.address || '',
-                                city: disaster.location?.city || '',
-                                state: disaster.location?.state || '',
+                                locationType: 'local', // Default to local
+                                range: '',
                                 country: disaster.location?.country || 'USA',
                                 lat: lat?.toString() || '',
                                 lng: lng?.toString() || '',
-                                affectedArea: disaster.affectedArea?.toString() || '',
                                 estimatedAffectedPeople: disaster.estimatedAffectedPeople?.toString() || '',
+                                selectedNasaDisasterId: '',
+                                useCustomDisaster: true,
                               });
+                              // Open modal first, then fetch NASA disasters in background
                               setShowAddModal(true);
+                              // Fetch NASA disasters when editing (non-blocking)
+                              fetchNasaDisasters().catch(err => console.error('Error fetching NASA disasters:', err));
                             }}
                             className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
                             title="Edit"
@@ -1305,15 +1425,121 @@ export default function LiveDisastersClient() {
         className="z-[10001]"
       >
         <form onSubmit={handleSubmitDisaster} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Title *</label>
-            <Input
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="Disaster title"
-              required
-            />
+          {/* Two Column Layout: NASA EONET Selection (Left) and Custom Disaster (Right) */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left Column: NASA EONET Selection */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                  Select Disaster <span className="text-red-400">*</span>
+                </label>
+                {isLoadingNasaDisasters ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <Select
+                    value={formData.selectedNasaDisasterId}
+                    onChange={(value) => {
+                      if (value) {
+                        const selectedDisaster = nasaDisasters.find(d => d.id === value);
+                        if (selectedDisaster) {
+                          const coords = selectedDisaster.location?.coordinates;
+                          // Build address from location data
+                          let addressParts = [];
+                          if (selectedDisaster.location?.state) {
+                            addressParts.push(selectedDisaster.location.state);
+                          }
+                          if (selectedDisaster.location?.country) {
+                            addressParts.push(selectedDisaster.location.country);
+                          } else {
+                            addressParts.push('USA');
+                          }
+                          const address = addressParts.join(', ') || 'USA';
+                          
+                          setFormData({
+                            ...formData,
+                            selectedNasaDisasterId: value,
+                            useCustomDisaster: false,
+                            title: selectedDisaster.title,
+                            description: selectedDisaster.description || '',
+                            type: selectedDisaster.type,
+                            severity: selectedDisaster.severity,
+                            lat: coords?.lat?.toString() || '',
+                            lng: coords?.lng?.toString() || '',
+                            address: address,
+                          });
+                        }
+                      } else {
+                        setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true });
+                      }
+                    }}
+                    options={[
+                      { value: '', label: 'Choose a disaster from NASA EONET...' },
+                      ...nasaDisasters.map((disaster) => ({
+                        value: disaster.id,
+                        label: `${disaster.title} (${disaster.type}) - ${disaster.severity}`,
+                      })),
+                    ]}
+                  />
+                )}
+                {/* <p className="text-xs text-[var(--text-muted)] mt-1">
+                  Select a disaster from NASA EONET API to auto-fill details
+                </p> */}
+              </div>
+
+              {/* Auto-filled fields when NASA disaster is selected */}
+              {formData.selectedNasaDisasterId && !formData.useCustomDisaster && (
+                <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-2">
+                  <p className="text-xs font-medium text-purple-400">Auto-filled from NASA EONET:</p>
+                  <div className="text-xs text-[var(--text-muted)] space-y-1">
+                    <p><span className="font-medium">Title:</span> {formData.title}</p>
+                    <p><span className="font-medium">Type:</span> {formData.type}</p>
+                    <p><span className="font-medium">Severity:</span> {formData.severity}</p>
+                    <p><span className="font-medium">Coordinates:</span> {formData.lat}, {formData.lng}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Custom Disaster Fields */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="useCustomDisaster"
+                  checked={formData.useCustomDisaster}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setFormData({ ...formData, useCustomDisaster: true, selectedNasaDisasterId: '' });
+                    } else {
+                      setFormData({ ...formData, useCustomDisaster: false });
+                    }
+                  }}
+                  className="w-4 h-4 text-purple-600 bg-[var(--bg-primary)] border-[var(--border-color)] rounded focus:ring-purple-500"
+                />
+                <label htmlFor="useCustomDisaster" className="text-sm font-medium text-[var(--text-secondary)]">
+                  Use Custom Disaster Information
+                </label>
+              </div>
+
+              {formData.useCustomDisaster && (
+                <div>
+                  {/* <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                    Title <span className="text-red-400">*</span>
+                  </label> */}
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Enter disaster title"
+                    required={formData.useCustomDisaster}
+                  />
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Type and Severity - Always visible */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Type *</label>
@@ -1346,6 +1572,8 @@ export default function LiveDisastersClient() {
               />
             </div>
           </div>
+
+          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Description *</label>
             <textarea
@@ -1357,24 +1585,78 @@ export default function LiveDisastersClient() {
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">City</label>
-              <Input
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                placeholder="City"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">State</label>
-              <Input
-                value={formData.state}
-                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                placeholder="State"
-              />
-            </div>
+             {/* Affected People - Removed Affected Area */}
+             <div>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Affected People</label>
+            <Input
+              type="number"
+              value={formData.estimatedAffectedPeople}
+              onChange={(e) => setFormData({ ...formData, estimatedAffectedPeople: e.target.value })}
+              placeholder="0"
+            />
           </div>
+
+          {/* Location Type: Local or Widespread */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              Location Type <span className="text-red-400">*</span>
+            </label>
+            <Select
+              value={formData.locationType}
+              onChange={(value) => setFormData({ ...formData, locationType: value as 'local' | 'widespread' })}
+              options={[
+                { value: 'local', label: 'Local' },
+                { value: 'widespread', label: 'Widespread' },
+              ]}
+            />
+          </div>
+
+          {/* Address Field - Always visible */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              Address <span className="text-red-400">*</span>
+            </label>
+            <Input
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder={formData.locationType === 'widespread' ? 'Enter Address' : 'Enter address'}
+              required
+              id="disaster-address-input"
+            />
+            {/* {formData.locationType === 'widespread' && (
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Start typing to search for an address. Google autocomplete will be enabled if API key is configured.
+              </p>
+            )} */}
+          </div>
+
+          {/* Range of Disaster */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              Range of Disaster <span className="text-red-400">*</span>
+            </label>
+            <Select
+              value={formData.range}
+              onChange={(value) => setFormData({ ...formData, range: value })}
+              options={[
+                { value: '<1', label: 'Less than 1 mile' },
+                { value: '1-5', label: '1 - 5 miles' },
+                { value: '5-10', label: '5 - 10 miles' },
+                { value: '10-15', label: '10 - 15 miles' },
+                { value: '15-20', label: '15 - 20 miles' },
+                { value: '20-25', label: '20 - 25 miles' },
+                { value: '25-30', label: '25 - 30 miles' },
+                { value: '30-35', label: '30 - 35 miles' },
+                { value: '35-40', label: '35 - 40 miles' },
+                { value: '40-45', label: '40 - 45 miles' },
+                { value: '45-50', label: '45 - 50 miles' },
+                { value: '50+', label: 'More than 50 miles' },
+              ]}
+              required
+            />
+          </div>
+
+          {/* Coordinates */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Latitude</label>
@@ -1397,26 +1679,9 @@ export default function LiveDisastersClient() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Affected Area (sq km)</label>
-              <Input
-                type="number"
-                value={formData.affectedArea}
-                onChange={(e) => setFormData({ ...formData, affectedArea: e.target.value })}
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Affected People</label>
-              <Input
-                type="number"
-                value={formData.estimatedAffectedPeople}
-                onChange={(e) => setFormData({ ...formData, estimatedAffectedPeople: e.target.value })}
-                placeholder="0"
-              />
-            </div>
-          </div>
+
+       
+
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-color)]">
             <Button
               type="button"
@@ -1424,6 +1689,12 @@ export default function LiveDisastersClient() {
               onClick={() => {
                 setShowAddModal(false);
                 setSelectedManagedDisaster(null);
+                setFormData({
+                  title: '', type: 'flood', description: '', severity: 'medium', status: 'active',
+                  address: '', locationType: 'local', range: '', country: 'USA',
+                  lat: '', lng: '', estimatedAffectedPeople: '',
+                  selectedNasaDisasterId: '', useCustomDisaster: false,
+                });
               }}
             >
               Cancel
@@ -1732,60 +2003,141 @@ export default function LiveDisastersClient() {
         onClose={() => {
           setShowAssignVolunteerModal(false);
           setSelectedDisasterForAssign(null);
-          setSelectedVolunteerId('');
+          setSelectedVolunteerIds([]);
+          setAssignmentFromDate('');
+          setAssignmentToDate('');
         }}
-        title={`Assign Volunteer - ${selectedDisasterForAssign?.title || 'Disaster'}`}
-        size="md"
+        title={`Assign Volunteers - ${selectedDisasterForAssign?.title || 'Disaster'}`}
+        size="lg"
         className="z-[10001]"
       >
         {selectedDisasterForAssign && (
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (!selectedVolunteerId) {
-                toast.error('Please select a volunteer');
+              if (selectedVolunteerIds.length === 0) {
+                toast.error('Please select at least one volunteer');
+                return;
+              }
+              if (!assignmentFromDate || !assignmentToDate) {
+                toast.error('Please select both from and to dates');
+                return;
+              }
+              if (new Date(assignmentFromDate) > new Date(assignmentToDate)) {
+                toast.error('From date must be before to date');
                 return;
               }
 
               try {
-                const response = await fetch(`/api/disasters/${selectedDisasterForAssign._id}/assign-volunteer`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                  },
-                  body: JSON.stringify({ volunteerId: selectedVolunteerId })
-                });
-                const data = await response.json();
-                if (data.success) {
-                  toast.success('Volunteer assigned successfully!');
+                // Assign all selected volunteers
+                const assignPromises = selectedVolunteerIds.map(volunteerId =>
+                  fetch(`/api/disasters/${selectedDisasterForAssign._id}/assign-volunteer`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                      volunteerId,
+                      fromDate: assignmentFromDate,
+                      toDate: assignmentToDate
+                    })
+                  })
+                );
+
+                const responses = await Promise.all(assignPromises);
+                const results = await Promise.all(responses.map(r => r.json()));
+                
+                const successCount = results.filter(r => r.success).length;
+                const failCount = results.length - successCount;
+
+                if (successCount > 0) {
+                  toast.success(`${successCount} volunteer(s) assigned successfully!`);
+                  if (failCount > 0) {
+                    toast.warning(`${failCount} volunteer(s) failed to assign`);
+                  }
                   await fetchDatabaseDisasters();
                   await fetchVolunteers();
-                  // Close the assign volunteer modal
                   setShowAssignVolunteerModal(false);
                   setSelectedDisasterForAssign(null);
-                  setSelectedVolunteerId('');
+                  setSelectedVolunteerIds([]);
+                  setAssignmentFromDate('');
+                  setAssignmentToDate('');
                 } else {
-                  toast.error(data.error || 'Failed to assign volunteer');
+                  toast.error('Failed to assign volunteers');
                 }
               } catch (error) {
-                console.error('Error assigning volunteer:', error);
-                toast.error('Failed to assign volunteer');
+                console.error('Error assigning volunteers:', error);
+                toast.error('Failed to assign volunteers');
               }
             }}
             className="space-y-4"
           >
+            {/* Date Range Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                  From Date <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={assignmentFromDate}
+                  onChange={(e) => setAssignmentFromDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                  className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                  To Date <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={assignmentToDate}
+                  onChange={(e) => setAssignmentToDate(e.target.value)}
+                  min={assignmentFromDate || new Date().toISOString().split('T')[0]}
+                  required
+                  className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                />
+              </div>
+            </div>
+
+            {/* Volunteers List with Checkboxes */}
             <div>
-              <Select
-                label="Select Volunteer"
-                value={selectedVolunteerId}
-                onChange={(value) => setSelectedVolunteerId(value)}
-                required
-                options={[
-                  { value: '', label: 'Choose a volunteer...' },
-                  ...volunteers
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">
+                Select Volunteers <span className="text-red-400">*</span>
+              </label>
+              <div className="max-h-[400px] overflow-y-auto border border-[var(--border-color)] rounded-lg p-4 space-y-3">
+                {volunteers.filter(v => {
+                  // Filter out already assigned volunteers
+                  const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
+                    (av: any) => {
+                      const volId = av.volunteerId;
+                      return typeof volId === 'string' ? volId : (volId as any)?._id?.toString() || '';
+                    }
+                  ) || [];
+                  
+                  // Filter out volunteers who are on mission
+                  const now = new Date();
+                  const hasActiveAssignments = v.assignedDisasters?.some(
+                    (ad: any) => {
+                      const toDate = new Date(ad.toDate);
+                      const status = ad.status;
+                      return toDate > now && (status === 'assigned' || status === 'active');
+                    }
+                  );
+                  
+                  const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
+                  
+                  return !assignedVolunteerIds.includes(v._id) && !isOnMission;
+                }).length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)] text-center py-4">
+                    All available volunteers are already assigned to this disaster or are currently on mission.
+                  </p>
+                ) : (
+                  volunteers
                     .filter(v => {
-                      // Filter out already assigned volunteers
                       const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
                         (av: any) => {
                           const volId = av.volunteerId;
@@ -1793,7 +2145,6 @@ export default function LiveDisastersClient() {
                         }
                       ) || [];
                       
-                      // Filter out volunteers who are on mission
                       const now = new Date();
                       const hasActiveAssignments = v.assignedDisasters?.some(
                         (ad: any) => {
@@ -1802,7 +2153,6 @@ export default function LiveDisastersClient() {
                           return toDate > now && (status === 'assigned' || status === 'active');
                         }
                       );
-                      
                       const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
                       
                       return !assignedVolunteerIds.includes(v._id) && !isOnMission;
@@ -1811,39 +2161,55 @@ export default function LiveDisastersClient() {
                       const name = volunteer.userId?.firstName && volunteer.userId?.lastName
                         ? `${volunteer.userId.firstName} ${volunteer.userId.lastName}`
                         : volunteer.userId?.name || volunteer.volunteerId || 'Unknown';
-                      return {
-                        value: volunteer._id,
-                        label: `${name} (${volunteer.volunteerId}) - ${volunteer.availability || 'N/A'}`
-                      };
+                      const isChecked = selectedVolunteerIds.includes(volunteer._id);
+                      
+                      return (
+                        <label
+                          key={volunteer._id}
+                          className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                            isChecked
+                              ? 'bg-purple-500/10 border-purple-500/50'
+                              : 'bg-[var(--bg-input)] border-[var(--border-color)] hover:border-purple-500/30'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedVolunteerIds([...selectedVolunteerIds, volunteer._id]);
+                              } else {
+                                setSelectedVolunteerIds(selectedVolunteerIds.filter(id => id !== volunteer._id));
+                              }
+                            }}
+                            className="mt-1 w-4 h-4 text-purple-600 bg-[var(--bg-primary)] border-[var(--border-color)] rounded focus:ring-purple-500 focus:ring-2"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-[var(--text-primary)]">{name}</span>
+                              <Badge variant="secondary" size="sm">
+                                {volunteer.volunteerId}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-[var(--text-muted)]">
+                              <span>Availability: {volunteer.availability || 'N/A'}</span>
+                              {volunteer.userId?.email && (
+                                <span className="ml-2">• {volunteer.userId.email}</span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
                     })
-                ]}
-              />
+                )}
+              </div>
+              {selectedVolunteerIds.length > 0 && (
+                <p className="text-xs text-[var(--text-muted)] mt-2">
+                  {selectedVolunteerIds.length} volunteer(s) selected
+                </p>
+              )}
             </div>
-            {volunteers.filter(v => {
-              const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
-                (av: any) => {
-                  const volId = av.volunteerId;
-                  return typeof volId === 'string' ? volId : (volId as any)?._id?.toString() || '';
-                }
-              ) || [];
-              
-              // Check if volunteer is on mission
-              const now = new Date();
-              const hasActiveAssignments = v.assignedDisasters?.some(
-                (ad: any) => {
-                  const toDate = new Date(ad.toDate);
-                  const status = ad.status;
-                  return toDate > now && (status === 'assigned' || status === 'active');
-                }
-              );
-              const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
-              
-              return !assignedVolunteerIds.includes(v._id) && !isOnMission;
-            }).length === 0 && (
-              <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                All available volunteers are already assigned to this disaster or are currently on mission.
-              </p>
-            )}
+
             <div className="flex gap-3 pt-4">
               <Button
                 type="button"
@@ -1851,7 +2217,9 @@ export default function LiveDisastersClient() {
                 onClick={() => {
                   setShowAssignVolunteerModal(false);
                   setSelectedDisasterForAssign(null);
-                  setSelectedVolunteerId('');
+                  setSelectedVolunteerIds([]);
+                  setAssignmentFromDate('');
+                  setAssignmentToDate('');
                 }}
                 className="flex-1"
               >
@@ -1861,17 +2229,9 @@ export default function LiveDisastersClient() {
                 type="submit"
                 variant="gradient"
                 className="flex-1"
-                disabled={!selectedVolunteerId || volunteers.filter(v => {
-                  const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
-                    (av: any) => {
-                      const volId = av.volunteerId;
-                      return typeof volId === 'string' ? volId : (volId as any)?._id?.toString() || '';
-                    }
-                  ) || [];
-                  return !assignedVolunteerIds.includes(v._id);
-                }).length === 0}
+                disabled={selectedVolunteerIds.length === 0 || !assignmentFromDate || !assignmentToDate}
               >
-                Assign Volunteer
+                Assign {selectedVolunteerIds.length > 0 ? `${selectedVolunteerIds.length} ` : ''}Volunteer{selectedVolunteerIds.length !== 1 ? 's' : ''}
               </Button>
             </div>
           </form>

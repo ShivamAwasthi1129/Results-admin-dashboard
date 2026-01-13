@@ -157,6 +157,8 @@ export default function DashboardClient() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [liveDisasters, setLiveDisasters] = useState<LiveDisaster[]>([]);
   const [users, setUsers] = useState<DashboardUser[]>([]);
+  const [devices, setDevices] = useState<any[]>([]);
+  const [deviceFilter, setDeviceFilter] = useState<'all' | 'with_device' | 'without_device'>('all');
   const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedWeather, setSelectedWeather] = useState<WeatherData | null>(null);
@@ -281,6 +283,24 @@ export default function DashboardClient() {
           }
         } catch (error) {
           console.error('Error fetching users:', error);
+        }
+
+        // Fetch devices to match with users
+        try {
+          const devicesResponse = await fetch('/api/devices?limit=1000', {
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json' 
+            }
+          });
+          if (devicesResponse.ok) {
+            const devicesData = await devicesResponse.json();
+            if (devicesData.success && devicesData.data?.devices) {
+              setDevices(devicesData.data.devices || []);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching devices:', error);
         }
 
         // Fetch weather data
@@ -741,16 +761,63 @@ export default function DashboardClient() {
         <div>
           <Card className="p-0 overflow-hidden h-full flex flex-col">
             <div className="p-5 border-b border-[var(--border-color)] flex-shrink-0">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-[var(--text-primary)]">All Users Map</h3>
-                  <p className="text-sm text-[var(--text-muted)]">User locations in USA region</p>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    User locations in USA region • Total: <span className="font-semibold text-[var(--text-primary)]">{users.length}</span> users
+                  </p>
                 </div>
                 <Link href="/dashboard/user-management">
                   <Button variant="secondary" size="sm" rightIcon={<ArrowRightIcon className="w-4 h-4" />}>
                     Manage Users
                   </Button>
                 </Link>
+              </div>
+              {/* Device Filter Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setDeviceFilter('all')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    deviceFilter === 'all'
+                      ? 'bg-blue-500 text-white shadow-lg'
+                      : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)]'
+                  }`}
+                >
+                  All Users ({users.length})
+                </button>
+                <button
+                  onClick={() => setDeviceFilter('with_device')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    deviceFilter === 'with_device'
+                      ? 'bg-green-500 text-white shadow-lg'
+                      : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)]'
+                  }`}
+                >
+                  With Device ({users.filter(u => {
+                    const userDevice = devices.find(d => 
+                      d.ownerName?.toLowerCase() === u.fullName?.toLowerCase() ||
+                      d.primaryOwner?.name?.toLowerCase() === u.fullName?.toLowerCase()
+                    );
+                    return !!userDevice;
+                  }).length})
+                </button>
+                <button
+                  onClick={() => setDeviceFilter('without_device')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    deviceFilter === 'without_device'
+                      ? 'bg-orange-500 text-white shadow-lg'
+                      : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)]'
+                  }`}
+                >
+                  Without Device ({users.filter(u => {
+                    const userDevice = devices.find(d => 
+                      d.ownerName?.toLowerCase() === u.fullName?.toLowerCase() ||
+                      d.primaryOwner?.name?.toLowerCase() === u.fullName?.toLowerCase()
+                    );
+                    return !userDevice;
+                  }).length})
+                </button>
               </div>
             </div>
             <div className="flex-1 relative min-h-[500px]">
@@ -761,21 +828,34 @@ export default function DashboardClient() {
                     <p className="text-sm text-[var(--text-muted)]">Loading user data...</p>
                   </div>
                 </div>
-              ) : (
-                <AllUsersMap
-                  userLocations={users.reduce((acc: any, u: any) => {
-                    if (u.location && u.location.latitude && u.location.longitude) {
-                      acc[u.id] = {
-                        latitude: u.location.latitude,
-                        longitude: u.location.longitude,
-                        accuracy: u.location.accuracy,
-                        lastUpdatedAt: u.location.lastUpdatedAt,
-                        isActive: u.location.isActive || u.isActive,
-                      };
-                    }
-                    return acc;
-                  }, {})}
-                  users={users.map(u => ({
+              ) : (() => {
+                // Filter users based on device filter
+                const filteredUsers = users.filter(u => {
+                  if (deviceFilter === 'all') return true;
+                  const userDevice = devices.find(d => 
+                    d.ownerName?.toLowerCase() === u.fullName?.toLowerCase() ||
+                    d.primaryOwner?.name?.toLowerCase() === u.fullName?.toLowerCase()
+                  );
+                  if (deviceFilter === 'with_device') return !!userDevice;
+                  if (deviceFilter === 'without_device') return !userDevice;
+                  return true;
+                });
+
+                return (
+                  <AllUsersMap
+                    userLocations={filteredUsers.reduce((acc: any, u: any) => {
+                      if (u.location && u.location.latitude && u.location.longitude) {
+                        acc[u.id] = {
+                          latitude: u.location.latitude,
+                          longitude: u.location.longitude,
+                          accuracy: u.location.accuracy,
+                          lastUpdatedAt: u.location.lastUpdatedAt,
+                          isActive: u.location.isActive || u.isActive,
+                        };
+                      }
+                      return acc;
+                    }, {})}
+                    users={filteredUsers.map(u => ({
                     id: u.id,
                     phoneNumber: u.phoneNumber,
                     email: u.email,
@@ -814,7 +894,8 @@ export default function DashboardClient() {
                   showPaths={false}
                   height="100%"
                 />
-              )}
+                );
+              })()}
             </div>
           </Card>
         </div>

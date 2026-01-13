@@ -187,7 +187,8 @@ export async function DELETE(
 
     await connectDB();
 
-    const disaster = await Disaster.findByIdAndDelete(id);
+    // Find the disaster first to get assigned volunteers
+    const disaster = await Disaster.findById(id);
 
     if (!disaster) {
       return NextResponse.json(
@@ -196,9 +197,69 @@ export async function DELETE(
       );
     }
 
+    // Get all assigned volunteer IDs before deleting
+    const assignedVolunteerIds: string[] = [];
+    if (disaster.assignedVolunteers && Array.isArray(disaster.assignedVolunteers)) {
+      (disaster.assignedVolunteers as any[]).forEach((av: any) => {
+        const volId = av.volunteerId;
+        if (volId) {
+          const volunteerIdStr = typeof volId === 'string' 
+            ? volId 
+            : (typeof volId === 'object' && volId?._id ? volId._id.toString() : '');
+          if (volunteerIdStr) {
+            assignedVolunteerIds.push(volunteerIdStr);
+          }
+        }
+      });
+    }
+
+    // Update all assigned volunteers - remove this disaster from their assignedDisasters
+    if (assignedVolunteerIds.length > 0) {
+      const volunteers = await Volunteer.find({ _id: { $in: assignedVolunteerIds } });
+      
+      for (const volunteer of volunteers) {
+        const volunteerDoc = volunteer as any;
+        
+        // Remove this disaster from volunteer's assignedDisasters
+        if (volunteerDoc.assignedDisasters && Array.isArray(volunteerDoc.assignedDisasters)) {
+          const beforeLength = volunteerDoc.assignedDisasters.length;
+          volunteerDoc.assignedDisasters = volunteerDoc.assignedDisasters.filter(
+            (ad: any) => ad.disasterId?.toString() !== id
+          );
+          const afterLength = volunteerDoc.assignedDisasters.length;
+          
+          // Check if volunteer has any other active assignments
+          const now = new Date();
+          const hasActiveAssignments = volunteerDoc.assignedDisasters?.some(
+            (ad: any) => {
+              const toDate = new Date(ad.toDate);
+              const status = ad.status;
+              return toDate > now && (status === 'assigned' || status === 'active');
+            }
+          );
+          
+          // If no active assignments, change availability back to 'available'
+          if (!hasActiveAssignments && volunteerDoc.availability === 'on_mission') {
+            volunteerDoc.availability = 'available';
+          }
+          
+          // Only save if there was a change
+          if (beforeLength !== afterLength || volunteerDoc.isModified('availability')) {
+            await volunteerDoc.save();
+          }
+        }
+      }
+    }
+
+    // Now delete the disaster
+    await Disaster.findByIdAndDelete(id);
+
     return NextResponse.json({
       success: true,
-      message: 'Disaster deleted successfully',
+      message: 'Disaster deleted successfully. All assigned volunteers have been updated.',
+      data: {
+        removedVolunteersCount: assignedVolunteerIds.length,
+      },
     });
   } catch (error) {
     console.error('Delete disaster error:', error);

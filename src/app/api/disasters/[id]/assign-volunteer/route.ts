@@ -30,7 +30,7 @@ export async function POST(
     await connectDB();
 
     const body = await request.json();
-    const { volunteerId } = body;
+    const { volunteerId, fromDate, toDate } = body;
 
     if (!volunteerId) {
       return NextResponse.json(
@@ -105,8 +105,8 @@ export async function POST(
         disasterId: disasterId,
         assignedAt: new Date(),
         assignedBy: tokenPayload.userId,
-        fromDate: new Date(), // Default to today
-        toDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default to 30 days from now
+        fromDate: fromDate ? new Date(fromDate) : new Date(), // Use provided date or default to today
+        toDate: toDate ? new Date(toDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Use provided date or default to 30 days from now
         status: 'assigned',
       });
       
