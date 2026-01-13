@@ -248,10 +248,13 @@ export default function DashboardClient() {
           }
         }
 
-        // Fetch users
+        // Fetch users with tracking data
         try {
-          const usersResponse = await fetch('https://dms-rust-omega.vercel.app/api/admin/users', {
-            headers: { 'Content-Type': 'application/json' }
+          const usersResponse = await fetch('/api/tracking/location/all', {
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json' 
+            }
           });
           if (usersResponse.ok) {
             const usersData = await usersResponse.json();
@@ -265,12 +268,13 @@ export default function DashboardClient() {
                 city: u.city,
                 state: u.state,
                 country: u.country,
-                role: u.role,
+                role: u.role || 'MEMBER',
                 isActive: u.isActive,
                 isVerified: u.isVerified,
                 isSubscriber: u.isSubscriber,
                 emailVerified: u.emailVerified,
                 phoneVerified: u.phoneVerified,
+                location: u.location, // Include location data for map
               }));
               setUsers(mappedUsers);
             }
@@ -759,6 +763,18 @@ export default function DashboardClient() {
                 </div>
               ) : (
                 <AllUsersMap
+                  userLocations={users.reduce((acc: any, u: any) => {
+                    if (u.location && u.location.latitude && u.location.longitude) {
+                      acc[u.id] = {
+                        latitude: u.location.latitude,
+                        longitude: u.location.longitude,
+                        accuracy: u.location.accuracy,
+                        lastUpdatedAt: u.location.lastUpdatedAt,
+                        isActive: u.location.isActive || u.isActive,
+                      };
+                    }
+                    return acc;
+                  }, {})}
                   users={users.map(u => ({
                     id: u.id,
                     phoneNumber: u.phoneNumber,

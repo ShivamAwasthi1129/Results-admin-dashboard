@@ -10,9 +10,10 @@ interface UserMapProps {
   user: User;
   showPath?: boolean;
   height?: string;
+  userLocation?: { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean };
 }
 
-export default function UserMap({ user, showPath = false, height = '400px' }: UserMapProps) {
+export default function UserMap({ user, showPath = false, height = '400px', userLocation }: UserMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
@@ -62,13 +63,21 @@ export default function UserMap({ user, showPath = false, height = '400px' }: Us
       pathRef.current = null;
     }
 
-    // Generate coordinates
-    const coordinates = generateUserCoordinates(
-      user.city,
-      user.state,
-      user.country,
-      user.id
-    );
+    // Use real location data if available, otherwise fallback to generated coordinates
+    let coordinates: { lat: number; lng: number };
+    if (userLocation && userLocation.latitude && userLocation.longitude) {
+      coordinates = {
+        lat: userLocation.latitude,
+        lng: userLocation.longitude,
+      };
+    } else {
+      coordinates = generateUserCoordinates(
+        user.city,
+        user.state,
+        user.country,
+        user.id
+      );
+    }
 
     // Center map on user location
     mapRef.current.setView([coordinates.lat, coordinates.lng], 13, { animate: true });
@@ -240,7 +249,7 @@ export default function UserMap({ user, showPath = false, height = '400px' }: Us
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
       }
     }
-  }, [user, showPath]);
+  }, [user, showPath, userLocation]);
 
   return (
     <div

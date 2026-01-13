@@ -59,6 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     // { name: 'Weather', href: '/dashboard/weather', icon: CloudIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const, badge: 'LIVE' },
    
     { name: 'Live Disasters', href: '/dashboard/live-disasters', icon: GlobeAltIcon, roles: ['super_admin', 'admin'] as const, badge: 'LIVE' },
+    { name: 'Live Tracking', href: '/dashboard/tracking', icon: MapPinIcon, roles: ['super_admin', 'admin'] as const, badge: 'LIVE' },
     { 
       name: 'Alert Management', 
       icon: ShieldExclamationIcon, 

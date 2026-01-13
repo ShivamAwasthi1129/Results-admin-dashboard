@@ -117,6 +117,12 @@ export const permissions = {
   // Own profile
   editOwnProfile: ['super_admin', 'admin', 'volunteer', 'service_provider'] as UserRole[],
   manageOwnServices: ['service_provider'] as UserRole[],
+  
+  // Location Tracking
+  viewTracking: ['super_admin', 'admin'] as UserRole[],
+  viewAllLocations: ['super_admin', 'admin'] as UserRole[],
+  viewLocationHistory: ['super_admin', 'admin'] as UserRole[],
+  viewGeofences: ['super_admin', 'admin'] as UserRole[],
 };
 
 export function canPerform(userRole: UserRole, action: keyof typeof permissions): boolean {

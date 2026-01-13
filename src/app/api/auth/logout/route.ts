@@ -18,3 +18,12 @@ export async function POST() {
   return response;
 }
 
+export async function GET() {
+  // Handle GET requests for logout (redirect or return message)
+  const response = NextResponse.json({
+    success: true,
+    message: 'Please use POST method for logout',
+  }, { status: 405 });
+
+  return response;
+}

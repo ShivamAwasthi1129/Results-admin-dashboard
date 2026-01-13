@@ -239,9 +239,7 @@ export default function VolunteersClient({
         fetchVolunteers().finally(() => setIsInitialLoading(false));
       }
       // Always fetch disasters to ensure they're up to date
-      if (initialDisasters.length === 0) {
-        fetchDisasters();
-      }
+      fetchDisasters();
     }
   }, [token]);
 

@@ -99,18 +99,32 @@ async function fetchDisasters(token: string | null): Promise<Disaster[]> {
     });
     
     if (!response.ok) {
-      console.error('Failed to fetch disasters');
+      console.error('[fetchDisasters] Failed to fetch disasters:', response.status);
       return [];
     }
     
-      const data = await response.json();
-    if (!data.success) {
-      return [];
+    const data = await response.json();
+    
+    // Handle different response structures
+    if (data.success) {
+      // Check if data.data exists and has disasters array
+      if (data.data && Array.isArray(data.data.disasters)) {
+        return data.data.disasters;
+      }
+      // Check if data.data is directly an array
+      if (Array.isArray(data.data)) {
+        return data.data;
+      }
+      // Check if disasters is at root level
+      if (Array.isArray(data.disasters)) {
+        return data.disasters;
+      }
     }
     
-    return data.data.disasters || [];
-    } catch (error) {
-    console.error('Error fetching disasters:', error);
+    console.warn('[fetchDisasters] Unexpected response structure:', data);
+    return [];
+  } catch (error) {
+    console.error('[fetchDisasters] Error fetching disasters:', error);
     return [];
   }
 }

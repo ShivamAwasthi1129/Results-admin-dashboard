@@ -98,6 +98,8 @@ interface UserManagementClientProps {
 }
 
 export default function UserManagementClient({ initialData }: UserManagementClientProps) {
+  const [userLocations, setUserLocations] = useState<Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }>>({});
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [users, setUsers] = useState<User[]>(initialData.data?.users || []);
   const [pagination, setPagination] = useState<Pagination>(initialData.data?.pagination || { page: 1, limit: 20, total: 0, pages: 1 });
   const [isLoading, setIsLoading] = useState(false);
@@ -149,6 +151,45 @@ export default function UserManagementClient({ initialData }: UserManagementClie
     }
   };
   
+  // Fetch user locations from tracking API
+  const fetchUserLocations = async () => {
+    setIsLoadingLocations(true);
+    try {
+      const response = await fetch('/api/tracking/location/all', {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.warn('Failed to fetch user locations, using fallback coordinates');
+        return;
+      }
+
+      const data = await response.json();
+      if (data.success && data.data && data.data.users) {
+        // Create a map of userId -> location
+        const locationMap: Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }> = {};
+        data.data.users.forEach((user: any) => {
+          if (user.location && user.location.latitude && user.location.longitude) {
+            locationMap[user.id] = {
+              latitude: user.location.latitude,
+              longitude: user.location.longitude,
+              accuracy: user.location.accuracy,
+              lastUpdatedAt: user.location.lastUpdatedAt,
+              isActive: user.location.isActive,
+            };
+          }
+        });
+        setUserLocations(locationMap);
+      }
+    } catch (error) {
+      console.warn('Error fetching user locations, using fallback coordinates:', error);
+    } finally {
+      setIsLoadingLocations(false);
+    }
+  };
+
   // Fetch users on mount if initial data failed
   useEffect(() => {
     if (!initialData.success || initialData.data?.users?.length === 0) {
@@ -156,6 +197,8 @@ export default function UserManagementClient({ initialData }: UserManagementClie
     } else {
       setIsInitialLoading(false);
     }
+    // Fetch real location data
+    fetchUserLocations();
   }, []);
 
   const filteredUsers = useMemo(() => {
@@ -729,6 +772,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
               users={filteredUsers}
               showPaths={showAllPaths}
               height="600px"
+              userLocations={userLocations}
               onUserClick={(user) => {
                 setSelectedUser(user);
                 setIsViewModalOpen(true);
@@ -1001,7 +1045,12 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                   )}
                 </div>
                 <div className="mt-3 border border-[var(--border-color)] rounded-lg overflow-hidden">
-                  <DynamicUserMap user={selectedUser} showPath={false} height="300px" />
+                  <DynamicUserMap 
+                    user={selectedUser} 
+                    showPath={false} 
+                    height="300px"
+                    userLocation={selectedUser ? userLocations[selectedUser.id] : undefined}
+                  />
                 </div>
               </div>
             )}

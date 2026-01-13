@@ -11,9 +11,10 @@ interface AllUsersMapProps {
   showPaths?: boolean;
   height?: string;
   onUserClick?: (user: User) => void;
+  userLocations?: Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }>;
 }
 
-export default function AllUsersMap({ users, showPaths = false, height = '600px', onUserClick }: AllUsersMapProps) {
+export default function AllUsersMap({ users, showPaths = false, height = '600px', onUserClick, userLocations = {} }: AllUsersMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
@@ -54,18 +55,27 @@ export default function AllUsersMap({ users, showPaths = false, height = '600px'
     pathsRef.current.forEach(path => path.remove());
     pathsRef.current = [];
 
-    const userLocations: Array<[number, number]> = [];
+    const mapLocations: Array<[number, number]> = [];
 
     // Add markers for each user
     users.forEach((user) => {
-      const coordinates = generateUserCoordinates(
-        user.city,
-        user.state,
-        user.country,
-        user.id
-      );
+      // Use real location data if available, otherwise fallback to generated coordinates
+      let coordinates: { lat: number; lng: number };
+      if (userLocations && userLocations[user.id] && userLocations[user.id].latitude && userLocations[user.id].longitude) {
+        coordinates = {
+          lat: userLocations[user.id].latitude,
+          lng: userLocations[user.id].longitude,
+        };
+      } else {
+        coordinates = generateUserCoordinates(
+          user.city,
+          user.state,
+          user.country,
+          user.id
+        );
+      }
 
-      userLocations.push([coordinates.lat, coordinates.lng]);
+      mapLocations.push([coordinates.lat, coordinates.lng]);
 
       const roleColor = getUserRoleColor(user.role);
       const isSelected = selectedUserId === user.id;
@@ -258,11 +268,11 @@ export default function AllUsersMap({ users, showPaths = false, height = '600px'
     });
 
     // Fit bounds to show all users
-    if (userLocations.length > 0) {
-      const bounds = L.latLngBounds(userLocations);
+    if (mapLocations.length > 0) {
+      const bounds = L.latLngBounds(mapLocations);
       mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 6 });
     }
-  }, [users, showPaths, selectedUserId, onUserClick]);
+  }, [users, showPaths, selectedUserId, onUserClick, userLocations]);
 
   return (
     <div
