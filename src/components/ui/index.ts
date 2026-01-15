@@ -13,3 +13,4 @@ export { default as SearchModal } from './SearchModal';
 export { default as NotificationPanel } from './NotificationPanel';
 export { default as PhoneInput } from './PhoneInput';
 export { default as MultiSelect } from './MultiSelect';
+export { SkeletonLoader } from './SkeletonLoader';

@@ -60,9 +60,9 @@ function Table<T extends Record<string, any>>({
         <table className="table-auto responsive-table">
             <thead>
               <tr className="border-b border-[var(--border-color)]">
-                {columns.map((column) => (
+                {columns.map((column, colIndex) => (
                   <th
-                    key={column.key as string}
+                    key={`header-${colIndex}-${column.key as string}`}
                     className={cn(
                       compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
                       'text-xs font-bold uppercase tracking-wider whitespace-nowrap',
@@ -81,9 +81,9 @@ function Table<T extends Record<string, any>>({
             {isLoading ? (
               [...Array(5)].map((_, i) => (
                 <tr key={i}>
-                  {columns.map((column) => (
+                  {columns.map((column, colIndex) => (
                     <td 
-                      key={column.key as string} 
+                      key={`skeleton-${i}-${colIndex}-${column.key as string}`} 
                       className={cn(
                         compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
                         'whitespace-nowrap'
@@ -124,12 +124,12 @@ function Table<T extends Record<string, any>>({
                   )}
                   onClick={() => onRowClick?.(item, index)}
                 >
-                  {columns.map((column) => {
+                  {columns.map((column, colIndex) => {
                     const cellValue = getCellValue(item, column);
                     const isCustomRender = column.render !== undefined;
                     return (
                       <td
-                        key={column.key as string}
+                        key={`cell-${index}-${colIndex}-${column.key as string}`}
                         className={cn(
                           compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
                           'text-xs sm:text-sm text-[var(--text-primary)]',

@@ -123,6 +123,12 @@ export const permissions = {
   viewAllLocations: ['super_admin', 'admin'] as UserRole[],
   viewLocationHistory: ['super_admin', 'admin'] as UserRole[],
   viewGeofences: ['super_admin', 'admin'] as UserRole[],
+  
+  // Product/Merchandise Management
+  viewProducts: ['super_admin', 'admin'] as UserRole[],
+  createProduct: ['super_admin', 'admin'] as UserRole[],
+  editProduct: ['super_admin', 'admin'] as UserRole[],
+  deleteProduct: ['super_admin', 'admin'] as UserRole[],
 };
 
 export function canPerform(userRole: UserRole, action: keyof typeof permissions): boolean {

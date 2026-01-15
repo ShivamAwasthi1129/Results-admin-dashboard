@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:volunteers": "tsx scripts/seed-volunteers-and-teams.ts"
+    "seed:volunteers": "tsx scripts/seed-volunteers-and-teams.ts",
+    "seed:products": "tsx scripts/seed-products.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

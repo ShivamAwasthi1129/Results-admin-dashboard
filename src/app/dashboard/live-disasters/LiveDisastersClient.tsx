@@ -33,6 +33,7 @@ import {
   UserPlusIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { USA_STATES } from '@/lib/geocoding';
@@ -178,6 +179,8 @@ export default function LiveDisastersClient() {
   });
   const [nasaDisasters, setNasaDisasters] = useState<LiveDisaster[]>([]);
   const [isLoadingNasaDisasters, setIsLoadingNasaDisasters] = useState(false);
+  const [disasterSearchQuery, setDisasterSearchQuery] = useState('');
+  const [showDisasterDropdown, setShowDisasterDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const canManage = hasPermission(['super_admin', 'admin']);
@@ -508,6 +511,21 @@ export default function LiveDisastersClient() {
       fetchDatabaseDisasters();
     }
   }, [searchQuery]);
+
+  // Close disaster dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showDisasterDropdown && !target.closest('.disaster-search-container')) {
+        setShowDisasterDropdown(false);
+      }
+    };
+
+    if (showDisasterDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDisasterDropdown]);
 
   // Load Google Maps Places API for autocomplete when modal opens and locationType is widespread
   useEffect(() => {
@@ -1429,7 +1447,7 @@ export default function LiveDisastersClient() {
           <div className="grid grid-cols-2 gap-6">
             {/* Left Column: NASA EONET Selection */}
             <div className="space-y-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                   Select Disaster <span className="text-red-400">*</span>
                 </label>
@@ -1438,54 +1456,152 @@ export default function LiveDisastersClient() {
                     <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
                   </div>
                 ) : (
-                  <Select
-                    value={formData.selectedNasaDisasterId}
-                    onChange={(value) => {
-                      if (value) {
-                        const selectedDisaster = nasaDisasters.find(d => d.id === value);
-                        if (selectedDisaster) {
-                          const coords = selectedDisaster.location?.coordinates;
-                          // Build address from location data
-                          let addressParts = [];
-                          if (selectedDisaster.location?.state) {
-                            addressParts.push(selectedDisaster.location.state);
-                          }
-                          if (selectedDisaster.location?.country) {
-                            addressParts.push(selectedDisaster.location.country);
-                          } else {
-                            addressParts.push('USA');
-                          }
-                          const address = addressParts.join(', ') || 'USA';
-                          
-                          setFormData({
-                            ...formData,
-                            selectedNasaDisasterId: value,
-                            useCustomDisaster: false,
-                            title: selectedDisaster.title,
-                            description: selectedDisaster.description || '',
-                            type: selectedDisaster.type,
-                            severity: selectedDisaster.severity,
-                            lat: coords?.lat?.toString() || '',
-                            lng: coords?.lng?.toString() || '',
-                            address: address,
-                          });
+                  <div className="relative disaster-search-container">
+                    <div className="relative">
+                      <Input
+                        value={formData.selectedNasaDisasterId 
+                          ? nasaDisasters.find(d => d.id === formData.selectedNasaDisasterId)?.title || disasterSearchQuery
+                          : disasterSearchQuery
                         }
-                      } else {
-                        setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true });
-                      }
-                    }}
-                    options={[
-                      { value: '', label: 'Choose a disaster from NASA EONET...' },
-                      ...nasaDisasters.map((disaster) => ({
-                        value: disaster.id,
-                        label: `${disaster.title} (${disaster.type}) - ${disaster.severity}`,
-                      })),
-                    ]}
-                  />
+                        onChange={(e) => {
+                          const query = e.target.value;
+                          setDisasterSearchQuery(query);
+                          setShowDisasterDropdown(true);
+                          // Clear selection if user is typing
+                          if (query && formData.selectedNasaDisasterId) {
+                            setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true });
+                          }
+                        }}
+                        onFocus={() => setShowDisasterDropdown(true)}
+                        onBlur={() => {
+                          // Delay closing to allow click on dropdown item
+                          setTimeout(() => setShowDisasterDropdown(false), 200);
+                        }}
+                        placeholder="Search disaster by name or location..."
+                        icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+                      />
+                      {formData.selectedNasaDisasterId && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true });
+                            setDisasterSearchQuery('');
+                          }}
+                          className="absolute right-10 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--bg-input)] transition-colors"
+                        >
+                          <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Searchable Dropdown */}
+                    {showDisasterDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
+                        {(() => {
+                          // Filter disasters by search query (name and location)
+                          const filteredDisasters = nasaDisasters.filter(disaster => {
+                            if (!disasterSearchQuery) return true;
+                            const query = disasterSearchQuery.toLowerCase();
+                            const titleMatch = disaster.title?.toLowerCase().includes(query);
+                            const locationMatch = 
+                              disaster.location?.state?.toLowerCase().includes(query) ||
+                              disaster.location?.country?.toLowerCase().includes(query) ||
+                              disaster.location?.region?.toLowerCase().includes(query);
+                            const typeMatch = disaster.type?.toLowerCase().includes(query);
+                            return titleMatch || locationMatch || typeMatch;
+                          });
+
+                          if (filteredDisasters.length === 0) {
+                            return (
+                              <div className="p-4 text-center text-sm text-[var(--text-muted)]">
+                                No disasters found matching "{disasterSearchQuery}"
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <>
+                              {filteredDisasters.map((disaster) => {
+                                const isSelected = formData.selectedNasaDisasterId === disaster.id;
+                                const coords = disaster.location?.coordinates;
+                                const locationStr = [
+                                  disaster.location?.region,
+                                  disaster.location?.state,
+                                  disaster.location?.country
+                                ].filter(Boolean).join(', ') || 'Unknown Location';
+
+                                return (
+                                  <button
+                                    key={disaster.id}
+                                    type="button"
+                                    onClick={() => {
+                                      // Build address from location data
+                                      let addressParts = [];
+                                      if (disaster.location?.state) {
+                                        addressParts.push(disaster.location.state);
+                                      }
+                                      if (disaster.location?.country) {
+                                        addressParts.push(disaster.location.country);
+                                      } else {
+                                        addressParts.push('USA');
+                                      }
+                                      const address = addressParts.join(', ') || 'USA';
+                                      
+                                      setFormData({
+                                        ...formData,
+                                        selectedNasaDisasterId: disaster.id,
+                                        useCustomDisaster: false,
+                                        title: disaster.title,
+                                        description: disaster.description || '',
+                                        type: disaster.type,
+                                        severity: disaster.severity,
+                                        lat: coords?.lat?.toString() || '',
+                                        lng: coords?.lng?.toString() || '',
+                                        address: address,
+                                      });
+                                      setDisasterSearchQuery('');
+                                      setShowDisasterDropdown(false);
+                                    }}
+                                    className={`w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0 ${
+                                      isSelected ? 'bg-purple-500/10 border-l-4 border-purple-500' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-[var(--text-primary)] mb-1">
+                                          {disaster.title}
+                                        </p>
+                                        <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--text-muted)]">
+                                          <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 capitalize">
+                                            {disaster.type}
+                                          </span>
+                                          <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 capitalize">
+                                            {disaster.severity}
+                                          </span>
+                                          <span className="flex items-center gap-1">
+                                            <MapPinIcon className="w-3 h-3" />
+                                            {locationStr}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {isSelected && (
+                                        <CheckCircleIcon className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
                 )}
-                {/* <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Select a disaster from NASA EONET API to auto-fill details
-                </p> */}
+                <p className="text-xs text-[var(--text-muted)] mt-1">
+                  Search by disaster name or location to find and select
+                </p>
               </div>
 
               {/* Auto-filled fields when NASA disaster is selected */}
