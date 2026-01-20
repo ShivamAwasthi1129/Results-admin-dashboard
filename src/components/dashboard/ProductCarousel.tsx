@@ -136,7 +136,7 @@ export default function ProductCarousel({ products, isLoading = false }: Product
         <div
           ref={carouselRef}
           className="relative h-96 cursor-pointer overflow-hidden"
-          onClick={() => handleProductClick(currentProduct)}
+          onClick={() => displayProducts[currentIndex] && handleProductClick(displayProducts[currentIndex])}
         >
           {/* Product Slides Container */}
           <div 
