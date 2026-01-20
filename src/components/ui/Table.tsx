@@ -55,22 +55,29 @@ function Table<T extends Record<string, any>>({
   };
 
   return (
-    <div className={cn('card overflow-hidden p-0', className)}>
-      <div className="relative w-full overflow-x-auto overflow-y-visible scrollbar-thin responsive-table-wrapper" style={{ WebkitOverflowScrolling: 'touch' }}>
-        <table className="table-auto responsive-table">
+    <div className={cn('card overflow-hidden p-0 w-full', className)}>
+      <div className="relative w-full overflow-x-hidden overflow-y-visible responsive-table-wrapper">
+        <table className="w-full table-fixed responsive-table" style={{ tableLayout: 'fixed', width: '100%' }}>
             <thead>
               <tr className="border-b border-[var(--border-color)]">
                 {columns.map((column, colIndex) => (
                   <th
                     key={`header-${colIndex}-${column.key as string}`}
                     className={cn(
-                      compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
-                      'text-xs font-bold uppercase tracking-wider whitespace-nowrap',
+                      compact ? 'px-2 py-2 sm:px-3 sm:py-2' : 'px-2 py-2 sm:px-3 sm:py-2 md:px-4 md:py-3',
+                      'text-xs font-bold uppercase tracking-wider',
                       'text-[var(--text-muted)] bg-[var(--bg-input)]',
                       alignClasses[column.align || 'left'],
                       column.className
                     )}
-                    style={{ minWidth: '120px' }}
+                    style={{ 
+                      width: column.key === 'image' ? '60px' : 
+                             column.key === 'name' ? '30%' :
+                             column.key === 'category' ? '15%' :
+                             column.key === 'price' ? '15%' :
+                             column.key === 'stock' ? '12%' :
+                             column.key === 'actions' ? 'auto' : 'auto'
+                    }}
                   >
                     {column.label}
                   </th>
@@ -85,10 +92,8 @@ function Table<T extends Record<string, any>>({
                     <td 
                       key={`skeleton-${i}-${colIndex}-${column.key as string}`} 
                       className={cn(
-                        compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
-                        'whitespace-nowrap'
+                        compact ? 'px-2 py-2 sm:px-3 sm:py-2' : 'px-2 py-2 sm:px-3 sm:py-2 md:px-4 md:py-3'
                       )}
-                      style={{ minWidth: '120px', whiteSpace: 'nowrap' }}
                     >
                       <div className="h-5 skeleton rounded" />
                     </td>
@@ -130,22 +135,17 @@ function Table<T extends Record<string, any>>({
                     return (
                       <td
                         key={`cell-${index}-${colIndex}-${column.key as string}`}
-                        className={cn(
-                          compact ? 'px-3 py-3 sm:px-4 sm:py-3' : 'px-3 py-3 sm:px-4 sm:py-3 md:px-6 md:py-4',
-                          'text-xs sm:text-sm text-[var(--text-primary)]',
-                          'whitespace-nowrap',
-                          alignClasses[column.align || 'left'],
-                          column.className
-                        )}
-                        style={{ 
-                          minWidth: isCustomRender ? '150px' : '120px',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
+                      className={cn(
+                        compact ? 'px-2 py-2 sm:px-3 sm:py-2' : 'px-2 py-2 sm:px-3 sm:py-2 md:px-4 md:py-3',
+                        'text-xs sm:text-sm text-[var(--text-primary)]',
+                        alignClasses[column.align || 'left'],
+                        column.className
+                      )}
+                    >
                         {isCustomRender ? (
-                          <div style={{ whiteSpace: 'nowrap' }}>{cellValue}</div>
+                          <div className="min-w-0">{cellValue}</div>
                         ) : (
-                          <div className="truncate" style={{ maxWidth: '300px', display: 'inline-block' }}>
+                          <div className="truncate max-w-full">
                             {cellValue}
                           </div>
                         )}

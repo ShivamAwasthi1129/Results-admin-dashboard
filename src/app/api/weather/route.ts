@@ -301,13 +301,21 @@ async function fetchOneCallData(lat: number, lon: number) {
     const response = await fetch(url);
     
     if (!response.ok) {
-      console.error('One Call API error:', response.status, response.statusText);
+      // 401 means API key doesn't have One Call API access (requires paid subscription)
+      // Silently fall back to free API - don't log as error
+      if (response.status === 401) {
+        return null; // Will fall back to free API
+      }
+      // Only log other errors
+      if (response.status !== 401) {
+        console.error('One Call API error:', response.status, response.statusText);
+      }
       return null;
     }
     
     return await response.json();
   } catch (error) {
-    console.error('Failed to fetch One Call data:', error);
+    // Silently fail - will fall back to free API
     return null;
   }
 }

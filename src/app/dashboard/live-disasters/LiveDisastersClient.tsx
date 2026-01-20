@@ -1443,216 +1443,242 @@ export default function LiveDisastersClient() {
         className="z-[10001]"
       >
         <form onSubmit={handleSubmitDisaster} className="space-y-4">
-          {/* Two Column Layout: NASA EONET Selection (Left) and Custom Disaster (Right) */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Left Column: NASA EONET Selection */}
-            <div className="space-y-4">
-              <div className="relative">
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                  Select Disaster <span className="text-red-400">*</span>
-                </label>
-                {isLoadingNasaDisasters ? (
-                  <div className="flex items-center justify-center py-4">
-                    <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <div className="relative disaster-search-container">
-                    <div className="relative">
-                      <Input
-                        value={formData.selectedNasaDisasterId 
-                          ? nasaDisasters.find(d => d.id === formData.selectedNasaDisasterId)?.title || disasterSearchQuery
-                          : disasterSearchQuery
-                        }
-                        onChange={(e) => {
-                          const query = e.target.value;
-                          setDisasterSearchQuery(query);
-                          setShowDisasterDropdown(true);
-                          // Clear selection if user is typing
-                          if (query && formData.selectedNasaDisasterId) {
-                            setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true });
-                          }
+          {/* Combined Disaster Selection - Single Field */}
+          <div className="space-y-4">
+            <div className="relative">
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                Select Disaster <span className="text-red-400">*</span>
+              </label>
+              {isLoadingNasaDisasters ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="relative disaster-search-container">
+                  <div className="relative">
+                    <Input
+                      value={formData.selectedNasaDisasterId 
+                        ? nasaDisasters.find(d => d.id === formData.selectedNasaDisasterId)?.title || formData.title || disasterSearchQuery
+                        : formData.title || disasterSearchQuery
+                      }
+                      onChange={(e) => {
+                        const query = e.target.value;
+                        setDisasterSearchQuery(query);
+                        setShowDisasterDropdown(true);
+                        // If user is typing, set as custom disaster title
+                        setFormData({ 
+                          ...formData, 
+                          title: query,
+                          selectedNasaDisasterId: '',
+                          useCustomDisaster: true 
+                        });
+                      }}
+                      onFocus={() => setShowDisasterDropdown(true)}
+                      onBlur={() => {
+                        // Delay closing to allow click on dropdown item
+                        setTimeout(() => setShowDisasterDropdown(false), 200);
+                      }}
+                      placeholder="Search disaster by name or location, or type custom disaster name..."
+                      icon={
+                        disasterSearchQuery && !formData.selectedNasaDisasterId ? (
+                          <PlusIcon className="w-5 h-5 text-purple-500" />
+                        ) : (
+                          <MagnifyingGlassIcon className="w-5 h-5" />
+                        )
+                      }
+                      iconPosition="right"
+                    />
+                    {formData.selectedNasaDisasterId && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true, title: '' });
+                          setDisasterSearchQuery('');
                         }}
-                        onFocus={() => setShowDisasterDropdown(true)}
-                        onBlur={() => {
-                          // Delay closing to allow click on dropdown item
-                          setTimeout(() => setShowDisasterDropdown(false), 200);
-                        }}
-                        placeholder="Search disaster by name or location..."
-                        icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-                      />
-                      {formData.selectedNasaDisasterId && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true });
-                            setDisasterSearchQuery('');
-                          }}
-                          className="absolute right-10 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--bg-input)] transition-colors"
-                        >
-                          <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                        </button>
-                      )}
-                    </div>
-                    
-                    {/* Searchable Dropdown */}
-                    {showDisasterDropdown && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
-                        {(() => {
-                          // Filter disasters by search query (name and location)
-                          const filteredDisasters = nasaDisasters.filter(disaster => {
-                            if (!disasterSearchQuery) return true;
-                            const query = disasterSearchQuery.toLowerCase();
-                            const titleMatch = disaster.title?.toLowerCase().includes(query);
-                            const locationMatch = 
-                              disaster.location?.state?.toLowerCase().includes(query) ||
-                              disaster.location?.country?.toLowerCase().includes(query) ||
-                              disaster.location?.region?.toLowerCase().includes(query);
-                            const typeMatch = disaster.type?.toLowerCase().includes(query);
-                            return titleMatch || locationMatch || typeMatch;
+                        className="absolute right-14 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--bg-input)] transition-colors z-20"
+                      >
+                        <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                      </button>
+                    )}
+                    {disasterSearchQuery && !formData.selectedNasaDisasterId && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Use the typed value as custom disaster
+                          setFormData({ 
+                            ...formData, 
+                            title: disasterSearchQuery,
+                            useCustomDisaster: true,
+                            selectedNasaDisasterId: ''
                           });
-
-                          if (filteredDisasters.length === 0) {
-                            return (
-                              <div className="p-4 text-center text-sm text-[var(--text-muted)]">
-                                No disasters found matching "{disasterSearchQuery}"
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <>
-                              {filteredDisasters.map((disaster) => {
-                                const isSelected = formData.selectedNasaDisasterId === disaster.id;
-                                const coords = disaster.location?.coordinates;
-                                const locationStr = [
-                                  disaster.location?.region,
-                                  disaster.location?.state,
-                                  disaster.location?.country
-                                ].filter(Boolean).join(', ') || 'Unknown Location';
-
-                                return (
-                                  <button
-                                    key={disaster.id}
-                                    type="button"
-                                    onClick={() => {
-                                      // Build address from location data
-                                      let addressParts = [];
-                                      if (disaster.location?.state) {
-                                        addressParts.push(disaster.location.state);
-                                      }
-                                      if (disaster.location?.country) {
-                                        addressParts.push(disaster.location.country);
-                                      } else {
-                                        addressParts.push('USA');
-                                      }
-                                      const address = addressParts.join(', ') || 'USA';
-                                      
-                                      setFormData({
-                                        ...formData,
-                                        selectedNasaDisasterId: disaster.id,
-                                        useCustomDisaster: false,
-                                        title: disaster.title,
-                                        description: disaster.description || '',
-                                        type: disaster.type,
-                                        severity: disaster.severity,
-                                        lat: coords?.lat?.toString() || '',
-                                        lng: coords?.lng?.toString() || '',
-                                        address: address,
-                                      });
-                                      setDisasterSearchQuery('');
-                                      setShowDisasterDropdown(false);
-                                    }}
-                                    className={`w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0 ${
-                                      isSelected ? 'bg-purple-500/10 border-l-4 border-purple-500' : ''
-                                    }`}
-                                  >
-                                    <div className="flex items-start gap-3">
-                                      <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-[var(--text-primary)] mb-1">
-                                          {disaster.title}
-                                        </p>
-                                        <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--text-muted)]">
-                                          <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 capitalize">
-                                            {disaster.type}
-                                          </span>
-                                          <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 capitalize">
-                                            {disaster.severity}
-                                          </span>
-                                          <span className="flex items-center gap-1">
-                                            <MapPinIcon className="w-3 h-3" />
-                                            {locationStr}
-                                          </span>
-                                        </div>
-                                      </div>
-                                      {isSelected && (
-                                        <CheckCircleIcon className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
-                                      )}
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </>
-                          );
-                        })()}
-                      </div>
+                          setDisasterSearchQuery('');
+                          setShowDisasterDropdown(false);
+                        }}
+                        className="absolute right-14 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--bg-input)] transition-colors z-20"
+                        title="Add custom disaster"
+                      >
+                        <PlusIcon className="w-5 h-5 text-purple-500" />
+                      </button>
                     )}
                   </div>
-                )}
-                <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Search by disaster name or location to find and select
-                </p>
-              </div>
+                  
+                  {/* Searchable Dropdown */}
+                  {showDisasterDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
+                      {(() => {
+                        // Filter disasters by search query (name and location)
+                        const filteredDisasters = nasaDisasters.filter(disaster => {
+                          if (!disasterSearchQuery) return true;
+                          const query = disasterSearchQuery.toLowerCase();
+                          const titleMatch = disaster.title?.toLowerCase().includes(query);
+                          const locationMatch = 
+                            disaster.location?.state?.toLowerCase().includes(query) ||
+                            disaster.location?.country?.toLowerCase().includes(query) ||
+                            disaster.location?.region?.toLowerCase().includes(query);
+                          const typeMatch = disaster.type?.toLowerCase().includes(query);
+                          return titleMatch || locationMatch || typeMatch;
+                        });
 
-              {/* Auto-filled fields when NASA disaster is selected */}
-              {formData.selectedNasaDisasterId && !formData.useCustomDisaster && (
-                <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-2">
-                  <p className="text-xs font-medium text-purple-400">Auto-filled from NASA EONET:</p>
-                  <div className="text-xs text-[var(--text-muted)] space-y-1">
-                    <p><span className="font-medium">Title:</span> {formData.title}</p>
-                    <p><span className="font-medium">Type:</span> {formData.type}</p>
-                    <p><span className="font-medium">Severity:</span> {formData.severity}</p>
-                    <p><span className="font-medium">Coordinates:</span> {formData.lat}, {formData.lng}</p>
-                  </div>
+                        // Check if query doesn't match any disaster
+                        const hasNoMatches = disasterSearchQuery && filteredDisasters.length === 0;
+                        const queryMatchesSelected = filteredDisasters.some(d => 
+                          d.title?.toLowerCase() === disasterSearchQuery.toLowerCase()
+                        );
+
+                        return (
+                          <>
+                            {filteredDisasters.length > 0 && (
+                              <>
+                                {filteredDisasters.map((disaster) => {
+                                  const isSelected = formData.selectedNasaDisasterId === disaster.id;
+                                  const coords = disaster.location?.coordinates;
+                                  const locationStr = [
+                                    disaster.location?.region,
+                                    disaster.location?.state,
+                                    disaster.location?.country
+                                  ].filter(Boolean).join(', ') || 'Unknown Location';
+
+                                  return (
+                                    <button
+                                      key={disaster.id}
+                                      type="button"
+                                      onClick={() => {
+                                        // Build address from location data
+                                        let addressParts = [];
+                                        if (disaster.location?.state) {
+                                          addressParts.push(disaster.location.state);
+                                        }
+                                        if (disaster.location?.country) {
+                                          addressParts.push(disaster.location.country);
+                                        } else {
+                                          addressParts.push('USA');
+                                        }
+                                        const address = addressParts.join(', ') || 'USA';
+                                        
+                                        setFormData({
+                                          ...formData,
+                                          selectedNasaDisasterId: disaster.id,
+                                          useCustomDisaster: false,
+                                          title: disaster.title,
+                                          description: disaster.description || '',
+                                          type: disaster.type,
+                                          severity: disaster.severity,
+                                          lat: coords?.lat?.toString() || '',
+                                          lng: coords?.lng?.toString() || '',
+                                          address: address,
+                                        });
+                                        setDisasterSearchQuery('');
+                                        setShowDisasterDropdown(false);
+                                      }}
+                                      className={`w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0 ${
+                                        isSelected ? 'bg-purple-500/10 border-l-4 border-purple-500' : ''
+                                      }`}
+                                    >
+                                      <div className="flex items-start gap-3">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-medium text-[var(--text-primary)] mb-1">
+                                            {disaster.title}
+                                          </p>
+                                          <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--text-muted)]">
+                                            <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 capitalize">
+                                              {disaster.type}
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 capitalize">
+                                              {disaster.severity}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                              <MapPinIcon className="w-3 h-3" />
+                                              {locationStr}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        {isSelected && (
+                                          <CheckCircleIcon className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                                        )}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </>
+                            )}
+                            
+                            {/* Show "Add Custom Disaster" option when no matches found */}
+                            {hasNoMatches && !queryMatchesSelected && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData({ 
+                                    ...formData, 
+                                    title: disasterSearchQuery,
+                                    useCustomDisaster: true,
+                                    selectedNasaDisasterId: ''
+                                  });
+                                  setDisasterSearchQuery('');
+                                  setShowDisasterDropdown(false);
+                                }}
+                                className="w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-t border-[var(--border-color)] flex items-center gap-3 text-purple-500"
+                              >
+                                <PlusIcon className="w-5 h-5" />
+                                <div>
+                                  <p className="font-medium">Add Custom Disaster</p>
+                                  <p className="text-xs text-[var(--text-muted)]">
+                                    "{disasterSearchQuery}" will be added as a custom disaster
+                                  </p>
+                                </div>
+                              </button>
+                            )}
+                            
+                            {!hasNoMatches && filteredDisasters.length === 0 && !disasterSearchQuery && (
+                              <div className="p-4 text-center text-sm text-[var(--text-muted)]">
+                                Start typing to search disasters from NASA EONET API
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               )}
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Search by disaster name or location. If not found, click the + icon to add as custom disaster.
+              </p>
             </div>
 
-            {/* Right Column: Custom Disaster Fields */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="useCustomDisaster"
-                  checked={formData.useCustomDisaster}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setFormData({ ...formData, useCustomDisaster: true, selectedNasaDisasterId: '' });
-                    } else {
-                      setFormData({ ...formData, useCustomDisaster: false });
-                    }
-                  }}
-                  className="w-4 h-4 text-purple-600 bg-[var(--bg-primary)] border-[var(--border-color)] rounded focus:ring-purple-500"
-                />
-                <label htmlFor="useCustomDisaster" className="text-sm font-medium text-[var(--text-secondary)]">
-                  Use Custom Disaster Information
-                </label>
-              </div>
-
-              {formData.useCustomDisaster && (
-                <div>
-                  {/* <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                    Title <span className="text-red-400">*</span>
-                  </label> */}
-                  <Input
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Enter disaster title"
-                    required={formData.useCustomDisaster}
-                  />
+            {/* Auto-filled fields when NASA disaster is selected */}
+            {formData.selectedNasaDisasterId && !formData.useCustomDisaster && (
+              <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-2">
+                <p className="text-xs font-medium text-purple-400">Auto-filled from NASA EONET:</p>
+                <div className="text-xs text-[var(--text-muted)] space-y-1">
+                  <p><span className="font-medium">Title:</span> {formData.title}</p>
+                  <p><span className="font-medium">Type:</span> {formData.type}</p>
+                  <p><span className="font-medium">Severity:</span> {formData.severity}</p>
+                  <p><span className="font-medium">Coordinates:</span> {formData.lat}, {formData.lng}</p>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Type and Severity - Always visible */}

@@ -5,8 +5,7 @@ The Merchandise API provides endpoints to retrieve product information for your 
 
 ## Base URL
 ```
-Production: https://your-domain.com/api/products
-Development: http://localhost:3000/api/products
+Production: https://results-admin-dashboard.vercel.app/api/products
 ```
 
 ## Authentication

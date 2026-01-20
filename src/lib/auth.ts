@@ -124,7 +124,7 @@ export const permissions = {
   viewLocationHistory: ['super_admin', 'admin'] as UserRole[],
   viewGeofences: ['super_admin', 'admin'] as UserRole[],
   
-  // Product/Merchandise Management
+  // Product Management
   viewProducts: ['super_admin', 'admin'] as UserRole[],
   createProduct: ['super_admin', 'admin'] as UserRole[],
   editProduct: ['super_admin', 'admin'] as UserRole[],

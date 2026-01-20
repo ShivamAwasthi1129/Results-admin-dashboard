@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/context/ThemeContext';
 import { NotificationProvider } from '@/context/NotificationContext';
 import { SearchProvider } from '@/context/SearchContext';
 import { LoadingProvider } from '@/context/LoadingContext';
+import { DataCacheProvider } from '@/context/DataCacheContext';
 import SearchModal from '@/components/ui/SearchModal';
 import './globals.css';
 
@@ -33,24 +34,26 @@ export default function RootLayout({
         <ThemeProvider>
           <LoadingProvider>
             <AuthProvider>
-              <NotificationProvider>
-                <SearchProvider>
-                  {children}
-                  <SearchModal />
-                  <ToastContainer
-                    position="top-right"
-                    autoClose={4000}
-                    hideProgressBar={false}
-                    newestOnTop
-                    closeOnClick
-                    rtl={false}
-                    pauseOnFocusLoss
-                    draggable
-                    pauseOnHover
-                    theme="colored"
-                  />
-                </SearchProvider>
-              </NotificationProvider>
+              <DataCacheProvider>
+                <NotificationProvider>
+                  <SearchProvider>
+                    {children}
+                    <SearchModal />
+                    <ToastContainer
+                      position="top-right"
+                      autoClose={4000}
+                      hideProgressBar={false}
+                      newestOnTop
+                      closeOnClick
+                      rtl={false}
+                      pauseOnFocusLoss
+                      draggable
+                      pauseOnHover
+                      theme="colored"
+                    />
+                  </SearchProvider>
+                </NotificationProvider>
+              </DataCacheProvider>
             </AuthProvider>
           </LoadingProvider>
         </ThemeProvider>

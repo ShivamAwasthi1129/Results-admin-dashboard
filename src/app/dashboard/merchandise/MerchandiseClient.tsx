@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Badge, Button, Modal, Input, Select, Table, SkeletonLoader } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useDataCache } from '@/context/DataCacheContext';
 import { toast } from 'react-toastify';
 import {
   PlusIcon,
@@ -17,6 +18,7 @@ import {
   TagIcon,
   CurrencyDollarIcon,
   ChartBarIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 
 interface Product {
@@ -76,15 +78,36 @@ interface Product {
   updatedAt?: string;
 }
 
-interface MerchandiseClientProps {
+interface ProductsClientProps {
   initialProducts: Product[];
 }
 
-export default function MerchandiseClient({ initialProducts }: MerchandiseClientProps) {
+interface Vendor {
+  _id: string;
+  businessName: string;
+  contactPerson?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+  };
+  location?: {
+    address?: string;
+    city?: string;
+    state?: string;
+  };
+}
+
+export default function ProductsClient({ initialProducts }: ProductsClientProps) {
   const { token } = useAuth();
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const { getCachedData, updateCache } = useDataCache();
+  
+  // Check cache first, then use initialProducts
+  const cachedProducts = getCachedData('products');
+  const initialData = cachedProducts && cachedProducts.length > 0 ? cachedProducts : initialProducts;
+  
+  const [products, setProducts] = useState<Product[]>(initialData);
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(initialProducts.length === 0);
+  const [isInitialLoading, setIsInitialLoading] = useState(initialData.length === 0);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +116,13 @@ export default function MerchandiseClient({ initialProducts }: MerchandiseClient
   const [brandFilter, setBrandFilter] = useState('all');
   const [lowStockFilter, setLowStockFilter] = useState(false);
   const [featuredFilter, setFeaturedFilter] = useState(false);
+  
+  // Vendor selection state
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [vendorSearchQuery, setVendorSearchQuery] = useState('');
+  const [showVendorDropdown, setShowVendorDropdown] = useState(false);
+  const [selectedVendorId, setSelectedVendorId] = useState<string>('');
+  const vendorDropdownRef = useRef<HTMLDivElement>(null);
 
   // Form data for add/edit
   const [formData, setFormData] = useState({
@@ -168,6 +198,8 @@ export default function MerchandiseClient({ initialProducts }: MerchandiseClient
       const data = await response.json();
       if (data.success && data.data?.products) {
         setProducts(data.data.products);
+        // Update cache
+        updateCache('products', data.data.products);
       }
     } catch (error: any) {
       console.error('Error fetching products:', error);
@@ -183,6 +215,78 @@ export default function MerchandiseClient({ initialProducts }: MerchandiseClient
       fetchProducts();
     }
   }, [searchQuery, categoryFilter, statusFilter, brandFilter, lowStockFilter, featuredFilter, token]);
+
+  // Fetch vendors from service providers
+  useEffect(() => {
+    const fetchVendors = async () => {
+      try {
+        const response = await fetch('/api/services?limit=1000', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data?.serviceProviders) {
+            setVendors(data.data.serviceProviders);
+          } else if (data.success && data.data?.providers) {
+            // Fallback for different API response structure
+            setVendors(data.data.providers);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching vendors:', error);
+      }
+    };
+    if (token) {
+      fetchVendors();
+    }
+  }, [token]);
+
+  // Handle click outside vendor dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (vendorDropdownRef.current && !vendorDropdownRef.current.contains(event.target as Node)) {
+        setShowVendorDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter vendors based on search query
+  const filteredVendors = vendors.filter(vendor => {
+    if (!vendorSearchQuery) return true;
+    const query = vendorSearchQuery.toLowerCase();
+    return (
+      vendor.businessName?.toLowerCase().includes(query) ||
+      vendor.contactPerson?.name?.toLowerCase().includes(query) ||
+      vendor.contactPerson?.email?.toLowerCase().includes(query) ||
+      vendor.location?.city?.toLowerCase().includes(query) ||
+      vendor.location?.state?.toLowerCase().includes(query)
+    );
+  });
+
+  // Handle vendor selection
+  const handleVendorSelect = (vendor: Vendor) => {
+    setSelectedVendorId(vendor._id);
+    setVendorSearchQuery(vendor.businessName || '');
+    setShowVendorDropdown(false);
+    
+    // Auto-fill vendor information
+    setFormData({
+      ...formData,
+      vendorName: vendor.businessName || '',
+      vendorContact: vendor.contactPerson?.phone || '',
+      vendorEmail: vendor.contactPerson?.email || '',
+      vendorAddress: [
+        vendor.location?.address,
+        vendor.location?.city,
+        vendor.location?.state,
+      ].filter(Boolean).join(', ') || '',
+    });
+  };
 
   // Get unique brands for filter
   const uniqueBrands = Array.from(new Set(products.map(p => p.brand).filter(Boolean)));
@@ -255,6 +359,9 @@ export default function MerchandiseClient({ initialProducts }: MerchandiseClient
       shippingClass: '',
     });
     setSelectedProduct(null);
+    setSelectedVendorId('');
+    setVendorSearchQuery('');
+    setShowVendorDropdown(false);
   };
 
   // Handle add/edit product
@@ -378,6 +485,19 @@ export default function MerchandiseClient({ initialProducts }: MerchandiseClient
   // Handle edit product
   const handleEditProduct = (product: Product) => {
     setSelectedProduct(product);
+    
+    // Try to find matching vendor
+    const matchingVendor = vendors.find(v => 
+      v.businessName === product.vendor?.name
+    );
+    if (matchingVendor) {
+      setSelectedVendorId(matchingVendor._id);
+      setVendorSearchQuery(matchingVendor.businessName || '');
+    } else {
+      setSelectedVendorId('');
+      setVendorSearchQuery(product.vendor?.name || '');
+    }
+    
     setFormData({
       name: product.name,
       description: product.description || '',
@@ -448,7 +568,7 @@ export default function MerchandiseClient({ initialProducts }: MerchandiseClient
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
             <ShoppingBagIcon className="w-7 h-7 text-purple-500" />
-            Merchandise Management
+            Products Management
           </h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">
             Manage products, inventory, and stock levels
@@ -1180,6 +1300,85 @@ export default function MerchandiseClient({ initialProducts }: MerchandiseClient
             <h3 className="text-lg font-semibold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2">
               Vendor Information
             </h3>
+            
+            {/* Vendor Selection Dropdown */}
+            <div className="relative" ref={vendorDropdownRef}>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                Select Vendor (Optional)
+              </label>
+              <div className="relative">
+                <Input
+                  icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+                  value={vendorSearchQuery}
+                  onChange={(e) => {
+                    setVendorSearchQuery(e.target.value);
+                    setShowVendorDropdown(true);
+                    setSelectedVendorId('');
+                  }}
+                  onFocus={() => setShowVendorDropdown(true)}
+                  placeholder="Search vendor from Vendor & Alliance Partners..."
+                  className="pr-10"
+                />
+                {selectedVendorId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedVendorId('');
+                      setVendorSearchQuery('');
+                      setFormData({
+                        ...formData,
+                        vendorName: '',
+                        vendorContact: '',
+                        vendorEmail: '',
+                        vendorAddress: '',
+                      });
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-[var(--bg-input)] text-[var(--text-muted)]"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                )}
+
+                {showVendorDropdown && filteredVendors.length > 0 && (
+                  <div className="absolute z-50 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                    {filteredVendors.map((vendor) => (
+                      <button
+                        key={vendor._id}
+                        type="button"
+                        onClick={() => handleVendorSelect(vendor)}
+                        className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0"
+                      >
+                        <div>
+                          <p className="font-medium text-[var(--text-primary)]">{vendor.businessName}</p>
+                          {vendor.contactPerson?.email && (
+                            <p className="text-xs text-[var(--text-muted)]">{vendor.contactPerson.email}</p>
+                          )}
+                          {vendor.location?.city && vendor.location?.state && (
+                            <p className="text-xs text-[var(--text-muted)]">
+                              {vendor.location.city}, {vendor.location.state}
+                            </p>
+                          )}
+                        </div>
+                        {selectedVendorId === vendor._id && (
+                          <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showVendorDropdown && vendorSearchQuery && filteredVendors.length === 0 && (
+                  <div className="absolute z-50 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg mt-1 p-4">
+                    <p className="text-sm text-[var(--text-muted)] text-center">
+                      No vendor found. You can manually enter vendor information below.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Select a vendor from Vendor & Alliance Partners to auto-fill information, or enter manually below.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Vendor Name</label>

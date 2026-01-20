@@ -74,7 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Device Management', href: '/dashboard/devices', icon: DevicePhoneMobileIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Incident Management', href: '/dashboard/incidents', icon: ClipboardDocumentListIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
     { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Merchandise', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const },
