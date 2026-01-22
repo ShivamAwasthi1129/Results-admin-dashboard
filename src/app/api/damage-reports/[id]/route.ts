@@ -3,6 +3,38 @@ import { verifyAuth, canPerform } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import DamageReport from '@/models/DamageReport';
 
+// Helper function to add CORS headers
+function addCorsHeaders(response: NextResponse, request?: NextRequest) {
+  // Get origin from request or use configured URL
+  let allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  
+  // If request origin matches our domain, use it (for production)
+  if (request) {
+    const requestOrigin = request.headers.get('origin');
+    if (requestOrigin) {
+      // Allow same origin or configured origin
+      const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
+      if (configuredUrl && requestOrigin.includes(new URL(configuredUrl).hostname)) {
+        allowedOrigin = requestOrigin;
+      } else if (!configuredUrl && requestOrigin.includes('localhost')) {
+        allowedOrigin = requestOrigin;
+      }
+    }
+  }
+  
+  response.headers.set('Access-Control-Allow-Origin', allowedOrigin);
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  return response;
+}
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  const response = new NextResponse(null, { status: 200 });
+  return addCorsHeaders(response, request);
+}
+
 // GET - Get single damage report
 export async function GET(
   request: NextRequest,
@@ -13,18 +45,20 @@ export async function GET(
     const { id } = await params;
 
     if (!tokenPayload) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Check permission
     if (!canPerform(tokenPayload.role, 'viewIncidents')) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Permission denied' },
         { status: 403 }
       );
+      return addCorsHeaders(response, request);
     }
 
     await connectDB();
@@ -32,10 +66,11 @@ export async function GET(
     const damageReport = await DamageReport.findById(id).lean();
 
     if (!damageReport) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Damage report not found' },
         { status: 404 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Calculate funding metrics
@@ -44,7 +79,7 @@ export async function GET(
       ? Math.round((totalFunding / damageReport.estimatedCost) * 100) 
       : 0;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         damageReport: {
@@ -57,9 +92,10 @@ export async function GET(
         },
       },
     });
+    return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('Get damage report error:', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         error: error.message || 'Internal server error',
@@ -67,6 +103,7 @@ export async function GET(
       },
       { status: 500 }
     );
+    return addCorsHeaders(response, request);
   }
 }
 
@@ -80,18 +117,20 @@ export async function PUT(
     const { id } = await params;
 
     if (!tokenPayload) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Check permission
     if (tokenPayload.role !== 'super_admin' && tokenPayload.role !== 'admin') {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Permission denied' },
         { status: 403 }
       );
+      return addCorsHeaders(response, request);
     }
 
     await connectDB();
@@ -99,10 +138,11 @@ export async function PUT(
     // Get existing report to track milestone changes
     const existingReport = await DamageReport.findById(id).lean();
     if (!existingReport) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Damage report not found' },
         { status: 404 }
       );
+      return addCorsHeaders(response, request);
     }
 
     const body = await request.json();
@@ -114,10 +154,11 @@ export async function PUT(
         _id: { $ne: id }
       });
       if (duplicateReport) {
-        return NextResponse.json(
+        const response = NextResponse.json(
           { success: false, error: 'Damage report with this report number already exists' },
           { status: 400 }
         );
+        return addCorsHeaders(response, request);
       }
       body.reportNumber = body.reportNumber.toUpperCase();
     }
@@ -175,10 +216,11 @@ export async function PUT(
     }).lean();
 
     if (!damageReport) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Damage report not found' },
         { status: 404 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Calculate funding metrics
@@ -187,7 +229,7 @@ export async function PUT(
       ? Math.round((totalFunding / damageReport.estimatedCost) * 100) 
       : 0;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         damageReport: {
@@ -201,9 +243,10 @@ export async function PUT(
       },
       message: 'Damage report updated successfully',
     });
+    return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('Update damage report error:', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         error: error.message || 'Internal server error',
@@ -211,6 +254,7 @@ export async function PUT(
       },
       { status: 500 }
     );
+    return addCorsHeaders(response, request);
   }
 }
 
@@ -224,18 +268,20 @@ export async function DELETE(
     const { id } = await params;
 
     if (!tokenPayload) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Only super_admin can delete damage reports
     if (tokenPayload.role !== 'super_admin') {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Permission denied. Only super admin can delete damage reports.' },
         { status: 403 }
       );
+      return addCorsHeaders(response, request);
     }
 
     await connectDB();
@@ -243,19 +289,21 @@ export async function DELETE(
     const damageReport = await DamageReport.findByIdAndDelete(id);
 
     if (!damageReport) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Damage report not found' },
         { status: 404 }
       );
+      return addCorsHeaders(response, request);
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: 'Damage report deleted successfully',
     });
+    return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('Delete damage report error:', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         error: error.message || 'Internal server error',
@@ -263,5 +311,6 @@ export async function DELETE(
       },
       { status: 500 }
     );
+    return addCorsHeaders(response, request);
   }
 }

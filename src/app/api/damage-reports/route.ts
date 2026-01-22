@@ -3,24 +3,58 @@ import { verifyAuth, canPerform } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import DamageReport from '@/models/DamageReport';
 
+// Helper function to add CORS headers
+function addCorsHeaders(response: NextResponse, request?: NextRequest) {
+  // Get origin from request or use configured URL
+  let allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  
+  // If request origin matches our domain, use it (for production)
+  if (request) {
+    const requestOrigin = request.headers.get('origin');
+    if (requestOrigin) {
+      // Allow same origin or configured origin
+      const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
+      if (configuredUrl && requestOrigin.includes(new URL(configuredUrl).hostname)) {
+        allowedOrigin = requestOrigin;
+      } else if (!configuredUrl && requestOrigin.includes('localhost')) {
+        allowedOrigin = requestOrigin;
+      }
+    }
+  }
+  
+  response.headers.set('Access-Control-Allow-Origin', allowedOrigin);
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  return response;
+}
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  const response = new NextResponse(null, { status: 200 });
+  return addCorsHeaders(response, request);
+}
+
 // GET - List all damage reports with pagination, search, and filters
 export async function GET(request: NextRequest) {
   try {
     const tokenPayload = await verifyAuth(request);
 
     if (!tokenPayload) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, message: 'Not authorized. No token provided.' },
         { status: 401 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Check permission
     if (!canPerform(tokenPayload.role, 'viewIncidents')) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Permission denied' },
         { status: 403 }
       );
+      return addCorsHeaders(response, request);
     }
 
     await connectDB();
@@ -119,7 +153,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         damageReports: transformedReports,
@@ -131,9 +165,10 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+    return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('Get damage reports error:', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         error: error.message || 'Internal server error',
@@ -141,6 +176,7 @@ export async function GET(request: NextRequest) {
       },
       { status: 500 }
     );
+    return addCorsHeaders(response, request);
   }
 }
 
@@ -150,18 +186,20 @@ export async function POST(request: NextRequest) {
     const tokenPayload = await verifyAuth(request);
 
     if (!tokenPayload) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, message: 'Not authorized. No token provided.' },
         { status: 401 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Allow admin and super_admin to create damage reports
     if (tokenPayload.role !== 'super_admin' && tokenPayload.role !== 'admin') {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Permission denied' },
         { status: 403 }
       );
+      return addCorsHeaders(response, request);
     }
 
     await connectDB();
@@ -170,20 +208,22 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!body.propertyOwner?.name || !body.propertyOwner?.phone || !body.propertyAddress || !body.damageType || !body.severity || !body.description) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { success: false, error: 'Property owner, address, damage type, severity, and description are required' },
         { status: 400 }
       );
+      return addCorsHeaders(response, request);
     }
 
     // Check if report number already exists (if provided)
     if (body.reportNumber) {
       const existingReport = await DamageReport.findOne({ reportNumber: body.reportNumber.toUpperCase() });
       if (existingReport) {
-        return NextResponse.json(
+        const response = NextResponse.json(
           { success: false, error: 'Damage report with this report number already exists' },
           { status: 400 }
         );
+        return addCorsHeaders(response, request);
       }
     }
 
@@ -225,7 +265,7 @@ export async function POST(request: NextRequest) {
       ? Math.round((totalFunding / damageReport.estimatedCost) * 100) 
       : 0;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         damageReport: {
@@ -237,9 +277,10 @@ export async function POST(request: NextRequest) {
       },
       message: 'Damage report created successfully',
     });
+    return addCorsHeaders(response, request);
   } catch (error: any) {
     console.error('Create damage report error:', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         error: error.message || 'Internal server error',
@@ -247,5 +288,6 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+    return addCorsHeaders(response, request);
   }
 }

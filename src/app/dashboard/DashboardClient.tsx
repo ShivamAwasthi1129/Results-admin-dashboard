@@ -260,6 +260,7 @@ export default function DashboardClient() {
 
   // Track if fetchers are already set up to prevent infinite loops
   const fetchersSetupRef = useRef(false);
+  const productsFetchingRef = useRef(false);
 
   // Fetch all data on mount - PARALLEL EXECUTION
   useEffect(() => {
@@ -397,6 +398,11 @@ export default function DashboardClient() {
       };
 
       const fetchProducts = async () => {
+        // Prevent double fetching
+        if (productsFetchingRef.current) {
+          return null;
+        }
+        productsFetchingRef.current = true;
         try {
           setIsLoadingProducts(true);
           const response = await fetch('/api/products?status=active&limit=20', {
@@ -414,6 +420,7 @@ export default function DashboardClient() {
           console.error('Error fetching products:', error);
         } finally {
           setIsLoadingProducts(false);
+          productsFetchingRef.current = false;
         }
         return null;
       };
