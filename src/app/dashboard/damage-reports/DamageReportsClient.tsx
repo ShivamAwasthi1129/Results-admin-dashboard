@@ -140,17 +140,13 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
   const fetchReports = async () => {
     setIsLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_APP_URL 
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/damage-reports`
-        : 'http://localhost:3000/api/damage-reports';
-
       const params = new URLSearchParams();
       if (searchQuery) params.append('search', searchQuery);
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (damageTypeFilter !== 'all') params.append('damageType', damageTypeFilter);
       if (severityFilter !== 'all') params.append('severity', severityFilter);
 
-      const response = await fetch(`${apiUrl}?${params.toString()}`, {
+      const response = await fetch(`/api/damage-reports?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -179,11 +175,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
     if (!confirm('Are you sure you want to delete this damage report?')) return;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_APP_URL 
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/damage-reports/${id}`
-        : `http://localhost:3000/api/damage-reports/${id}`;
-
-      const response = await fetch(apiUrl, {
+      const response = await fetch(`/api/damage-reports/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

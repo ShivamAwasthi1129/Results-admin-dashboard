@@ -185,11 +185,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate }:
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_APP_URL 
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/damage-reports/${report._id}`
-        : `http://localhost:3000/api/damage-reports/${report._id}`;
-
-      const response = await fetch(apiUrl, {
+      const response = await fetch(`/api/damage-reports/${report._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

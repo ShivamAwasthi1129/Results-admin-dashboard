@@ -121,11 +121,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         status: 'reported',
       };
 
-      const apiUrl = process.env.NEXT_PUBLIC_APP_URL 
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/damage-reports`
-        : 'http://localhost:3000/api/damage-reports';
-
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/damage-reports', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
