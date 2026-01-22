@@ -11,6 +11,6 @@ export { default as Avatar } from './Avatar';
 export { default as Loader } from './Loader';
 export { default as SearchModal } from './SearchModal';
 export { default as NotificationPanel } from './NotificationPanel';
-export { default as PhoneInput } from './PhoneInput';
+export { PhoneInput, default as PhoneInputDefault } from './PhoneInput';
 export { default as MultiSelect } from './MultiSelect';
 export { SkeletonLoader } from './SkeletonLoader';

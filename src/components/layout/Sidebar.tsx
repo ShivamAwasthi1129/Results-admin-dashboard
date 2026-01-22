@@ -29,6 +29,7 @@ import {
   ShieldExclamationIcon,
   IdentificationIcon,
   ShoppingBagIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { Avatar } from '@/components/ui';
 import ResultsLogo from '@/Results_logo.png';
@@ -73,6 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Housing & Relief', href: '/dashboard/shelters', icon: HomeModernIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
     { name: 'Device Management', href: '/dashboard/devices', icon: DevicePhoneMobileIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Incident Management', href: '/dashboard/incidents', icon: ClipboardDocumentListIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
+    { name: 'Damage Reports', href: '/dashboard/damage-reports', icon: DocumentTextIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },

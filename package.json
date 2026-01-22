@@ -8,10 +8,17 @@
     "start": "next start",
     "lint": "eslint",
     "seed:volunteers": "tsx scripts/seed-volunteers-and-teams.ts",
-    "seed:products": "tsx scripts/seed-products.ts"
+    "seed:products": "tsx scripts/seed-products.ts",
+    "seed:damage-reports": "tsx scripts/seed-damage-reports.ts",
+    "migrate:products": "tsx scripts/migrate-products.ts",
+    "add-media:products": "tsx scripts/add-media-to-products.ts",
+    "update-products:real-media": "tsx scripts/update-products-with-real-media.ts",
+    "test-and-update-3d-models": "tsx scripts/test-and-update-3d-models.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/leaflet": "^1.9.21",
@@ -31,7 +38,8 @@
     "react-phone-number-input": "^3.4.14",
     "react-toastify": "^11.0.5",
     "recharts": "^3.6.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "three": "^0.182.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

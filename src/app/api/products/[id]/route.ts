@@ -86,8 +86,24 @@ export async function PUT(
       body.sku = body.sku.toUpperCase();
     }
 
-    // Update stock calculations if stock is being updated
-    if (body.stock) {
+    // If variants are provided, calculate total stock from variants
+    if (body.variants && Array.isArray(body.variants) && body.variants.length > 0) {
+      const totalQuantity = body.variants.reduce((sum: number, variant: any) => {
+        const qty = variant.stock?.quantity || variant.stockQuantity || 0;
+        return sum + (Number(qty) || 0);
+      }, 0);
+      const totalReserved = body.variants.reduce((sum: number, variant: any) => {
+        const reserved = variant.stock?.reservedQuantity || variant.reservedQuantity || 0;
+        return sum + (Number(reserved) || 0);
+      }, 0);
+      body.stock = {
+        ...body.stock,
+        quantity: totalQuantity,
+        reservedQuantity: totalReserved,
+        availableQuantity: Math.max(0, totalQuantity - totalReserved),
+      };
+    } else if (body.stock) {
+      // Update stock calculations if stock is being updated (and no variants)
       const quantity = Number(body.stock.quantity) || 0;
       const reservedQuantity = Number(body.stock.reservedQuantity) || 0;
       body.stock.availableQuantity = Math.max(0, quantity - reservedQuantity);

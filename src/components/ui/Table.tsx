@@ -55,7 +55,7 @@ function Table<T extends Record<string, any>>({
   };
 
   return (
-    <div className={cn('card overflow-hidden p-0 w-full', className)}>
+    <div className={cn('w-full', className)}>
       <div className="relative w-full overflow-x-hidden overflow-y-visible responsive-table-wrapper">
         <table className="w-full table-fixed responsive-table" style={{ tableLayout: 'fixed', width: '100%' }}>
             <thead>

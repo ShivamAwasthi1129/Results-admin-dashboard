@@ -79,6 +79,28 @@ async function seedData() {
         images: [
           { url: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400', alt: 'Safety Work Boots', isPrimary: true },
         ],
+        videoUrl: 'https://www.youtube.com/watch?v=example',
+        keyFeatures: [
+          'Steel toe protection',
+          'Slip-resistant sole',
+          'Waterproof construction',
+          'Comfortable all-day wear',
+        ],
+        categoryAttributes: {
+          ukSizes: ['UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10', 'UK 11'],
+          usSizes: ['US 7', 'US 8', 'US 9', 'US 10', 'US 11', 'US 12'],
+          shoeWidth: 'Standard',
+          colors: ['Black', 'Brown'],
+          materials: ['Leather', 'Steel', 'Rubber'],
+        },
+        variants: [
+          { id: 'SHOES-001-UK6-BLACK', ukSize: 'UK 6', usSize: 'US 7', color: 'Black', stock: { quantity: 25, reservedQuantity: 0, availableQuantity: 25 }, sku: 'SHOES-001-UK6-BLK' },
+          { id: 'SHOES-001-UK7-BLACK', ukSize: 'UK 7', usSize: 'US 8', color: 'Black', stock: { quantity: 25, reservedQuantity: 0, availableQuantity: 25 }, sku: 'SHOES-001-UK7-BLK' },
+          { id: 'SHOES-001-UK8-BLACK', ukSize: 'UK 8', usSize: 'US 9', color: 'Black', stock: { quantity: 25, reservedQuantity: 0, availableQuantity: 25 }, sku: 'SHOES-001-UK8-BLK' },
+          { id: 'SHOES-001-UK9-BLACK', ukSize: 'UK 9', usSize: 'US 10', color: 'Black', stock: { quantity: 25, reservedQuantity: 0, availableQuantity: 25 }, sku: 'SHOES-001-UK9-BLK' },
+          { id: 'SHOES-001-UK10-BLACK', ukSize: 'UK 10', usSize: 'US 11', color: 'Black', stock: { quantity: 25, reservedQuantity: 0, availableQuantity: 25 }, sku: 'SHOES-001-UK10-BLK' },
+          { id: 'SHOES-001-UK11-BLACK', ukSize: 'UK 11', usSize: 'US 12', color: 'Black', stock: { quantity: 25, reservedQuantity: 0, availableQuantity: 25 }, sku: 'SHOES-001-UK11-BLK' },
+        ],
         specifications: [
           { key: 'Toe Type', value: 'Steel Toe' },
           { key: 'Sole Material', value: 'Rubber' },
@@ -332,6 +354,25 @@ async function seedData() {
         images: [
           { url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400', alt: 'Safety Smartwatch', isPrimary: true },
         ],
+        keyFeatures: [
+          'SOS emergency button',
+          'GPS tracking',
+          'Heart rate monitoring',
+          '7-day battery life',
+        ],
+        categoryAttributes: {
+          strapColors: ['Black', 'Silver', 'Blue'],
+          strapWidths: ['20mm', '22mm'],
+          watchCaseMaterial: 'Stainless Steel',
+          watchDialColor: 'Black',
+          colors: ['Black', 'Silver'],
+          materials: ['Stainless Steel', 'Silicone'],
+        },
+        variants: [
+          { id: 'WATCH-001-BLACK-20MM', strapColor: 'Black', strapWidth: '20mm', color: 'Black', stock: { quantity: 20, reservedQuantity: 0, availableQuantity: 20 }, sku: 'WATCH-001-BLK-20' },
+          { id: 'WATCH-001-SILVER-20MM', strapColor: 'Silver', strapWidth: '20mm', color: 'Silver', stock: { quantity: 20, reservedQuantity: 0, availableQuantity: 20 }, sku: 'WATCH-001-SLV-20' },
+          { id: 'WATCH-001-BLACK-22MM', strapColor: 'Black', strapWidth: '22mm', color: 'Black', stock: { quantity: 20, reservedQuantity: 2, availableQuantity: 18 }, sku: 'WATCH-001-BLK-22' },
+        ],
         specifications: [
           { key: 'Battery Life', value: '7 days' },
           { key: 'Water Resistance', value: '50m' },
@@ -417,6 +458,25 @@ async function seedData() {
         certifications: ['FR Certified'],
         images: [
           { url: 'https://images.unsplash.com/photo-1594938291221-94f18ab4d1df?w=400', alt: 'FR Work Shirt', isPrimary: true },
+        ],
+        keyFeatures: [
+          'Flame-resistant protection',
+          'Arc-rated for electrical safety',
+          'Comfortable all-day wear',
+          'Durable construction',
+        ],
+        categoryAttributes: {
+          shirtSizes: ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'],
+          colors: ['Navy Blue', 'Gray', 'Khaki'],
+          materials: ['FR-Treated Cotton'],
+        },
+        variants: [
+          { id: 'SHIRT-001-S-NAVY', size: 'S', color: 'Navy Blue', stock: { quantity: 42, reservedQuantity: 0, availableQuantity: 42 }, sku: 'SHIRT-001-S-NVY' },
+          { id: 'SHIRT-001-M-NAVY', size: 'M', color: 'Navy Blue', stock: { quantity: 42, reservedQuantity: 0, availableQuantity: 42 }, sku: 'SHIRT-001-M-NVY' },
+          { id: 'SHIRT-001-L-NAVY', size: 'L', color: 'Navy Blue', stock: { quantity: 42, reservedQuantity: 0, availableQuantity: 42 }, sku: 'SHIRT-001-L-NVY' },
+          { id: 'SHIRT-001-XL-NAVY', size: 'XL', color: 'Navy Blue', stock: { quantity: 42, reservedQuantity: 0, availableQuantity: 42 }, sku: 'SHIRT-001-XL-NVY' },
+          { id: 'SHIRT-001-XXL-NAVY', size: 'XXL', color: 'Navy Blue', stock: { quantity: 42, reservedQuantity: 0, availableQuantity: 42 }, sku: 'SHIRT-001-XXL-NVY' },
+          { id: 'SHIRT-001-XXXL-NAVY', size: 'XXXL', color: 'Navy Blue', stock: { quantity: 40, reservedQuantity: 20, availableQuantity: 20 }, sku: 'SHIRT-001-XXXL-NVY' },
         ],
         vendor: {
           name: 'FlameGuard Apparel',

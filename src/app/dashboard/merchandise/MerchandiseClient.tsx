@@ -5,6 +5,7 @@ import { Card, Badge, Button, Modal, Input, Select, Table, SkeletonLoader } from
 import { useAuth } from '@/context/AuthContext';
 import { useDataCache } from '@/context/DataCacheContext';
 import { toast } from 'react-toastify';
+import dynamic from 'next/dynamic';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -19,7 +20,11 @@ import {
   CurrencyDollarIcon,
   ChartBarIcon,
   CheckCircleIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline';
+
+// Dynamically import product detail modal
+const ProductDetailModal = dynamic(() => import('@/components/products/ProductDetailModal'), { ssr: false });
 
 interface Product {
   _id: string;
@@ -57,6 +62,38 @@ interface Product {
   safetyStandards?: string[];
   certifications?: string[];
   images?: Array<{ url: string; alt?: string; isPrimary?: boolean }>;
+  videoUrl?: string;
+  model3dUrl?: string;
+  model3dFormat?: 'glb' | 'gltf' | 'obj' | 'fbx' | 'dae';
+  keyFeatures?: string[];
+  variants?: Array<{
+    id: string;
+    size?: string;
+    color?: string;
+    strapColor?: string;
+    strapWidth?: string;
+    ukSize?: string;
+    usSize?: string;
+    stock: {
+      quantity: number;
+      reservedQuantity: number;
+      availableQuantity: number;
+    };
+    sku?: string;
+    price?: number;
+  }>;
+  categoryAttributes?: {
+    shirtSizes?: string[];
+    strapColors?: string[];
+    strapWidths?: string[];
+    watchCaseMaterial?: string;
+    watchDialColor?: string;
+    ukSizes?: string[];
+    usSizes?: string[];
+    shoeWidth?: string;
+    colors?: string[];
+    materials?: string[];
+  };
   specifications?: Array<{ key: string; value: string }>;
   vendor?: {
     name: string;
@@ -110,6 +147,8 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
   const [isInitialLoading, setIsInitialLoading] = useState(initialData.length === 0);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -154,6 +193,35 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
     safetyStandards: [] as string[],
     certifications: [] as string[],
     images: [] as Array<{ url: string; alt?: string; isPrimary?: boolean }>,
+    videoUrl: '',
+    model3dUrl: '',
+    model3dFormat: 'glb' as 'glb' | 'gltf' | 'obj' | 'fbx' | 'dae',
+    keyFeatures: [] as string[],
+    variants: [] as Array<{
+      id: string;
+      size?: string;
+      color?: string;
+      strapColor?: string;
+      strapWidth?: string;
+      ukSize?: string;
+      usSize?: string;
+      stockQuantity: number;
+      reservedQuantity: number;
+      sku?: string;
+      price?: number;
+    }>,
+    categoryAttributes: {
+      shirtSizes: [] as string[],
+      strapColors: [] as string[],
+      strapWidths: [] as string[],
+      watchCaseMaterial: '',
+      watchDialColor: '',
+      ukSizes: [] as string[],
+      usSizes: [] as string[],
+      shoeWidth: '',
+      colors: [] as string[],
+      materials: [] as string[],
+    },
     specifications: [] as Array<{ key: string; value: string }>,
     vendorName: '',
     vendorContact: '',
@@ -167,6 +235,23 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
     shippingWeight: '',
     shippingDimensions: '',
     shippingClass: '',
+  });
+  
+  // Variant management state
+  const [showVariantModal, setShowVariantModal] = useState(false);
+  const [editingVariantIndex, setEditingVariantIndex] = useState<number | null>(null);
+  const [variantForm, setVariantForm] = useState({
+    id: '',
+    size: '',
+    color: '',
+    strapColor: '',
+    strapWidth: '',
+    ukSize: '',
+    usSize: '',
+    stockQuantity: '',
+    reservedQuantity: '',
+    sku: '',
+    price: '',
   });
 
   // Fetch products from API
@@ -344,6 +429,23 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
       safetyStandards: [],
       certifications: [],
       images: [],
+      videoUrl: '',
+      model3dUrl: '',
+      model3dFormat: 'glb',
+      keyFeatures: [],
+      variants: [],
+      categoryAttributes: {
+        shirtSizes: [],
+        strapColors: [],
+        strapWidths: [],
+        watchCaseMaterial: '',
+        watchDialColor: '',
+        ukSizes: [],
+        usSizes: [],
+        shoeWidth: '',
+        colors: [],
+        materials: [],
+      },
       specifications: [],
       vendorName: '',
       vendorContact: '',
@@ -358,6 +460,21 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
       shippingDimensions: '',
       shippingClass: '',
     });
+    setVariantForm({
+      id: '',
+      size: '',
+      color: '',
+      strapColor: '',
+      strapWidth: '',
+      ukSize: '',
+      usSize: '',
+      stockQuantity: '',
+      reservedQuantity: '',
+      sku: '',
+      price: '',
+    });
+    setEditingVariantIndex(null);
+    setShowVariantModal(false);
     setSelectedProduct(null);
     setSelectedVendorId('');
     setVendorSearchQuery('');
@@ -404,6 +521,29 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
         safetyStandards: formData.safetyStandards.length > 0 ? formData.safetyStandards : undefined,
         certifications: formData.certifications.length > 0 ? formData.certifications : undefined,
         images: formData.images.length > 0 ? formData.images : [],
+        videoUrl: formData.videoUrl || undefined,
+        model3dUrl: formData.model3dUrl || undefined,
+        model3dFormat: formData.model3dUrl ? formData.model3dFormat : undefined,
+        keyFeatures: formData.keyFeatures.length > 0 ? formData.keyFeatures : undefined,
+        variants: formData.variants.length > 0 ? formData.variants.map(v => ({
+          id: v.id,
+          size: v.size || undefined,
+          color: v.color || undefined,
+          strapColor: v.strapColor || undefined,
+          strapWidth: v.strapWidth || undefined,
+          ukSize: v.ukSize || undefined,
+          usSize: v.usSize || undefined,
+          stock: {
+            quantity: typeof v.stockQuantity === 'number' ? v.stockQuantity : parseInt(String(v.stockQuantity)) || 0,
+            reservedQuantity: typeof v.reservedQuantity === 'number' ? v.reservedQuantity : parseInt(String(v.reservedQuantity)) || 0,
+            availableQuantity: Math.max(0, (typeof v.stockQuantity === 'number' ? v.stockQuantity : parseInt(String(v.stockQuantity)) || 0) - (typeof v.reservedQuantity === 'number' ? v.reservedQuantity : parseInt(String(v.reservedQuantity)) || 0)),
+          },
+          sku: v.sku || undefined,
+          price: v.price ? (typeof v.price === 'number' ? v.price : parseFloat(String(v.price))) : undefined,
+        })) : undefined,
+        categoryAttributes: Object.values(formData.categoryAttributes).some(v => 
+          Array.isArray(v) ? v.length > 0 : v !== ''
+        ) ? formData.categoryAttributes : undefined,
         specifications: formData.specifications.length > 0 ? formData.specifications : undefined,
         vendor: formData.vendorName
           ? {
@@ -527,6 +667,27 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
       safetyStandards: product.safetyStandards || [],
       certifications: product.certifications || [],
       images: product.images || [],
+      videoUrl: (product as any).videoUrl || '',
+      model3dUrl: (product as any).model3dUrl || '',
+      model3dFormat: (product as any).model3dFormat || 'glb',
+      keyFeatures: (product as any).keyFeatures || [],
+      variants: ((product as any).variants || []).map((v: any) => ({
+        ...v,
+        stockQuantity: v.stock?.quantity ?? v.stockQuantity ?? 0,
+        reservedQuantity: v.stock?.reservedQuantity ?? v.reservedQuantity ?? 0,
+      })),
+      categoryAttributes: {
+        shirtSizes: (product as any).categoryAttributes?.shirtSizes || [],
+        strapColors: (product as any).categoryAttributes?.strapColors || [],
+        strapWidths: (product as any).categoryAttributes?.strapWidths || [],
+        watchCaseMaterial: (product as any).categoryAttributes?.watchCaseMaterial || '',
+        watchDialColor: (product as any).categoryAttributes?.watchDialColor || '',
+        ukSizes: (product as any).categoryAttributes?.ukSizes || [],
+        usSizes: (product as any).categoryAttributes?.usSizes || [],
+        shoeWidth: (product as any).categoryAttributes?.shoeWidth || '',
+        colors: (product as any).categoryAttributes?.colors || [],
+        materials: (product as any).categoryAttributes?.materials || [],
+      },
       specifications: product.specifications || [],
       vendorName: product.vendor?.name || '',
       vendorContact: product.vendor?.contact || '',
@@ -857,6 +1018,16 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                 label: 'Actions',
                 render: (product: Product) => (
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedProductForDetail(product);
+                        setShowDetailModal(true);
+                      }}
+                      className="p-2 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                      title="View Details"
+                    >
+                      <EyeIcon className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleEditProduct(product)}
                       className="p-2 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
@@ -1295,6 +1466,338 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
             </div>
           </div>
 
+          {/* Video & 3D Model */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2">
+              Video & 3D Model
+            </h3>
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Video URL</label>
+              <Input
+                type="url"
+                value={formData.videoUrl}
+                onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
+                placeholder="https://youtube.com/watch?v=... or direct video URL"
+              />
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Enter a YouTube URL or direct link to a product demonstration video
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">3D Model URL</label>
+                <Input
+                  type="url"
+                  value={formData.model3dUrl}
+                  onChange={(e) => setFormData({ ...formData, model3dUrl: e.target.value })}
+                  placeholder="https://example.com/model.glb"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">3D Model Format</label>
+                <Select
+                  value={formData.model3dFormat}
+                  onChange={(value) => setFormData({ ...formData, model3dFormat: value as any })}
+                  options={[
+                    { value: 'glb', label: 'GLB' },
+                    { value: 'gltf', label: 'GLTF' },
+                    { value: 'obj', label: 'OBJ' },
+                    { value: 'fbx', label: 'FBX' },
+                    { value: 'dae', label: 'DAE' },
+                  ]}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              💡 Supported formats: GLB (recommended), GLTF, OBJ, FBX, DAE. Upload your 3D model file and provide the URL here.
+            </p>
+          </div>
+
+          {/* Key Features */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2">
+              Key Features
+            </h3>
+            <div className="space-y-2">
+              {formData.keyFeatures.map((feature, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    value={feature}
+                    onChange={(e) => {
+                      const newFeatures = [...formData.keyFeatures];
+                      newFeatures[index] = e.target.value;
+                      setFormData({ ...formData, keyFeatures: newFeatures });
+                    }}
+                    placeholder="Enter key feature..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newFeatures = formData.keyFeatures.filter((_, i) => i !== index);
+                      setFormData({ ...formData, keyFeatures: newFeatures });
+                    }}
+                    className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setFormData({ ...formData, keyFeatures: [...formData.keyFeatures, ''] })}
+                leftIcon={<PlusIcon className="w-4 h-4" />}
+                className="w-full"
+              >
+                Add Key Feature
+              </Button>
+            </div>
+          </div>
+
+          {/* Category-Specific Attributes */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2">
+              Category-Specific Attributes
+            </h3>
+            {formData.category === 'shirts' && (
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Shirt Sizes</label>
+                <div className="flex flex-wrap gap-2">
+                  {['S', 'M', 'L', 'XL', 'XXL', 'XXXL'].map(size => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => {
+                        const currentSizes = formData.categoryAttributes?.shirtSizes || [];
+                        const sizes = currentSizes.includes(size)
+                          ? currentSizes.filter(s => s !== size)
+                          : [...currentSizes, size];
+                        setFormData({
+                          ...formData,
+                          categoryAttributes: { ...formData.categoryAttributes, shirtSizes: sizes },
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                        (formData.categoryAttributes?.shirtSizes || []).includes(size)
+                          ? 'bg-purple-500 text-white'
+                          : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'
+                      }`}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {formData.category === 'watches' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Strap Colors</label>
+                  <Input
+                    value={(formData.categoryAttributes?.strapColors || []).join(', ')}
+                    onChange={(e) => {
+                      const colors = e.target.value.split(',').map(c => c.trim()).filter(c => c);
+                      setFormData({
+                        ...formData,
+                        categoryAttributes: { ...formData.categoryAttributes, strapColors: colors },
+                      });
+                    }}
+                    placeholder="Black, Brown, Blue (comma-separated)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Strap Widths</label>
+                  <Input
+                    value={(formData.categoryAttributes?.strapWidths || []).join(', ')}
+                    onChange={(e) => {
+                      const widths = e.target.value.split(',').map(w => w.trim()).filter(w => w);
+                      setFormData({
+                        ...formData,
+                        categoryAttributes: { ...formData.categoryAttributes, strapWidths: widths },
+                      });
+                    }}
+                    placeholder="20mm, 22mm, 24mm (comma-separated)"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Case Material</label>
+                    <Input
+                      value={formData.categoryAttributes.watchCaseMaterial}
+                      onChange={(e) => {
+                        setFormData({
+                          ...formData,
+                          categoryAttributes: { ...formData.categoryAttributes, watchCaseMaterial: e.target.value },
+                        });
+                      }}
+                      placeholder="Stainless Steel, Titanium, etc."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Dial Color</label>
+                    <Input
+                      value={formData.categoryAttributes.watchDialColor}
+                      onChange={(e) => {
+                        setFormData({
+                          ...formData,
+                          categoryAttributes: { ...formData.categoryAttributes, watchDialColor: e.target.value },
+                        });
+                      }}
+                      placeholder="Black, White, Blue, etc."
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            {(formData.category === 'shoes' || formData.category === 'boots') && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">UK Sizes</label>
+                  <Input
+                    value={(formData.categoryAttributes?.ukSizes || []).join(', ')}
+                    onChange={(e) => {
+                      const sizes = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+                      setFormData({
+                        ...formData,
+                        categoryAttributes: { ...formData.categoryAttributes, ukSizes: sizes },
+                      });
+                    }}
+                    placeholder="UK 6, UK 7, UK 8, UK 9 (comma-separated)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">US Sizes</label>
+                  <Input
+                    value={(formData.categoryAttributes?.usSizes || []).join(', ')}
+                    onChange={(e) => {
+                      const sizes = e.target.value.split(',').map(s => s.trim()).filter(s => s);
+                      setFormData({
+                        ...formData,
+                        categoryAttributes: { ...formData.categoryAttributes, usSizes: sizes },
+                      });
+                    }}
+                    placeholder="US 7, US 8, US 9, US 10 (comma-separated)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Shoe Width</label>
+                  <Select
+                    value={formData.categoryAttributes.shoeWidth}
+                    onChange={(value) => {
+                      setFormData({
+                        ...formData,
+                        categoryAttributes: { ...formData.categoryAttributes, shoeWidth: value },
+                      });
+                    }}
+                    options={[
+                      { value: '', label: 'Select Width' },
+                      { value: 'Narrow', label: 'Narrow' },
+                      { value: 'Standard', label: 'Standard' },
+                      { value: 'Wide', label: 'Wide' },
+                      { value: 'Extra Wide', label: 'Extra Wide' },
+                    ]}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Product Variants (Size/Color/Strap combinations with individual stock) */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2">
+                Product Variants
+              </h3>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setVariantForm({
+                    id: '',
+                    size: '',
+                    color: '',
+                    strapColor: '',
+                    strapWidth: '',
+                    ukSize: '',
+                    usSize: '',
+                    stockQuantity: '',
+                    reservedQuantity: '',
+                    sku: '',
+                    price: '',
+                  });
+                  setEditingVariantIndex(null);
+                  setShowVariantModal(true);
+                }}
+                leftIcon={<PlusIcon className="w-4 h-4" />}
+              >
+                Add Variant
+              </Button>
+            </div>
+            {formData.variants.length > 0 ? (
+              <div className="space-y-2">
+                {formData.variants.map((variant, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 border border-[var(--border-color)] rounded-lg bg-[var(--bg-input)]">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-[var(--text-primary)]">
+                        {variant.size && `Size: ${variant.size}`}
+                        {variant.color && ` | Color: ${variant.color}`}
+                        {variant.strapColor && ` | Strap: ${variant.strapColor}`}
+                        {variant.strapWidth && ` (${variant.strapWidth})`}
+                        {variant.ukSize && ` | UK: ${variant.ukSize}`}
+                        {variant.usSize && ` | US: ${variant.usSize}`}
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">
+                        Stock: {variant.stockQuantity ?? 0} | Reserved: {variant.reservedQuantity ?? 0} | Available: {Math.max(0, (variant.stockQuantity ?? 0) - (variant.reservedQuantity ?? 0))}
+                        {variant.sku && ` | SKU: ${variant.sku}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const stockQty = variant.stockQuantity ?? 0;
+                          const reservedQty = variant.reservedQuantity ?? 0;
+                          setVariantForm({ 
+                            id: variant.id || '',
+                            size: variant.size || '',
+                            color: variant.color || '',
+                            strapColor: variant.strapColor || '',
+                            strapWidth: variant.strapWidth || '',
+                            ukSize: variant.ukSize || '',
+                            usSize: variant.usSize || '',
+                            stockQuantity: stockQty.toString(), 
+                            reservedQuantity: reservedQty.toString(),
+                            sku: variant.sku || '',
+                            price: variant.price?.toString() || '' 
+                          });
+                          setEditingVariantIndex(index);
+                          setShowVariantModal(true);
+                        }}
+                        className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newVariants = formData.variants.filter((_, i) => i !== index);
+                          setFormData({ ...formData, variants: newVariants });
+                        }}
+                        className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)] text-center py-4">
+                No variants added. Add variants to track stock for different sizes, colors, or other attributes.
+              </p>
+            )}
+          </div>
+
           {/* Vendor Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2">
@@ -1475,6 +1978,238 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
           </div>
         </form>
       </Modal>
+
+      {/* Variant Modal */}
+      <Modal
+        isOpen={showVariantModal}
+        onClose={() => {
+          setShowVariantModal(false);
+          setEditingVariantIndex(null);
+          setVariantForm({
+            id: '',
+            size: '',
+            color: '',
+            strapColor: '',
+            strapWidth: '',
+            ukSize: '',
+            usSize: '',
+            stockQuantity: '',
+            reservedQuantity: '',
+            sku: '',
+            price: '',
+          });
+        }}
+        title={editingVariantIndex !== null ? 'Edit Variant' : 'Add Variant'}
+        size="md"
+      >
+        <div className="space-y-4">
+          {formData.category === 'shirts' && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Size</label>
+              <Select
+                value={variantForm.size}
+                onChange={(value) => setVariantForm({ ...variantForm, size: value })}
+                options={[
+                  { value: '', label: 'Select Size' },
+                  ...(formData.categoryAttributes?.shirtSizes || []).map(s => ({ value: s, label: s })),
+                ]}
+              />
+            </div>
+          )}
+          {(formData.category === 'shoes' || formData.category === 'boots') && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">UK Size</label>
+                <Select
+                  value={variantForm.ukSize}
+                  onChange={(value) => setVariantForm({ ...variantForm, ukSize: value })}
+                  options={[
+                    { value: '', label: 'Select UK Size' },
+                    ...(formData.categoryAttributes?.ukSizes || []).map(s => ({ value: s, label: s })),
+                  ]}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">US Size</label>
+                <Select
+                  value={variantForm.usSize}
+                  onChange={(value) => setVariantForm({ ...variantForm, usSize: value })}
+                  options={[
+                    { value: '', label: 'Select US Size' },
+                    ...(formData.categoryAttributes?.usSizes || []).map(s => ({ value: s, label: s })),
+                  ]}
+                />
+              </div>
+            </div>
+          )}
+          {formData.category === 'watches' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Strap Color</label>
+                <Select
+                  value={variantForm.strapColor}
+                  onChange={(value) => setVariantForm({ ...variantForm, strapColor: value })}
+                  options={[
+                    { value: '', label: 'Select Strap Color' },
+                    ...(formData.categoryAttributes?.strapColors || []).map(c => ({ value: c, label: c })),
+                  ]}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Strap Width</label>
+                <Select
+                  value={variantForm.strapWidth}
+                  onChange={(value) => setVariantForm({ ...variantForm, strapWidth: value })}
+                  options={[
+                    { value: '', label: 'Select Strap Width' },
+                    ...(formData.categoryAttributes?.strapWidths || []).map(w => ({ value: w, label: w })),
+                  ]}
+                />
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Color (General)</label>
+            <Input
+              value={variantForm.color}
+              onChange={(e) => setVariantForm({ ...variantForm, color: e.target.value })}
+              placeholder="Product color"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                Stock Quantity <span className="text-red-400">*</span>
+              </label>
+              <Input
+                type="number"
+                min="0"
+                value={variantForm.stockQuantity}
+                onChange={(e) => setVariantForm({ ...variantForm, stockQuantity: e.target.value })}
+                placeholder="0"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Reserved Quantity</label>
+              <Input
+                type="number"
+                min="0"
+                value={variantForm.reservedQuantity}
+                onChange={(e) => setVariantForm({ ...variantForm, reservedQuantity: e.target.value })}
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Variant SKU</label>
+              <Input
+                value={variantForm.sku}
+                onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value.toUpperCase() })}
+                placeholder="Variant-specific SKU (optional)"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Variant Price ($)</label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={variantForm.price}
+                onChange={(e) => setVariantForm({ ...variantForm, price: e.target.value })}
+                placeholder="Override product price (optional)"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-3 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowVariantModal(false);
+                setEditingVariantIndex(null);
+                setVariantForm({
+                  id: '',
+                  size: '',
+                  color: '',
+                  strapColor: '',
+                  strapWidth: '',
+                  ukSize: '',
+                  usSize: '',
+                  stockQuantity: '',
+                  reservedQuantity: '',
+                  sku: '',
+                  price: '',
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="gradient"
+              onClick={() => {
+                if (!variantForm.stockQuantity) {
+                  toast.error('Stock quantity is required');
+                  return;
+                }
+                // Preserve existing variant ID when editing, generate new ID when adding
+                const variantId = editingVariantIndex !== null && formData.variants[editingVariantIndex]?.id
+                  ? formData.variants[editingVariantIndex].id
+                  : `${variantForm.size || variantForm.ukSize || variantForm.usSize || variantForm.strapColor || 'variant'}-${variantForm.color || 'default'}-${Date.now()}`;
+                const newVariant = {
+                  id: variantId,
+                  size: variantForm.size || undefined,
+                  color: variantForm.color || undefined,
+                  strapColor: variantForm.strapColor || undefined,
+                  strapWidth: variantForm.strapWidth || undefined,
+                  ukSize: variantForm.ukSize || undefined,
+                  usSize: variantForm.usSize || undefined,
+                  stockQuantity: parseInt(variantForm.stockQuantity) || 0,
+                  reservedQuantity: parseInt(variantForm.reservedQuantity) || 0,
+                  sku: variantForm.sku || undefined,
+                  price: variantForm.price ? parseFloat(variantForm.price) : undefined,
+                };
+                if (editingVariantIndex !== null) {
+                  const newVariants = [...formData.variants];
+                  newVariants[editingVariantIndex] = newVariant;
+                  setFormData({ ...formData, variants: newVariants });
+                } else {
+                  setFormData({ ...formData, variants: [...formData.variants, newVariant] });
+                }
+                setShowVariantModal(false);
+                setEditingVariantIndex(null);
+                setVariantForm({
+                  id: '',
+                  size: '',
+                  color: '',
+                  strapColor: '',
+                  strapWidth: '',
+                  ukSize: '',
+                  usSize: '',
+                  stockQuantity: '',
+                  reservedQuantity: '',
+                  sku: '',
+                  price: '',
+                });
+              }}
+            >
+              {editingVariantIndex !== null ? 'Update Variant' : 'Add Variant'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Product Detail Modal */}
+      <ProductDetailModal
+        product={selectedProductForDetail}
+        isOpen={showDetailModal}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedProductForDetail(null);
+        }}
+      />
     </div>
   );
 }

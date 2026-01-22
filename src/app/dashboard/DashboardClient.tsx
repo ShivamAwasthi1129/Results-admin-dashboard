@@ -841,7 +841,7 @@ export default function DashboardClient() {
         </div>
 
         {/* Product List */}
-        <div>
+        <div className="h-full">
           <ProductList products={products} isLoading={isLoadingProducts} />
         </div>
       </div>

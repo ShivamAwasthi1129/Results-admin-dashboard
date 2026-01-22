@@ -11,6 +11,43 @@ export interface IProductImage {
   isPrimary?: boolean;
 }
 
+export interface IProductVariant {
+  id: string; // Unique identifier for variant (e.g., "S-Red", "UK8-Black")
+  size?: string; // Size (S, M, L, XL, XXL, XXXL, UK8, US9, etc.)
+  color?: string; // Color
+  strapColor?: string; // For watches
+  strapWidth?: string; // For watches (e.g., "20mm", "22mm")
+  ukSize?: string; // UK size for shoes
+  usSize?: string; // US size for shoes
+  stock: {
+    quantity: number;
+    reservedQuantity: number;
+    availableQuantity: number;
+  };
+  sku?: string; // Variant-specific SKU
+  price?: number; // Variant-specific price (optional, uses product price if not set)
+}
+
+export interface IProductCategoryAttributes {
+  // Shirts
+  shirtSizes?: string[]; // ["S", "M", "L", "XL", "XXL", "XXXL"]
+  
+  // Watches
+  strapColors?: string[];
+  strapWidths?: string[];
+  watchCaseMaterial?: string;
+  watchDialColor?: string;
+  
+  // Shoes
+  ukSizes?: string[]; // ["UK 6", "UK 7", "UK 8", etc.]
+  usSizes?: string[]; // ["US 7", "US 8", "US 9", etc.]
+  shoeWidth?: string; // "Narrow", "Standard", "Wide"
+  
+  // General
+  colors?: string[];
+  materials?: string[];
+}
+
 export interface IProduct {
   _id?: string;
   name: string;
@@ -54,8 +91,20 @@ export interface IProduct {
   safetyStandards?: string[]; // e.g., ["ANSI Z87.1", "OSHA Approved"]
   certifications?: string[]; // e.g., ["CE Certified", "ISO 9001"]
   
-  // Images
+  // Media
   images: IProductImage[];
+  videoUrl?: string; // Video link for product demonstration
+  model3dUrl?: string; // 3D model URL (GLB, GLTF, OBJ, etc.)
+  model3dFormat?: string; // Format: 'glb', 'gltf', 'obj', etc.
+  
+  // Key Features (Bullet Points)
+  keyFeatures?: string[]; // Key selling points/features
+  
+  // Variants (for size/color/strap combinations with individual stock)
+  variants?: IProductVariant[]; // Array of variants with individual stock tracking
+  
+  // Category-specific attributes
+  categoryAttributes?: IProductCategoryAttributes;
   
   // Specifications
   specifications?: IProductSpecification[];
@@ -245,6 +294,54 @@ const ProductSchema = new Schema<IProductDocument>(
       type: [ProductImageSchema],
       default: [],
     },
+    videoUrl: {
+      type: String,
+      trim: true,
+    },
+    model3dUrl: {
+      type: String,
+      trim: true,
+    },
+    model3dFormat: {
+      type: String,
+      enum: ['glb', 'gltf', 'obj', 'fbx', 'dae'],
+      trim: true,
+    },
+    keyFeatures: {
+      type: [String],
+      default: [],
+    },
+    variants: {
+      type: [{
+        id: { type: String, required: true },
+        size: { type: String, trim: true },
+        color: { type: String, trim: true },
+        strapColor: { type: String, trim: true },
+        strapWidth: { type: String, trim: true },
+        ukSize: { type: String, trim: true },
+        usSize: { type: String, trim: true },
+        stock: {
+          quantity: { type: Number, required: true, min: 0, default: 0 },
+          reservedQuantity: { type: Number, required: true, min: 0, default: 0 },
+          availableQuantity: { type: Number, required: true, min: 0, default: 0 },
+        },
+        sku: { type: String, trim: true, uppercase: true },
+        price: { type: Number, min: 0 },
+      }],
+      default: [],
+    },
+    categoryAttributes: {
+      shirtSizes: { type: [String], default: [] },
+      strapColors: { type: [String], default: [] },
+      strapWidths: { type: [String], default: [] },
+      watchCaseMaterial: { type: String, trim: true },
+      watchDialColor: { type: String, trim: true },
+      ukSizes: { type: [String], default: [] },
+      usSizes: { type: [String], default: [] },
+      shoeWidth: { type: String, trim: true },
+      colors: { type: [String], default: [] },
+      materials: { type: [String], default: [] },
+    },
     specifications: {
       type: [ProductSpecificationSchema],
       default: [],
@@ -308,22 +405,51 @@ ProductSchema.index({ isFeatured: 1, status: 1 });
 
 // Pre-save hook to calculate availableQuantity and update status
 ProductSchema.pre('save', async function() {
-  const quantity = Number(this.stock.quantity) || 0;
-  const reservedQuantity = Number(this.stock.reservedQuantity) || 0;
+  // Calculate total stock from variants if they exist, otherwise use main stock
+  let totalQuantity = 0;
+  let totalReserved = 0;
+  let totalAvailable = 0;
+  
+  if (this.variants && this.variants.length > 0) {
+    // Calculate from variants
+    this.variants.forEach((variant: any) => {
+      const qty = Number(variant.stock.quantity) || 0;
+      const reserved = Number(variant.stock.reservedQuantity) || 0;
+      const available = Math.max(0, qty - reserved);
+      
+      variant.stock.availableQuantity = available;
+      totalQuantity += qty;
+      totalReserved += reserved;
+      totalAvailable += available;
+    });
+    
+    // Update main stock totals
+    this.stock.quantity = totalQuantity;
+    this.stock.reservedQuantity = totalReserved;
+    this.stock.availableQuantity = totalAvailable;
+  } else {
+    // Use main stock (backward compatibility)
+    const quantity = Number(this.stock.quantity) || 0;
+    const reservedQuantity = Number(this.stock.reservedQuantity) || 0;
+    const lowStockThreshold = Number(this.stock.lowStockThreshold) || 0;
+    
+    // Calculate available quantity
+    this.stock.availableQuantity = Math.max(0, quantity - reservedQuantity);
+    totalQuantity = quantity;
+    totalAvailable = this.stock.availableQuantity;
+  }
+  
   const lowStockThreshold = Number(this.stock.lowStockThreshold) || 0;
   
-  // Calculate available quantity
-  this.stock.availableQuantity = Math.max(0, quantity - reservedQuantity);
-  
   // Update status based on stock
-  if (quantity === 0) {
+  if (totalQuantity === 0) {
     this.status = 'out_of_stock';
-  } else if (quantity < lowStockThreshold) {
+  } else if (totalQuantity < lowStockThreshold) {
     // Keep current status if it's already set, but ensure out_of_stock is set when quantity is 0
-    if (this.status === 'out_of_stock' && quantity > 0) {
+    if (this.status === 'out_of_stock' && totalQuantity > 0) {
       this.status = 'active';
     }
-  } else if (this.status === 'out_of_stock' && quantity > 0) {
+  } else if (this.status === 'out_of_stock' && totalQuantity > 0) {
     this.status = 'active';
   }
 });

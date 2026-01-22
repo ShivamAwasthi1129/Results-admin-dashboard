@@ -724,7 +724,7 @@ table {
 /* Custom Scrollbar for Tables */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: var(--border-light) transparent;
+  scrollbar-color: var(--border-color) var(--bg-input);
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -733,20 +733,18 @@ table {
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--bg-input);
   border-radius: 4px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: var(--border-light);
+  background: var(--border-color);
   border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  border: 1px solid var(--bg-input);
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: var(--primary-500);
-  background-clip: padding-box;
+  background: var(--text-muted);
 }
 
 /* Select dropdown */
