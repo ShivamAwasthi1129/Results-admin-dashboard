@@ -153,8 +153,6 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [brandFilter, setBrandFilter] = useState('all');
-  const [lowStockFilter, setLowStockFilter] = useState(false);
-  const [featuredFilter, setFeaturedFilter] = useState(false);
   
   // Vendor selection state
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -265,8 +263,6 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
       if (categoryFilter !== 'all') params.append('category', categoryFilter);
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (brandFilter !== 'all') params.append('brand', brandFilter);
-      if (lowStockFilter) params.append('lowStock', 'true');
-      if (featuredFilter) params.append('featured', 'true');
       params.append('limit', '100');
 
       const response = await fetch(`/api/products?${params.toString()}`, {
@@ -299,7 +295,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
     if (token) {
       fetchProducts();
     }
-  }, [searchQuery, categoryFilter, statusFilter, brandFilter, lowStockFilter, featuredFilter, token]);
+  }, [searchQuery, categoryFilter, statusFilter, brandFilter, token]);
 
   // Fetch vendors from service providers
   useEffect(() => {
@@ -392,8 +388,6 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
     if (categoryFilter !== 'all' && product.category !== categoryFilter) return false;
     if (statusFilter !== 'all' && product.status !== statusFilter) return false;
     if (brandFilter !== 'all' && product.brand !== brandFilter) return false;
-    if (lowStockFilter && product.stock.quantity >= product.stock.lowStockThreshold) return false;
-    if (featuredFilter && !product.isFeatured) return false;
 
     return true;
   });
@@ -735,7 +729,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
             Manage products, inventory, and stock levels
           </p>
         </div>
-        <Button
+        {/* <Button
           variant="gradient"
           onClick={() => {
             resetForm();
@@ -744,7 +738,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
         >
           <PlusIcon className="w-5 h-5 mr-2" />
           Add Product
-        </Button>
+        </Button> */}
       </div>
 
       {/* Stats Cards */}
@@ -794,7 +788,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
       </div>
 
       {/* Filters & Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="w-full">
           <Input
             icon={<MagnifyingGlassIcon className="w-5 h-5" />}
@@ -849,20 +843,12 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
         </div>
         <div className="w-full">
           <Button
-            variant={lowStockFilter ? 'primary' : 'secondary'}
-            onClick={() => setLowStockFilter(!lowStockFilter)}
+            variant="gradient"
+            onClick={() => setShowAddModal(true)}
             className="w-full"
+            leftIcon={<PlusIcon className="w-5 h-5" />}
           >
-            Low Stock
-          </Button>
-        </div>
-        <div className="w-full">
-          <Button
-            variant={featuredFilter ? 'primary' : 'secondary'}
-            onClick={() => setFeaturedFilter(!featuredFilter)}
-            className="w-full"
-          >
-            Featured
+            Add Product
           </Button>
         </div>
       </div>

@@ -155,6 +155,7 @@ export default function LiveDisastersClient() {
   const [showVolunteersModal, setShowVolunteersModal] = useState(false);
   const [selectedDisasterForVolunteers, setSelectedDisasterForVolunteers] = useState<ManagedDisaster | null>(null);
   const [volunteers, setVolunteers] = useState<any[]>([]);
+  const [isLoadingVolunteers, setIsLoadingVolunteers] = useState(false);
   const [showAssignVolunteerModal, setShowAssignVolunteerModal] = useState(false);
   const [selectedDisasterForAssign, setSelectedDisasterForAssign] = useState<ManagedDisaster | null>(null);
   const [selectedVolunteerIds, setSelectedVolunteerIds] = useState<string[]>([]);
@@ -187,6 +188,8 @@ export default function LiveDisastersClient() {
 
   // Fetch volunteers list
   const fetchVolunteers = async () => {
+    if (!token) return;
+    setIsLoadingVolunteers(true);
     try {
       const response = await fetch('/api/volunteers?limit=100', {
         headers: { Authorization: `Bearer ${token}` }
@@ -198,6 +201,8 @@ export default function LiveDisastersClient() {
       }
     } catch (error) {
       console.error('Failed to fetch volunteers:', error);
+    } finally {
+      setIsLoadingVolunteers(false);
     }
   };
 
@@ -2251,7 +2256,12 @@ export default function LiveDisastersClient() {
                 Select Volunteers <span className="text-red-400">*</span>
               </label>
               <div className="max-h-[400px] overflow-y-auto border border-[var(--border-color)] rounded-lg p-4 space-y-3">
-                {volunteers.filter(v => {
+                {isLoadingVolunteers ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                    <p className="text-sm text-[var(--text-muted)]">Loading volunteers...</p>
+                  </div>
+                ) : volunteers.filter(v => {
                   // Filter out already assigned volunteers
                   const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
                     (av: any) => {

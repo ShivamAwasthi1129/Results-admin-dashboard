@@ -23,6 +23,22 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 
+interface ServiceProvider {
+  _id: string;
+  providerId: string;
+  businessName: string;
+  category: string;
+  contactPerson?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+  };
+  location?: {
+    city?: string;
+    state?: string;
+  };
+}
+
 interface DamageReport {
   _id: string;
   reportNumber: string;
@@ -84,6 +100,21 @@ interface DamageReport {
     email?: string;
     phone?: string;
   };
+  vendor?: {
+    vendorId: string;
+    providerId?: string;
+    businessName?: string;
+    contactPerson?: {
+      name?: string;
+      phone?: string;
+      email?: string;
+    };
+    category?: string;
+    assignedDate?: string;
+    assignedBy?: string;
+    status?: 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+    notes?: string;
+  };
 }
 
 interface DamageReportModalProps {
@@ -142,7 +173,7 @@ const getFundingSourceColor = (source: string) => {
 };
 
 export default function DamageReportModal({ report, isOpen, onClose, onUpdate }: DamageReportModalProps) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'funding' | 'milestones' | 'images'>('overview');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -151,6 +182,9 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate }:
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newAffectedArea, setNewAffectedArea] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ url: string; file?: File }>>([]);
+  const [vendors, setVendors] = useState<ServiceProvider[]>([]);
+  const [isLoadingVendors, setIsLoadingVendors] = useState(false);
+  const [assignedVendorIds, setAssignedVendorIds] = useState<string[]>([]);
 
   // Deep comparison function to check if form data has changed
   const hasChanges = useMemo(() => {
@@ -181,6 +215,61 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate }:
     setOriginalData(report);
     setIsEditing(false);
   }, [report]);
+
+  // Fetch vendors when modal opens in edit mode
+  useEffect(() => {
+    if (isOpen && token && isEditing) {
+      fetchVendors();
+      fetchAssignedVendors();
+    }
+  }, [isOpen, token, isEditing, report._id]);
+
+  const fetchVendors = async () => {
+    setIsLoadingVendors(true);
+    try {
+      const response = await fetch('/api/services?limit=1000&verified=true&status=active', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.serviceProviders) {
+          setVendors(data.data.serviceProviders);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching vendors:', error);
+    } finally {
+      setIsLoadingVendors(false);
+    }
+  };
+
+  const fetchAssignedVendors = async () => {
+    try {
+      const response = await fetch('/api/damage-reports?limit=1000', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.damageReports) {
+          // Get all vendor IDs that are already assigned to OTHER reports (not the current one)
+          const assignedIds = data.data.damageReports
+            .filter((r: any) => r.vendor?.vendorId && r._id !== report._id)
+            .map((r: any) => r.vendor.vendorId);
+          setAssignedVendorIds(assignedIds);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching assigned vendors:', error);
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -582,61 +671,141 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate }:
               )}
             </div>
 
-            {/* Contractor Assignment */}
+            {/* Vendor Assignment */}
             {isEditing ? (
               <div className="bg-[var(--bg-input)] rounded-lg p-4">
                 <h3 className="font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <BuildingOfficeIcon className="w-5 h-5" />
-                  Contractor Assignment
+                  Vendor/Service Provider Assignment
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    label="Contractor Name"
-                    value={formData.contractor?.name || ''}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      contractor: { ...formData.contractor, name: e.target.value },
-                    })}
+                <div className="space-y-4">
+                  {isLoadingVendors ? (
+                    <div className="flex items-center gap-2 py-3 px-4 border border-[var(--border-color)] rounded-lg bg-[var(--bg-primary)]">
+                      <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin flex-shrink-0" />
+                      <p className="text-sm text-[var(--text-muted)]">Loading vendors...</p>
+                    </div>
+                  ) : (
+                  <Select
+                    label="Select Vendor"
+                    value={formData.vendor?.vendorId || ''}
+                    onChange={(value) => {
+                      if (value) {
+                        const selectedVendor = vendors.find(v => v._id === value);
+                        if (selectedVendor) {
+                          setFormData({
+                            ...formData,
+                            vendor: {
+                              vendorId: selectedVendor._id,
+                              providerId: selectedVendor.providerId,
+                              businessName: selectedVendor.businessName,
+                              contactPerson: {
+                                name: selectedVendor.contactPerson?.name || '',
+                                phone: selectedVendor.contactPerson?.phone || '',
+                                email: selectedVendor.contactPerson?.email || '',
+                              },
+                              category: selectedVendor.category,
+                              assignedDate: new Date().toISOString(),
+                              assignedBy: user?.id || '',
+                              status: 'assigned',
+                            },
+                          });
+                        }
+                      } else {
+                        setFormData({
+                          ...formData,
+                          vendor: undefined,
+                        });
+                      }
+                    }}
+                    options={[
+                      { value: '', label: 'No vendor assigned' },
+                      ...vendors
+                        .filter((vendor) => !assignedVendorIds.includes(vendor._id) || formData.vendor?.vendorId === vendor._id)
+                        .map((vendor) => ({
+                          value: vendor._id,
+                          label: `${vendor.businessName}${vendor.location?.city ? ` - ${vendor.location.city}, ${vendor.location.state}` : ''}${vendor.category ? ` (${vendor.category})` : ''}`,
+                        })),
+                    ]}
                   />
-                  <Input
-                    label="Estimated Timeline"
-                    placeholder="e.g., 6-8 weeks"
-                    value={formData.contractor?.estimatedTimeline || ''}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      contractor: { name: formData.contractor?.name || '', ...formData.contractor, estimatedTimeline: e.target.value },
-                    })}
-                  />
-                  <PhoneInput
-                    label="Contractor Phone"
-                    value={formData.contractor?.phone || ''}
-                    onChange={(value) => setFormData({
-                      ...formData,
-                      contractor: { name: formData.contractor?.name || '', ...formData.contractor, phone: value || '' },
-                    })}
-                  />
-                  <Input
-                    label="Contractor Email"
-                    type="email"
-                    value={formData.contractor?.email || ''}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      contractor: { name: formData.contractor?.name || '', ...formData.contractor, email: e.target.value },
-                    })}
-                  />
+                  )}
+                  {vendors.filter((v) => !assignedVendorIds.includes(v._id) || formData.vendor?.vendorId === v._id).length === 0 && vendors.length > 0 && !formData.vendor && (
+                    <p className="text-sm text-amber-500 mt-2">All vendors are currently assigned to other damage reports.</p>
+                  )}
+                  {formData.vendor && (
+                    <div className="p-3 bg-[var(--bg-secondary)] rounded-lg space-y-2 text-sm">
+                      <p className="font-medium text-[var(--text-primary)]">{formData.vendor.businessName}</p>
+                      {formData.vendor.contactPerson?.phone && (
+                        <p className="text-[var(--text-muted)]">Phone: {formData.vendor.contactPerson.phone}</p>
+                      )}
+                      {formData.vendor.contactPerson?.email && (
+                        <p className="text-[var(--text-muted)]">Email: {formData.vendor.contactPerson.email}</p>
+                      )}
+                      {formData.vendor.category && (
+                        <p className="text-[var(--text-muted)]">Category: {formData.vendor.category}</p>
+                      )}
+                      <Select
+                        label="Vendor Status"
+                        value={formData.vendor.status || 'assigned'}
+                        onChange={(value) => setFormData({
+                          ...formData,
+                          vendor: formData.vendor ? { ...formData.vendor, status: value as any } : undefined,
+                        })}
+                        options={[
+                          { value: 'assigned', label: 'Assigned' },
+                          { value: 'in_progress', label: 'In Progress' },
+                          { value: 'completed', label: 'Completed' },
+                          { value: 'cancelled', label: 'Cancelled' },
+                        ]}
+                      />
+                      <div>
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+                          Notes (Optional)
+                        </label>
+                        <textarea
+                          className="input-field w-full min-h-[80px]"
+                          value={formData.vendor.notes || ''}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            vendor: formData.vendor ? { ...formData.vendor, notes: e.target.value } : undefined,
+                          })}
+                          placeholder="Add notes about vendor assignment..."
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            ) : formData.contractor && (
-              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                <h3 className="font-semibold text-green-800 mb-2 flex items-center gap-2">
+            ) : formData.vendor && (
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <h3 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
                   <BuildingOfficeIcon className="w-5 h-5" />
-                  Assigned Contractor
+                  Assigned Vendor/Service Provider
                 </h3>
-                <p className="text-green-700 font-medium">{formData.contractor.name}</p>
-                {formData.contractor.estimatedTimeline && (
-                  <p className="text-sm text-green-600 mt-1">
-                    Estimated timeline: {formData.contractor.estimatedTimeline}
+                <p className="text-blue-700 font-medium">{formData.vendor.businessName}</p>
+                {formData.vendor.providerId && (
+                  <p className="text-sm text-blue-600 mt-1">Provider ID: {formData.vendor.providerId}</p>
+                )}
+                {formData.vendor.contactPerson?.phone && (
+                  <p className="text-sm text-blue-600 mt-1">Phone: {formData.vendor.contactPerson.phone}</p>
+                )}
+                {formData.vendor.contactPerson?.email && (
+                  <p className="text-sm text-blue-600 mt-1">Email: {formData.vendor.contactPerson.email}</p>
+                )}
+                {formData.vendor.category && (
+                  <p className="text-sm text-blue-600 mt-1">Category: {formData.vendor.category}</p>
+                )}
+                {formData.vendor.status && (
+                  <p className="text-sm text-blue-600 mt-1">
+                    Status: <span className="capitalize">{formData.vendor.status.replace('_', ' ')}</span>
                   </p>
+                )}
+                {formData.vendor.assignedDate && (
+                  <p className="text-sm text-blue-600 mt-1">
+                    Assigned: {formatDate(formData.vendor.assignedDate)}
+                  </p>
+                )}
+                {formData.vendor.notes && (
+                  <p className="text-sm text-blue-600 mt-2">Notes: {formData.vendor.notes}</p>
                 )}
               </div>
             )}

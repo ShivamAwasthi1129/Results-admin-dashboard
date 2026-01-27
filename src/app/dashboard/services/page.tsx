@@ -8,22 +8,22 @@ async function fetchServiceProviders(token: string | null): Promise<any[]> {
   try {
     if (!token) return [];
     
-    const response = await fetch(getApiUrl('/api/service-providers?limit=100'), {
+    const response = await fetch(getApiUrl('/api/services?limit=100'), {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });
     
-    // if (!response.ok) {
-    //   console.error('Failed to fetch service providers');
-    //   return [];
-    // }
+    if (!response.ok) {
+      console.error('Failed to fetch service providers');
+      return [];
+    }
     
     const data = await response.json();
     if (!data.success) {
       return [];
     }
     
-    return data.data.providers || [];
+    return data.data.serviceProviders || [];
   } catch (error) {
     console.error('Error fetching service providers:', error);
     return [];

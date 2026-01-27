@@ -113,7 +113,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (roleFilter !== 'all') params.append('role', roleFilter);
-      const response = await fetch(`/api/users?${params.toString()}`, {
+      const response = await fetch(`/api/ops-users?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();
@@ -174,7 +174,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
     }
     
     try {
-      const url = selectedUser ? `/api/users?id=${selectedUser._id}` : '/api/users';
+      const url = selectedUser ? `/api/ops-users?id=${selectedUser._id}` : '/api/ops-users';
       const method = selectedUser ? 'PUT' : 'POST';
       
       const requestBody = {
@@ -234,7 +234,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
   const handleDelete = async () => {
     if (!selectedUser) return;
     try {
-      const response = await fetch(`/api/users?id=${selectedUser._id}`, {
+      const response = await fetch(`/api/ops-users?id=${selectedUser._id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

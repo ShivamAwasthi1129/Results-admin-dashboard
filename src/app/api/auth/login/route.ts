@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import OpsUser from '@/models/OpsUser';
 import { verifyPassword, generateToken } from '@/lib/auth';
 
+// Portal login uses OPS users table only. Only admin/super_admin in ops_users can access this portal.
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
@@ -10,7 +11,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password } = body;
 
-    // Validate input
     if (!email || !password) {
       return NextResponse.json(
         { success: false, error: 'Email and password are required' },
@@ -18,9 +18,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user by email
-    const user = await User.findOne({ email: email.toLowerCase() });
-    
+    const user = await OpsUser.findOne({ email: email.toLowerCase() });
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
@@ -28,7 +27,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user is active
     if (user.status !== 'active') {
       return NextResponse.json(
         { success: false, error: 'Your account is not active. Please contact administrator.' },
@@ -36,9 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify password
     const isPasswordValid = await verifyPassword(password, user.password);
-    
     if (!isPasswordValid) {
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
@@ -46,7 +42,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate JWT token
     const displayName = user.name || `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
     const token = generateToken({
       userId: user._id.toString(),
@@ -55,7 +50,6 @@ export async function POST(request: NextRequest) {
       name: displayName,
     });
 
-    // Create response with token
     const response = NextResponse.json({
       success: true,
       data: {

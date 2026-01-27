@@ -145,6 +145,7 @@ export async function GET(request: NextRequest) {
         milestones: report.milestones || [],
         images: report.images || [],
         contractor: report.contractor,
+        vendor: report.vendor,
         notes: report.notes,
         tags: report.tags || [],
         priority: report.priority,
@@ -252,6 +253,10 @@ export async function POST(request: NextRequest) {
       fundingSources: body.fundingSources || [],
       milestones: body.milestones && body.milestones.length > 0 ? body.milestones : defaultMilestones,
       images: body.images || [],
+      vendor: body.vendor ? {
+        ...body.vendor,
+        assignedDate: body.vendor.assignedDate ? new Date(body.vendor.assignedDate) : new Date(),
+      } : undefined,
       createdBy: tokenPayload.userId,
       lastModifiedBy: tokenPayload.userId,
     };

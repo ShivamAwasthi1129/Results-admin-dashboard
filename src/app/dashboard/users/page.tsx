@@ -8,7 +8,7 @@ async function fetchUsers(token: string | null): Promise<any[]> {
   try {
     if (!token) return [];
     
-    const response = await fetch(getApiUrl('/api/users?limit=100'), {
+    const response = await fetch(getApiUrl('/api/ops-users?limit=100'), {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });

@@ -90,6 +90,22 @@ export interface IContractor {
   assignedDate?: Date;
 }
 
+export interface IVendor {
+  vendorId: string; // ServiceProvider _id
+  providerId?: string; // ServiceProvider providerId
+  businessName?: string;
+  contactPerson?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+  };
+  category?: string;
+  assignedDate?: Date;
+  assignedBy?: string; // User ID who assigned
+  status?: 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+  notes?: string;
+}
+
 export interface IDamageReport extends Document {
   reportNumber: string; // Format: DR-YYYY-NNN (e.g., DR-2024-001)
   reportDate: Date;
@@ -135,6 +151,9 @@ export interface IDamageReport extends Document {
   
   // Contractor Assignment
   contractor?: IContractor;
+  
+  // Vendor/Service Provider Assignment
+  vendor?: IVendor;
   
   // Additional Information
   notes?: string;
@@ -219,6 +238,26 @@ const ContractorSchema = new Schema<IContractor>({
   phone: { type: String, trim: true },
   estimatedTimeline: { type: String, trim: true },
   assignedDate: { type: Date },
+}, { _id: false });
+
+const VendorSchema = new Schema<IVendor>({
+  vendorId: { type: String, required: true, trim: true },
+  providerId: { type: String, trim: true },
+  businessName: { type: String, trim: true },
+  contactPerson: {
+    name: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    email: { type: String, trim: true, lowercase: true },
+  },
+  category: { type: String, trim: true },
+  assignedDate: { type: Date, default: Date.now },
+  assignedBy: { type: String, trim: true },
+  status: {
+    type: String,
+    enum: ['assigned', 'in_progress', 'completed', 'cancelled'],
+    default: 'assigned',
+  },
+  notes: { type: String, trim: true },
 }, { _id: false });
 
 const DamageReportSchema = new Schema<IDamageReport>(
@@ -309,6 +348,9 @@ const DamageReportSchema = new Schema<IDamageReport>(
     contractor: {
       type: ContractorSchema,
     },
+    vendor: {
+      type: VendorSchema,
+    },
     notes: {
       type: String,
       trim: true,
@@ -347,6 +389,7 @@ DamageReportSchema.index({ severity: 1 });
 DamageReportSchema.index({ 'propertyOwner.name': 1 });
 DamageReportSchema.index({ 'propertyAddress.city': 1 });
 DamageReportSchema.index({ 'propertyAddress.state': 1 });
+DamageReportSchema.index({ 'vendor.vendorId': 1 });
 DamageReportSchema.index({ createdAt: -1 });
 
 // Virtual for total funding

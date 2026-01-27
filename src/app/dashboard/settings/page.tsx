@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout';
 import { Card, Button, Input, Select, Badge, Avatar } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -11,7 +11,6 @@ import {
   BellIcon,
   ShieldCheckIcon,
   PaintBrushIcon,
-  GlobeAltIcon,
   KeyIcon,
   EnvelopeIcon,
   PhoneIcon,
@@ -20,63 +19,253 @@ import {
   MapPinIcon,
   IdentificationIcon,
 } from '@heroicons/react/24/outline';
+import { BLOOD_GROUPS, GENDER_OPTIONS, US_STATES, RELATION_OPTIONS } from '@/lib/constants/usa';
 
 type TabKey = 'profile' | 'notifications' | 'security' | 'appearance';
 
+interface OpsProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  status: string;
+  profilePhoto: string;
+  dateOfBirth: string;
+  gender: string;
+  bloodGroup: string;
+  ssnNumber: string;
+  driversLicense: { number: string; state: string; expiryDate: string };
+  emergencyContact: { firstName: string; lastName: string; phone: string; relation: string };
+  address: { street: string; apartment: string; city: string; state: string; zipCode: string; country: string };
+  preferences?: {
+    notifications?: {
+      email?: boolean;
+      push?: boolean;
+      sms?: boolean;
+      emergencyAlerts?: boolean;
+      disasterUpdates?: boolean;
+      volunteerAssignments?: boolean;
+      systemUpdates?: boolean;
+      weeklyReport?: boolean;
+    };
+  };
+}
+
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<TabKey>('profile');
   const [isLoading, setIsLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profile, setProfile] = useState<OpsProfile | null>(null);
 
   const [profileForm, setProfileForm] = useState({
-    name: user?.name || '', 
-    email: user?.email || '', 
-    phone: user?.phone || '',
-    city: '', 
-    state: '', 
-    bio: '',
-    address: '',
-    pincode: '',
-    emergencyContact: '',
-    aadharNumber: '',
-    bloodGroup: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
     dateOfBirth: '',
-    occupation: '',
+    gender: '',
+    bloodGroup: '',
+    ssnNumber: '',
+    driversLicenseNumber: '',
+    driversLicenseState: '',
+    driversLicenseExpiry: '',
+    emergencyFirstName: '',
+    emergencyLastName: '',
+    emergencyPhone: '',
+    emergencyRelation: '',
+    street: '',
+    apartment: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'United States',
   });
 
   const [securityForm, setSecurityForm] = useState({
-    currentPassword: '', newPassword: '', confirmPassword: ''
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
   });
 
   const [notifications, setNotifications] = useState({
-    email: true, push: true, sms: false,
-    emergencyAlerts: true, disasterUpdates: true, volunteerAssignments: true,
-    systemUpdates: false, weeklyReport: true
+    email: true,
+    push: true,
+    sms: false,
+    emergencyAlerts: true,
+    disasterUpdates: true,
+    volunteerAssignments: true,
+    systemUpdates: false,
+    weeklyReport: true,
   });
 
-  const [appearance, setAppearance] = useState({
-    language: 'en', timezone: 'Asia/Kolkata'
-  });
+  const fetchProfile = useCallback(async () => {
+    if (!token) {
+      setProfileLoading(false);
+      return;
+    }
+    try {
+      setProfileLoading(true);
+      const res = await fetch('/api/ops-users/me', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.success && data.data) {
+        const p = data.data;
+        setProfile(p);
+        setProfileForm({
+          firstName: p.firstName || '',
+          lastName: p.lastName || '',
+          email: p.email || '',
+          phone: p.phone || '',
+          dateOfBirth: p.dateOfBirth || '',
+          gender: p.gender || '',
+          bloodGroup: p.bloodGroup || '',
+          ssnNumber: p.ssnNumber || '',
+          driversLicenseNumber: p.driversLicense?.number || '',
+          driversLicenseState: p.driversLicense?.state || '',
+          driversLicenseExpiry: p.driversLicense?.expiryDate || '',
+          emergencyFirstName: p.emergencyContact?.firstName || '',
+          emergencyLastName: p.emergencyContact?.lastName || '',
+          emergencyPhone: p.emergencyContact?.phone || '',
+          emergencyRelation: p.emergencyContact?.relation || '',
+          street: p.address?.street || '',
+          apartment: p.address?.apartment || '',
+          city: p.address?.city || '',
+          state: p.address?.state || '',
+          zipCode: p.address?.zipCode || '',
+          country: p.address?.country || 'United States',
+        });
+        if (p.preferences?.notifications) {
+          setNotifications((prev) => ({ ...prev, ...p.preferences!.notifications }));
+        }
+      }
+    } catch {
+      toast.error('Failed to load profile');
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [token]);
 
-  const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-    { key: 'profile', label: 'Profile', icon: <UserCircleIcon className="w-5 h-5" /> },
-    { key: 'notifications', label: 'Notifications', icon: <BellIcon className="w-5 h-5" /> },
-    { key: 'security', label: 'Security', icon: <ShieldCheckIcon className="w-5 h-5" /> },
-    { key: 'appearance', label: 'Appearance', icon: <PaintBrushIcon className="w-5 h-5" /> }
-  ];
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
-  const handleSave = () => {
+  const handleSaveProfile = async () => {
+    if (!token || !user?.id) return;
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch(`/api/ops-users?id=${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          firstName: profileForm.firstName,
+          lastName: profileForm.lastName,
+          email: profileForm.email,
+          phone: profileForm.phone,
+          dateOfBirth: profileForm.dateOfBirth || undefined,
+          gender: profileForm.gender || undefined,
+          bloodGroup: profileForm.bloodGroup || undefined,
+          ssnNumber: profileForm.ssnNumber || undefined,
+          driversLicense: {
+            number: profileForm.driversLicenseNumber,
+            state: profileForm.driversLicenseState,
+            expiryDate: profileForm.driversLicenseExpiry || undefined,
+          },
+          emergencyContact: {
+            firstName: profileForm.emergencyFirstName,
+            lastName: profileForm.emergencyLastName,
+            phone: profileForm.emergencyPhone,
+            relation: profileForm.emergencyRelation,
+          },
+          address: {
+            street: profileForm.street,
+            apartment: profileForm.apartment,
+            city: profileForm.city,
+            state: profileForm.state,
+            zipCode: profileForm.zipCode,
+            country: profileForm.country,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Profile updated successfully');
+        fetchProfile();
+      } else {
+        toast.error(data.error || 'Failed to save');
+      }
+    } catch {
+      toast.error('Failed to save profile');
+    } finally {
       setIsLoading(false);
-      toast.success('Settings saved!');
-    }, 1000);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    if (!token || !user?.id) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/ops-users?id=${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ preferences: { notifications } }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Notification preferences saved');
+        fetchProfile();
+      } else {
+        toast.error(data.error || 'Failed to save');
+      }
+    } catch {
+      toast.error('Failed to save preferences');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (securityForm.newPassword !== securityForm.confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (securityForm.newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    if (!token) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/ops-users/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          currentPassword: securityForm.currentPassword,
+          newPassword: securityForm.newPassword,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Password updated successfully');
+        setSecurityForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        toast.error(data.error || 'Failed to update password');
+      }
+    } catch {
+      toast.error('Failed to update password');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
     <button
       type="button"
+      role="switch"
+      aria-checked={checked}
       onClick={onChange}
       className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
         checked ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-[var(--bg-input)]'
@@ -90,10 +279,16 @@ export default function SettingsPage() {
     </button>
   );
 
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+    { key: 'profile', label: 'Profile', icon: <UserCircleIcon className="w-5 h-5" /> },
+    { key: 'notifications', label: 'Notifications', icon: <BellIcon className="w-5 h-5" /> },
+    { key: 'security', label: 'Security', icon: <ShieldCheckIcon className="w-5 h-5" /> },
+    { key: 'appearance', label: 'Appearance', icon: <PaintBrushIcon className="w-5 h-5" /> },
+  ];
+
   return (
-    <DashboardLayout title="Settings" subtitle="Manage your account and preferences">
+    <DashboardLayout title="Settings" subtitle="Manage your OPS account and preferences">
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar Tabs */}
         <div className="lg:w-72 shrink-0">
           <Card>
             <nav className="space-y-2">
@@ -115,156 +310,108 @@ export default function SettingsPage() {
           </Card>
         </div>
 
-        {/* Content Area */}
         <div className="flex-1">
-          {/* Profile Tab */}
           {activeTab === 'profile' && (
             <Card>
-              <div className="flex items-center gap-5 mb-10 pb-8 border-b border-[var(--border-color)]">
-                <div className="relative">
-                  <Avatar name={user?.name || 'User'} size="xl" />
-                  <button className="absolute bottom-0 right-0 w-9 h-9 rounded-full bg-purple-500 flex items-center justify-center text-white shadow-lg hover:bg-purple-600 transition-colors">
-                    <CameraIcon className="w-5 h-5" />
-                  </button>
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-1">{user?.name}</h3>
-                  <p className="text-[var(--text-muted)] mb-3">{user?.email}</p>
-                  <Badge variant="primary" size="sm" className="capitalize">
-                    {user?.role?.replace('_', ' ')}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="space-y-8">
-                {/* Basic Info */}
-                <div>
-                  <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">Basic Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Input 
-                      label="Full Name" 
-                      value={profileForm.name} 
-                      onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} 
-                      icon={<UserCircleIcon className="w-5 h-5" />} 
+              {profileLoading ? (
+                <div className="py-12 text-center text-[var(--text-muted)]">Loading profile...</div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-5 mb-10 pb-8 border-b border-[var(--border-color)]">
+                    <Avatar
+                      name={profile ? `${profile.firstName} ${profile.lastName}`.trim() || user?.name : user?.name || 'User'}
+                      size="xl"
+                      src={profile?.profilePhoto}
                     />
-                    <Input 
-                      label="Email" 
-                      type="email" 
-                      value={profileForm.email} 
-                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} 
-                      icon={<EnvelopeIcon className="w-5 h-5" />} 
-                    />
-                    <Input 
-                      label="Phone" 
-                      value={profileForm.phone} 
-                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} 
-                      icon={<PhoneIcon className="w-5 h-5" />} 
-                    />
-                    <Input 
-                      label="Date of Birth" 
-                      type="date" 
-                      value={profileForm.dateOfBirth} 
-                      onChange={(e) => setProfileForm({ ...profileForm, dateOfBirth: e.target.value })} 
-                    />
-                    <Input 
-                      label="Occupation" 
-                      value={profileForm.occupation} 
-                      onChange={(e) => setProfileForm({ ...profileForm, occupation: e.target.value })} 
-                    />
-                    <Select 
-                      label="Blood Group" 
-                      value={profileForm.bloodGroup} 
-                      onChange={(value) => setProfileForm({ ...profileForm, bloodGroup: value })} 
-                      options={[
-                        { value: '', label: 'Select Blood Group' },
-                        { value: 'A+', label: 'A+' }, { value: 'A-', label: 'A-' },
-                        { value: 'B+', label: 'B+' }, { value: 'B-', label: 'B-' },
-                        { value: 'AB+', label: 'AB+' }, { value: 'AB-', label: 'AB-' },
-                        { value: 'O+', label: 'O+' }, { value: 'O-', label: 'O-' },
-                      ]} 
-                    />
-                  </div>
-                </div>
-
-                {/* Address Info */}
-                <div>
-                  <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">Address Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="md:col-span-2">
-                      <Input 
-                        label="Address" 
-                        value={profileForm.address} 
-                        onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })} 
-                        icon={<MapPinIcon className="w-5 h-5" />} 
-                      />
+                    <div>
+                      <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-1">
+                        {profile ? `${profile.firstName} ${profile.lastName}`.trim() || profile.name : user?.name}
+                      </h3>
+                      <p className="text-[var(--text-muted)] mb-3">{user?.email}</p>
+                      <Badge variant="primary" size="sm" className="capitalize">
+                        {user?.role?.replace('_', ' ')}
+                      </Badge>
                     </div>
-                    <Input label="City" value={profileForm.city} onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })} />
-                    <Input label="State" value={profileForm.state} onChange={(e) => setProfileForm({ ...profileForm, state: e.target.value })} />
-                    <Input label="Pincode" value={profileForm.pincode} onChange={(e) => setProfileForm({ ...profileForm, pincode: e.target.value })} />
-                    <Input 
-                      label="Emergency Contact" 
-                      value={profileForm.emergencyContact} 
-                      onChange={(e) => setProfileForm({ ...profileForm, emergencyContact: e.target.value })} 
-                      icon={<PhoneIcon className="w-5 h-5" />}
-                    />
-                    <Input 
-                      label="Aadhar Number" 
-                      value={profileForm.aadharNumber} 
-                      onChange={(e) => setProfileForm({ ...profileForm, aadharNumber: e.target.value })} 
-                      icon={<IdentificationIcon className="w-5 h-5" />}
-                    />
                   </div>
-                </div>
 
-                {/* Bio */}
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2.5">Bio</label>
-                  <textarea
-                    value={profileForm.bio}
-                    onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
-                    rows={4}
-                    className="w-full px-4 py-3.5 bg-[var(--bg-input)] border-2 border-[var(--border-color)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-placeholder)] focus:outline-none focus:border-[var(--primary-500)] focus:ring-4 focus:ring-[var(--primary-500)]/20 transition-all resize-none"
-                    placeholder="Tell us about yourself..."
-                  />
-                </div>
+                  <div className="space-y-8">
+                    <div>
+                      <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">Basic Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Input label="First Name" value={profileForm.firstName} onChange={(e) => setProfileForm((f) => ({ ...f, firstName: e.target.value }))} icon={<UserCircleIcon className="w-5 h-5" />} />
+                        <Input label="Last Name" value={profileForm.lastName} onChange={(e) => setProfileForm((f) => ({ ...f, lastName: e.target.value }))} icon={<UserCircleIcon className="w-5 h-5" />} />
+                        <Input label="Email" type="email" value={profileForm.email} onChange={(e) => setProfileForm((f) => ({ ...f, email: e.target.value }))} icon={<EnvelopeIcon className="w-5 h-5" />} />
+                        <Input label="Phone" value={profileForm.phone} onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))} icon={<PhoneIcon className="w-5 h-5" />} />
+                        <Input label="Date of Birth" type="date" value={profileForm.dateOfBirth} onChange={(e) => setProfileForm((f) => ({ ...f, dateOfBirth: e.target.value }))} />
+                        <Select label="Gender" value={profileForm.gender} onChange={(v) => setProfileForm((f) => ({ ...f, gender: v }))} options={GENDER_OPTIONS} />
+                        <Select label="Blood Group" value={profileForm.bloodGroup} onChange={(v) => setProfileForm((f) => ({ ...f, bloodGroup: v }))} options={BLOOD_GROUPS} />
+                        <Input label="SSN (last 4 or masked)" value={profileForm.ssnNumber} onChange={(e) => setProfileForm((f) => ({ ...f, ssnNumber: e.target.value }))} icon={<IdentificationIcon className="w-5 h-5" />} />
+                      </div>
+                    </div>
 
-                <div className="flex justify-end pt-6">
-                  <Button variant="gradient" onClick={handleSave} isLoading={isLoading}>
-                    Save Changes
-                  </Button>
-                </div>
-              </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">Driver&apos;s License (USA)</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Input label="License Number" value={profileForm.driversLicenseNumber} onChange={(e) => setProfileForm((f) => ({ ...f, driversLicenseNumber: e.target.value }))} />
+                        <Select label="State" value={profileForm.driversLicenseState} onChange={(v) => setProfileForm((f) => ({ ...f, driversLicenseState: v }))} options={[{ value: '', label: 'Select State' }, ...US_STATES]} />
+                        <Input label="Expiry Date" type="date" value={profileForm.driversLicenseExpiry} onChange={(e) => setProfileForm((f) => ({ ...f, driversLicenseExpiry: e.target.value }))} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">Emergency Contact</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Input label="First Name" value={profileForm.emergencyFirstName} onChange={(e) => setProfileForm((f) => ({ ...f, emergencyFirstName: e.target.value }))} />
+                        <Input label="Last Name" value={profileForm.emergencyLastName} onChange={(e) => setProfileForm((f) => ({ ...f, emergencyLastName: e.target.value }))} />
+                        <Input label="Phone" value={profileForm.emergencyPhone} onChange={(e) => setProfileForm((f) => ({ ...f, emergencyPhone: e.target.value }))} icon={<PhoneIcon className="w-5 h-5" />} />
+                        <Select label="Relation" value={profileForm.emergencyRelation} onChange={(v) => setProfileForm((f) => ({ ...f, emergencyRelation: v }))} options={RELATION_OPTIONS} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-4">Address</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                          <Input label="Street" value={profileForm.street} onChange={(e) => setProfileForm((f) => ({ ...f, street: e.target.value }))} icon={<MapPinIcon className="w-5 h-5" />} />
+                        </div>
+                        <Input label="Apartment / Suite" value={profileForm.apartment} onChange={(e) => setProfileForm((f) => ({ ...f, apartment: e.target.value }))} />
+                        <Input label="City" value={profileForm.city} onChange={(e) => setProfileForm((f) => ({ ...f, city: e.target.value }))} />
+                        <Select label="State" value={profileForm.state} onChange={(v) => setProfileForm((f) => ({ ...f, state: v }))} options={[{ value: '', label: 'Select State' }, ...US_STATES]} />
+                        <Input label="ZIP Code" value={profileForm.zipCode} onChange={(e) => setProfileForm((f) => ({ ...f, zipCode: e.target.value }))} />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-6">
+                      <Button variant="gradient" onClick={handleSaveProfile} isLoading={isLoading}>Save profile</Button>
+                    </div>
+                  </div>
+                </>
+              )}
             </Card>
           )}
 
-          {/* Notifications Tab */}
           {activeTab === 'notifications' && (
             <Card>
               <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-8">Notification Preferences</h3>
-
               <div className="space-y-10">
                 <div>
                   <h4 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-5">Channels</h4>
                   <div className="space-y-4">
                     {[
                       { key: 'email' as const, label: 'Email Notifications', desc: 'Receive notifications via email' },
-                      { key: 'push' as const, label: 'Push Notifications', desc: 'Receive push notifications' },
-                      { key: 'sms' as const, label: 'SMS Notifications', desc: 'Receive notifications via SMS' }
+                      { key: 'push' as const, label: 'Push Notifications', desc: 'Receive push notifications in browser' },
+                      { key: 'sms' as const, label: 'SMS Notifications', desc: 'Receive notifications via SMS' },
                     ].map((item) => (
                       <div key={item.key} className="flex items-center justify-between p-5 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)]">
                         <div>
                           <p className="font-medium text-[var(--text-primary)] mb-1">{item.label}</p>
                           <p className="text-sm text-[var(--text-muted)]">{item.desc}</p>
                         </div>
-                        <Toggle
-                          checked={notifications[item.key]}
-                          onChange={() => setNotifications({ ...notifications, [item.key]: !notifications[item.key] })}
-                        />
+                        <Toggle checked={notifications[item.key]} onChange={() => setNotifications((n) => ({ ...n, [item.key]: !n[item.key] }))} />
                       </div>
                     ))}
                   </div>
                 </div>
-
                 <div>
                   <h4 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-5">Alert Types</h4>
                   <div className="space-y-4">
@@ -272,160 +419,62 @@ export default function SettingsPage() {
                       { key: 'emergencyAlerts' as const, label: 'Emergency Alerts', desc: 'Critical emergency notifications' },
                       { key: 'disasterUpdates' as const, label: 'Disaster Updates', desc: 'Updates on active disasters' },
                       { key: 'volunteerAssignments' as const, label: 'Volunteer Assignments', desc: 'New mission assignments' },
-                      { key: 'systemUpdates' as const, label: 'System Updates', desc: 'Platform updates' },
-                      { key: 'weeklyReport' as const, label: 'Weekly Report', desc: 'Weekly activity summary' }
+                      { key: 'systemUpdates' as const, label: 'System Updates', desc: 'Platform and maintenance updates' },
+                      { key: 'weeklyReport' as const, label: 'Weekly Report', desc: 'Weekly activity summary email' },
                     ].map((item) => (
                       <div key={item.key} className="flex items-center justify-between p-5 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)]">
                         <div>
                           <p className="font-medium text-[var(--text-primary)] mb-1">{item.label}</p>
                           <p className="text-sm text-[var(--text-muted)]">{item.desc}</p>
                         </div>
-                        <Toggle
-                          checked={notifications[item.key]}
-                          onChange={() => setNotifications({ ...notifications, [item.key]: !notifications[item.key] })}
-                        />
+                        <Toggle checked={notifications[item.key]} onChange={() => setNotifications((n) => ({ ...n, [item.key]: !n[item.key] }))} />
                       </div>
                     ))}
                   </div>
                 </div>
-
                 <div className="flex justify-end pt-6">
-                  <Button variant="gradient" onClick={handleSave} isLoading={isLoading}>
-                    Save Preferences
-                  </Button>
+                  <Button variant="gradient" onClick={handleSaveNotifications} isLoading={isLoading}>Save preferences</Button>
                 </div>
               </div>
             </Card>
           )}
 
-          {/* Security Tab */}
           {activeTab === 'security' && (
-            <div className="space-y-8">
-              <Card>
-                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-8">Change Password</h3>
-                <div className="space-y-6">
-                  <Input 
-                    label="Current Password" 
-                    type="password" 
-                    value={securityForm.currentPassword} 
-                    onChange={(e) => setSecurityForm({ ...securityForm, currentPassword: e.target.value })} 
-                    icon={<KeyIcon className="w-5 h-5" />} 
-                  />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Input 
-                      label="New Password" 
-                      type="password" 
-                      value={securityForm.newPassword} 
-                      onChange={(e) => setSecurityForm({ ...securityForm, newPassword: e.target.value })} 
-                      icon={<KeyIcon className="w-5 h-5" />} 
-                    />
-                    <Input 
-                      label="Confirm Password" 
-                      type="password" 
-                      value={securityForm.confirmPassword} 
-                      onChange={(e) => setSecurityForm({ ...securityForm, confirmPassword: e.target.value })} 
-                      icon={<KeyIcon className="w-5 h-5" />} 
-                    />
-                  </div>
-                  <div className="flex justify-end pt-6">
-                    <Button variant="gradient" onClick={handleSave} isLoading={isLoading}>
-                      Update Password
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-
-              <Card>
-                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-6">Two-Factor Authentication</h3>
-                <div className="flex items-center justify-between p-5 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)]">
-                  <div>
-                    <p className="font-medium text-[var(--text-primary)] mb-1">2FA Status</p>
-                    <p className="text-sm text-[var(--text-muted)]">Add extra security to your account</p>
-                  </div>
-                  <Badge variant="warning" size="sm">Not Enabled</Badge>
-                </div>
-                <Button variant="secondary" className="mt-5">Enable 2FA</Button>
-              </Card>
-
-              <Card>
-                <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-6">Active Sessions</h3>
-                <div className="flex items-center justify-between p-5 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)]">
-                  <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                      <GlobeAltIcon className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-[var(--text-primary)] mb-0.5">Current Session</p>
-                      <p className="text-sm text-[var(--text-muted)]">Windows • Chrome • India</p>
-                    </div>
-                  </div>
-                  <Badge variant="success" size="sm" dot>Active</Badge>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* Appearance Tab */}
-          {activeTab === 'appearance' && (
             <Card>
-              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-8">Appearance Settings</h3>
-
-              <div className="space-y-8">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-4">Theme</label>
-                  <div className="grid grid-cols-3 gap-5">
-                    {['light', 'dark'].map((themeOption) => (
-                      <button
-                        key={themeOption}
-                        onClick={() => setTheme(themeOption as 'light' | 'dark')}
-                        className={`p-5 rounded-xl border-2 transition-all ${
-                          theme === themeOption
-                            ? 'border-purple-500 bg-purple-500/10'
-                            : 'border-[var(--border-color)] hover:border-[var(--border-light)]'
-                        }`}
-                      >
-                        <div className={`w-full h-14 rounded-lg mb-4 ${
-                          themeOption === 'light' ? 'bg-gray-200' : 'bg-[#1e1e32]'
-                        }`} />
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-[var(--text-primary)] capitalize">{themeOption}</span>
-                          {theme === themeOption && (
-                            <CheckIcon className="w-5 h-5 text-purple-400" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Select 
-                    label="Language" 
-                    value={appearance.language} 
-                    onChange={(value) => setAppearance({ ...appearance, language: value })} 
-                    options={[
-                      { value: 'en', label: 'English' }, { value: 'hi', label: 'Hindi' },
-                      { value: 'ta', label: 'Tamil' }, { value: 'te', label: 'Telugu' }
-                    ]} 
-                  />
-                  <Select 
-                    label="Timezone" 
-                    value={appearance.timezone} 
-                    onChange={(value) => setAppearance({ ...appearance, timezone: value })} 
-                    options={[
-                      { value: 'Asia/Kolkata', label: 'India (IST)' },
-                      { value: 'America/New_York', label: 'New York (EST)' },
-                      { value: 'Europe/London', label: 'London (GMT)' }
-                    ]} 
-                  />
-                </div>
-
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-8">Change Password</h3>
+              <div className="space-y-6">
+                <Input label="Current Password" type="password" value={securityForm.currentPassword} onChange={(e) => setSecurityForm((f) => ({ ...f, currentPassword: e.target.value }))} icon={<KeyIcon className="w-5 h-5" />} />
+                <Input label="New Password" type="password" value={securityForm.newPassword} onChange={(e) => setSecurityForm((f) => ({ ...f, newPassword: e.target.value }))} icon={<KeyIcon className="w-5 h-5" />} />
+                <Input label="Confirm New Password" type="password" value={securityForm.confirmPassword} onChange={(e) => setSecurityForm((f) => ({ ...f, confirmPassword: e.target.value }))} icon={<KeyIcon className="w-5 h-5" />} />
                 <div className="flex justify-end pt-6">
-                  <Button variant="gradient" onClick={handleSave} isLoading={isLoading}>
-                    Save Settings
-                  </Button>
+                  <Button variant="gradient" onClick={handleChangePassword} isLoading={isLoading}>Update password</Button>
                 </div>
               </div>
+            </Card>
+          )}
+
+          {activeTab === 'appearance' && (
+            <Card>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-8">Theme</h3>
+              <div className="grid grid-cols-2 gap-5 max-w-md">
+                {(['light', 'dark'] as const).map((themeOption) => (
+                  <button
+                    key={themeOption}
+                    type="button"
+                    onClick={() => setTheme(themeOption)}
+                    className={`p-5 rounded-xl border-2 transition-all text-left ${
+                      theme === themeOption ? 'border-purple-500 bg-purple-500/10' : 'border-[var(--border-color)] hover:border-[var(--border-light)]'
+                    }`}
+                  >
+                    <div className={`w-full h-14 rounded-lg mb-4 ${themeOption === 'light' ? 'bg-gray-200' : 'bg-[#1e1e32]'}`} />
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-[var(--text-primary)] capitalize">{themeOption}</span>
+                      {theme === themeOption && <CheckIcon className="w-5 h-5 text-purple-400" />}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm text-[var(--text-muted)] mt-4">Theme is saved to your device and applies immediately.</p>
             </Card>
           )}
         </div>

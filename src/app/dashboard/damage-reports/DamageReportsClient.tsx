@@ -21,8 +21,10 @@ import {
   ExclamationTriangleIcon,
   ChevronUpIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   PhoneIcon,
   EnvelopeIcon,
+  BuildingOfficeIcon,
 } from '@heroicons/react/24/outline';
 import DamageReportModal from '@/components/damage-reports/DamageReportModal';
 import CreateDamageReportModal from '@/components/damage-reports/CreateDamageReportModal';
@@ -77,6 +79,21 @@ interface DamageReport {
   contractor?: {
     name: string;
     estimatedTimeline?: string;
+  };
+  vendor?: {
+    vendorId: string;
+    providerId?: string;
+    businessName?: string;
+    contactPerson?: {
+      name?: string;
+      phone?: string;
+      email?: string;
+    };
+    category?: string;
+    assignedDate?: string;
+    assignedBy?: string;
+    status?: 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+    notes?: string;
   };
   createdAt?: string;
   updatedAt?: string;
@@ -426,7 +443,15 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                           </Badge>
                         </td>
                         <td className="px-3 py-3">
-                          <span className="text-sm text-[var(--text-primary)]">{report.propertyOwner.name}</span>
+                          <div className="space-y-1">
+                            <span className="text-sm text-[var(--text-primary)]">{report.propertyOwner.name}</span>
+                            {report.vendor && (
+                              <div className="flex items-center gap-1">
+                                <BuildingOfficeIcon className="w-3 h-3 text-blue-500" />
+                                <span className="text-xs text-blue-500 font-medium">{report.vendor.businessName}</span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-3">
                           <span className="text-sm text-[var(--text-muted)] truncate max-w-[200px] block">
@@ -554,40 +579,94 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
 
                             {/* Progress Milestones */}
                             <div className="mt-6 pt-6 border-t border-[var(--border-color)]">
-                              <h4 className="text-sm font-semibold text-red-600 mb-3 flex items-center gap-2">
+                              <h4 className="text-sm font-semibold text-red-600 mb-4 flex items-center gap-2">
                                 <ClockIcon className="w-4 h-4" />
                                 Progress Milestones
                               </h4>
-                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                                {report.milestones
-                                  ?.sort((a, b) => a.order - b.order)
-                                  .map((milestone, idx) => (
-                                    <div key={idx} className="flex items-start gap-2">
-                                      <div className="flex-shrink-0 mt-0.5">
-                                        {milestone.status === 'completed' ? (
-                                          <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                                        ) : (
-                                          <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                                        )}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-medium text-[var(--text-primary)]">{milestone.name}</p>
-                                        {milestone.completionDate && (
-                                          <p className="text-xs text-[var(--text-muted)] mt-1">
-                                            {formatDate(milestone.completionDate)}
-                                          </p>
-                                        )}
-                                        <Badge
-                                          variant={milestone.status === 'completed' ? 'success' : 'secondary'}
-                                          size="sm"
-                                          className="mt-1"
-                                        >
-                                          {milestone.status === 'completed' ? 'Completed' : milestone.status === 'in_progress' ? 'In Progress' : 'Pending'}
-                                        </Badge>
-                                      </div>
+                              {(() => {
+                                const milestones = report.milestones || [];
+                                if (milestones.length === 0) {
+                                  return <p className="text-sm text-[var(--text-muted)]">No milestones defined</p>;
+                                }
+                                
+                                // Sort milestones by order
+                                const sortedMilestones = [...milestones].sort((a, b) => (a.order || 0) - (b.order || 0));
+                                
+                                // Find the last completed milestone
+                                let lastCompletedIndex = -1;
+                                for (let i = sortedMilestones.length - 1; i >= 0; i--) {
+                                  if (sortedMilestones[i].status === 'completed') {
+                                    lastCompletedIndex = i;
+                                    break;
+                                  }
+                                }
+                                
+                                return (
+                                  <div className="space-y-6">
+                                    {/* Horizontal Progress Line */}
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-4">
+                                      {sortedMilestones.map((milestone, idx) => {
+                                        const isCompleted = milestone.status === 'completed';
+                                        const isInProgress = milestone.status === 'in_progress';
+                                        const isLastCompleted = idx === lastCompletedIndex;
+                                        const isPending = milestone.status === 'pending';
+                                        
+                                        return (
+                                          <React.Fragment key={milestone.order || idx}>
+                                            <div className="flex flex-col items-center min-w-[120px]">
+                                              <div
+                                                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all relative z-10 ${
+                                                  isCompleted
+                                                    ? 'bg-green-500 text-white shadow-lg'
+                                                    : isInProgress
+                                                    ? 'bg-blue-500 text-white shadow-lg'
+                                                    : 'bg-[var(--bg-input)] text-[var(--text-muted)] border-2 border-[var(--border-color)]'
+                                                } ${isLastCompleted ? 'ring-2 ring-green-400 ring-offset-2' : ''}`}
+                                                style={isLastCompleted ? { animation: 'blink 1.5s ease-in-out infinite' } : {}}
+                                                title={milestone.name}
+                                              >
+                                                {isCompleted ? '✓' : isInProgress ? '→' : idx + 1}
+                                              </div>
+                                              <div className="mt-2 text-center">
+                                                <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{milestone.name}</p>
+                                                {milestone.completionDate && (
+                                                  <p className="text-xs text-[var(--text-muted)] mt-1">
+                                                    {formatDate(milestone.completionDate)}
+                                                  </p>
+                                                )}
+                                                <Badge
+                                                  variant={isCompleted ? 'success' : isInProgress ? 'info' : 'secondary'}
+                                                  size="sm"
+                                                  className="mt-1"
+                                                >
+                                                  {isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Pending'}
+                                                </Badge>
+                                              </div>
+                                            </div>
+                                            {idx < sortedMilestones.length - 1 && (
+                                              <div className="flex items-center flex-1 min-w-[40px]" style={{ marginTop: '20px' }} title="Towards completion">
+                                                <div
+                                                  className={`h-1 flex-1 min-w-[20px] transition-all ${
+                                                    isCompleted
+                                                      ? 'bg-green-500'
+                                                      : 'bg-[var(--border-color)]'
+                                                  }`}
+                                                />
+                                                <ChevronRightIcon
+                                                  className={`w-5 h-5 flex-shrink-0 ${
+                                                    isCompleted ? 'text-green-500' : 'text-[var(--text-muted)]'
+                                                  }`}
+                                                  aria-hidden
+                                                />
+                                              </div>
+                                            )}
+                                          </React.Fragment>
+                                        );
+                                      })}
                                     </div>
-                                  ))}
-                              </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </td>
                         </tr>

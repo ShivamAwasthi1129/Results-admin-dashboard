@@ -1,4 +1,5 @@
 export { default as User } from './User';
+export { default as OpsUser } from './OpsUser';
 export { default as Volunteer } from './Volunteer';
 export { default as VolunteerTeam } from './VolunteerTeam';
 export { default as ServiceProvider } from './ServiceProvider';

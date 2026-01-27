@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Button, Input, Select } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
@@ -26,10 +26,29 @@ const defaultMilestones = [
   { name: 'Completion & Closeout', status: 'pending', order: 6 },
 ];
 
+interface ServiceProvider {
+  _id: string;
+  providerId: string;
+  businessName: string;
+  category: string;
+  contactPerson?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+  };
+  location?: {
+    city?: string;
+    state?: string;
+  };
+}
+
 export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: CreateDamageReportModalProps) {
   const { token, user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<Array<{ url: string; file?: File }>>([]);
+  const [vendors, setVendors] = useState<ServiceProvider[]>([]);
+  const [isLoadingVendors, setIsLoadingVendors] = useState(false);
+  const [assignedVendorIds, setAssignedVendorIds] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     // Property Owner
     propertyOwnerName: '',
@@ -59,6 +78,9 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       selfPay: '',
       other: '',
     },
+    
+    // Vendor Assignment
+    selectedVendorId: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,6 +119,28 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         isPrimary: idx === 0,
       }));
 
+      // Get selected vendor details
+      let vendorData = undefined;
+      if (formData.selectedVendorId) {
+        const selectedVendor = vendors.find(v => v._id === formData.selectedVendorId);
+        if (selectedVendor) {
+          vendorData = {
+            vendorId: selectedVendor._id,
+            providerId: selectedVendor.providerId,
+            businessName: selectedVendor.businessName,
+            contactPerson: {
+              name: selectedVendor.contactPerson?.name || '',
+              phone: selectedVendor.contactPerson?.phone || '',
+              email: selectedVendor.contactPerson?.email || '',
+            },
+            category: selectedVendor.category,
+            assignedDate: new Date(),
+            assignedBy: user?.id || '',
+            status: 'assigned' as const,
+          };
+        }
+      }
+
       const payload = {
         propertyOwner: {
           name: formData.propertyOwnerName,
@@ -119,6 +163,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         milestones: defaultMilestones,
         images,
         status: 'reported',
+        vendor: vendorData,
       };
 
       const response = await fetch('/api/damage-reports', {
@@ -156,6 +201,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
             selfPay: '',
             other: '',
           },
+          selectedVendorId: '',
         });
         onSuccess();
       } else {
@@ -166,6 +212,61 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       toast.error('Error creating damage report');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Fetch vendors when modal opens
+  useEffect(() => {
+    if (isOpen && token) {
+      fetchVendors();
+      fetchAssignedVendors();
+    }
+  }, [isOpen, token]);
+
+  const fetchVendors = async () => {
+    setIsLoadingVendors(true);
+    try {
+      const response = await fetch('/api/services?limit=1000&verified=true&status=active', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.serviceProviders) {
+          setVendors(data.data.serviceProviders);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching vendors:', error);
+    } finally {
+      setIsLoadingVendors(false);
+    }
+  };
+
+  const fetchAssignedVendors = async () => {
+    try {
+      const response = await fetch('/api/damage-reports?limit=1000', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.damageReports) {
+          // Get all vendor IDs that are already assigned
+          const assignedIds = data.data.damageReports
+            .filter((report: any) => report.vendor?.vendorId)
+            .map((report: any) => report.vendor.vendorId);
+          setAssignedVendorIds(assignedIds);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching assigned vendors:', error);
     }
   };
 
@@ -338,6 +439,58 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                     </button>
                   </span>
                 ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Vendor Assignment */}
+        <div className="space-y-4">
+          <h3 className="font-semibold text-[var(--text-primary)]">Assign Vendor/Service Provider (Optional)</h3>
+          <div>
+            {isLoadingVendors ? (
+              <div className="flex items-center gap-2 py-3 px-4 border border-[var(--border-color)] rounded-lg bg-[var(--bg-input)]">
+                <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin flex-shrink-0" />
+                <p className="text-sm text-[var(--text-muted)]">Loading vendors...</p>
+              </div>
+            ) : (
+              <Select
+                label="Select Vendor"
+                value={formData.selectedVendorId}
+                onChange={(value) => setFormData({ ...formData, selectedVendorId: value })}
+                options={[
+                  { value: '', label: 'No vendor assigned' },
+                  ...vendors
+                    .filter((vendor) => !assignedVendorIds.includes(vendor._id))
+                    .map((vendor) => ({
+                      value: vendor._id,
+                      label: `${vendor.businessName}${vendor.location?.city ? ` - ${vendor.location.city}, ${vendor.location.state}` : ''}${vendor.category ? ` (${vendor.category})` : ''}`,
+                    })),
+                ]}
+              />
+            )}
+            {!isLoadingVendors && vendors.filter((v) => !assignedVendorIds.includes(v._id)).length === 0 && vendors.length > 0 && (
+              <p className="text-sm text-amber-500 mt-2">All vendors are currently assigned to other damage reports.</p>
+            )}
+            {formData.selectedVendorId && (
+              <div className="mt-3 p-3 bg-[var(--bg-input)] rounded-lg">
+                {(() => {
+                  const selectedVendor = vendors.find(v => v._id === formData.selectedVendorId);
+                  return selectedVendor ? (
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium text-[var(--text-primary)]">{selectedVendor.businessName}</p>
+                      {selectedVendor.contactPerson?.phone && (
+                        <p className="text-[var(--text-muted)]">Phone: {selectedVendor.contactPerson.phone}</p>
+                      )}
+                      {selectedVendor.contactPerson?.email && (
+                        <p className="text-[var(--text-muted)]">Email: {selectedVendor.contactPerson.email}</p>
+                      )}
+                      {selectedVendor.location?.city && (
+                        <p className="text-[var(--text-muted)]">Location: {selectedVendor.location.city}, {selectedVendor.location.state}</p>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
               </div>
             )}
           </div>

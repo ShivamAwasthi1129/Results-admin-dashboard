@@ -77,6 +77,21 @@ interface DamageReport {
     estimatedTimeline?: string;
     assignedDate?: string;
   };
+  vendor?: {
+    vendorId: string;
+    providerId?: string;
+    businessName?: string;
+    contactPerson?: {
+      name?: string;
+      phone?: string;
+      email?: string;
+    };
+    category?: string;
+    assignedDate?: string;
+    assignedBy?: string;
+    status?: 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+    notes?: string;
+  };
   notes?: string;
   tags?: string[];
   priority?: string;

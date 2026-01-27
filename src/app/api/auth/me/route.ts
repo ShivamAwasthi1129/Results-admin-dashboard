@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import OpsUser from '@/models/OpsUser';
 import { verifyAuth } from '@/lib/auth';
 
+// Portal auth: current user is always from OPS users table (admin/super_admin).
 export async function GET(request: NextRequest) {
   try {
     const tokenPayload = await verifyAuth(request);
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
 
-    const user = await User.findById(tokenPayload.userId).select('-password');
+    const user = await OpsUser.findById(tokenPayload.userId).select('-password');
 
     if (!user) {
       return NextResponse.json(
@@ -25,16 +26,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const name = user.name || `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
     return NextResponse.json({
       success: true,
       data: {
         user: {
           id: user._id,
-          name: user.name,
+          name,
           email: user.email,
           role: user.role,
           phone: user.phone,
-          avatar: user.avatar,
+          avatar: user.profilePhoto || user.avatar,
           status: user.status,
           address: user.address,
           createdAt: user.createdAt,

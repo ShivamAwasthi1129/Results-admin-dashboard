@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout';
-import { Card, StatCard, Button, Input, Badge, Modal, Select } from '@/components/ui';
+import { Card, Button, Input, Badge, Modal, Select } from '@/components/ui';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +22,7 @@ import {
   UserIcon,
   PhotoIcon,
   DocumentIcon,
+  DocumentTextIcon,
   UsersIcon,
   GlobeAltIcon,
   CurrencyDollarIcon,
@@ -101,14 +102,17 @@ interface ServicesClientProps {
 
 export default function ServicesClient({ initialProviders }: ServicesClientProps) {
   const { token, hasPermission } = useAuth();
-  const [providers, setProviders] = useState<ServiceProvider[]>(initialProviders);
-  const [isLoading, setIsLoading] = useState(false);
+  const [providers, setProviders] = useState<ServiceProvider[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ServiceProvider | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const [assignedDamageReports, setAssignedDamageReports] = useState<any[]>([]);
+  const [isLoadingAssignedReports, setIsLoadingAssignedReports] = useState(false);
+  const [providerAssignments, setProviderAssignments] = useState<Record<string, any[]>>({});
 
   const [formData, setFormData] = useState({
     // Business Details
@@ -326,6 +330,9 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
   };
 
   const fetchProviders = async () => {
+    if (!token) return;
+    
+    setIsLoading(true);
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
@@ -334,17 +341,71 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();
-      if (data.success) setProviders(data.data.serviceProviders);
+      if (data.success) {
+        const fetchedProviders = data.data.serviceProviders || [];
+        setProviders(fetchedProviders);
+        // Fetch assigned damage reports for all providers
+        if (fetchedProviders.length > 0) {
+          fetchAllAssignedReports(fetchedProviders);
+        } else {
+          setProviderAssignments({});
+        }
+      } else {
+        setProviders([]);
+        setProviderAssignments({});
+      }
     } catch (error) {
+      console.error('Error fetching providers:', error);
       toast.error('Failed to fetch service providers');
+      setProviders([]);
+      setProviderAssignments({});
     } finally {
       setIsLoading(false);
     }
   };
 
+  const fetchAllAssignedReports = async (providersList: ServiceProvider[]) => {
+    try {
+      const response = await fetch('/api/damage-reports?limit=1000', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.damageReports) {
+          // Group damage reports by vendor ID
+          const assignments: Record<string, any[]> = {};
+          providersList.forEach(provider => {
+            assignments[provider._id] = data.data.damageReports.filter((report: any) => 
+              report.vendor?.vendorId === provider._id
+            );
+          });
+          setProviderAssignments(assignments);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching assigned damage reports:', error);
+    }
+  };
+
+  // Initial load - use initialProviders if available, otherwise fetch
   useEffect(() => {
-    if (token) fetchProviders();
-  }, [token, search, categoryFilter]);
+    if (token) {
+      // Always fetch on initial load to ensure fresh data
+      setIsLoading(true);
+      fetchProviders();
+    }
+  }, [token]);
+
+  // Refetch when filters change
+  useEffect(() => {
+    if (token && (search || categoryFilter !== 'all')) {
+      fetchProviders();
+    }
+  }, [search, categoryFilter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -491,9 +552,38 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
     setShowModal(true);
   };
 
-  const openDetailModal = (provider: ServiceProvider) => {
+  const openDetailModal = async (provider: ServiceProvider) => {
     setSelectedProvider(provider);
     setShowDetailModal(true);
+    // Fetch assigned damage reports for this vendor
+    await fetchAssignedDamageReports(provider._id);
+  };
+
+  const fetchAssignedDamageReports = async (vendorId: string) => {
+    setIsLoadingAssignedReports(true);
+    try {
+      const response = await fetch(`/api/damage-reports?limit=1000`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.damageReports) {
+          // Filter reports assigned to this vendor
+          const assigned = data.data.damageReports.filter((report: any) => 
+            report.vendor?.vendorId === vendorId
+          );
+          setAssignedDamageReports(assigned);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching assigned damage reports:', error);
+    } finally {
+      setIsLoadingAssignedReports(false);
+    }
   };
 
   const stats = {
@@ -550,11 +640,35 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
   return (
     <DashboardLayout title="Service Providers" subtitle="Manage service providers and their services">
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard title="Total Providers" value={stats.total} icon={<WrenchScrewdriverIcon className="w-6 h-6" />} variant="purple" />
-        <StatCard title="Verified" value={stats.verified} icon={<CheckBadgeIcon className="w-6 h-6" />} variant="green" />
-        <StatCard title="Pending Verification" value={stats.pending} icon={<ClockIcon className="w-6 h-6" />} variant="orange" />
-        <StatCard title="Avg Rating" value={stats.avgRating} icon={<StarIcon className="w-6 h-6" />} variant="teal" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-8">
+        <Card className="p-3 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Total Providers</p>
+            <WrenchScrewdriverIcon className="w-5 h-5 text-purple-400" />
+          </div>
+          <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.total}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-emerald-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Verified</p>
+            <CheckBadgeIcon className="w-5 h-5 text-emerald-400" />
+          </div>
+          <p className="text-2xl font-bold text-emerald-400 leading-tight">{stats.verified}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-amber-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Pending Verification</p>
+            <ClockIcon className="w-5 h-5 text-amber-400" />
+          </div>
+          <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.pending}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-teal-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Avg Rating</p>
+            <StarIcon className="w-5 h-5 text-teal-400" />
+          </div>
+          <p className="text-2xl font-bold text-teal-400 leading-tight">{stats.avgRating}</p>
+        </Card>
       </div>
 
       {/* Filters & Actions */}
@@ -584,9 +698,9 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
   <div className="w-full">
     <Button 
       onClick={() => { setSelectedProvider(null); resetForm(); setShowModal(true); }} 
-      leftIcon={<PlusIcon className="w-4 h-4" />} 
-      variant="gradient"
-      className="w-full"
+      leftIcon={<PlusIcon className="w-5 h-5" />} 
+      variant="primary"
+      className="w-full justify-start"
     >
       Add Provider
     </Button>
@@ -600,38 +714,61 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[var(--border-color)]">
-                <th className="text-left px-6 py-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Provider</th>
-                <th className="text-left px-6 py-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Category</th>
-                <th className="text-left px-6 py-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Location</th>
-                <th className="text-left px-6 py-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Rating</th>
-                <th className="text-left px-6 py-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
-                <th className="text-right px-6 py-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Actions</th>
+              <tr className="border-b-2 border-[var(--border-color)] bg-[var(--bg-input)]">
+                <th className="text-left px-4 md:px-6 py-4 md:py-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Provider</th>
+                <th className="text-left px-4 md:px-6 py-4 md:py-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Category</th>
+                <th className="text-left px-4 md:px-6 py-4 md:py-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Location</th>
+                <th className="text-left px-4 md:px-6 py-4 md:py-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Assigned Disasters</th>
+                <th className="text-left px-4 md:px-6 py-4 md:py-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Rating</th>
+                <th className="text-left px-4 md:px-6 py-4 md:py-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Status</th>
+                <th className="text-right px-4 md:px-6 py-4 md:py-5 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                [...Array(5)].map((_, i) => (
-                  <tr key={i} className="border-b border-[var(--border-color)]">
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 skeleton rounded-xl" />
-                        <div className="space-y-2">
-                          <div className="h-4 skeleton rounded w-32" />
-                          <div className="h-3 skeleton rounded w-24" />
+                [...Array(6)].map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--border-color)] animate-pulse">
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="flex items-center gap-3 md:gap-4">
+                        <div className="w-10 h-10 md:w-12 md:h-12 skeleton rounded-lg md:rounded-xl" />
+                        <div className="space-y-2 flex-1">
+                          <div className="h-4 skeleton rounded w-32 md:w-40" />
+                          <div className="h-3 skeleton rounded w-24 md:w-28" />
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-5"><div className="h-7 skeleton rounded-full w-24" /></td>
-                    <td className="px-6 py-5"><div className="h-4 skeleton rounded w-28" /></td>
-                    <td className="px-6 py-5"><div className="h-4 skeleton rounded w-20" /></td>
-                    <td className="px-6 py-5"><div className="h-7 skeleton rounded-full w-20" /></td>
-                    <td className="px-6 py-5"><div className="h-9 skeleton rounded w-24 ml-auto" /></td>
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="h-7 skeleton rounded-full w-20 md:w-24" />
+                    </td>
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="h-4 skeleton rounded w-24 md:w-28" />
+                    </td>
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="space-y-2">
+                        <div className="h-4 skeleton rounded w-32 md:w-36" />
+                        <div className="h-4 skeleton rounded w-28 md:w-32" />
+                      </div>
+                    </td>
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="h-4 skeleton rounded w-16 md:w-20" />
+                    </td>
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="space-y-1">
+                        <div className="h-6 skeleton rounded-full w-16 md:w-20" />
+                        <div className="h-5 skeleton rounded-full w-12 md:w-14" />
+                      </div>
+                    </td>
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="h-9 w-9 skeleton rounded-lg" />
+                        <div className="h-9 w-9 skeleton rounded-lg" />
+                      </div>
+                    </td>
                   </tr>
                 ))
-              ) : providers.length === 0 ? (
+              ) : !isLoading && providers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-16">
+                  <td colSpan={7} className="text-center py-16">
                     <WrenchScrewdriverIcon className="w-14 h-14 mx-auto text-[var(--text-muted)] mb-4" />
                     <p className="text-[var(--text-secondary)] text-lg">No service providers found</p>
                     <p className="text-[var(--text-muted)] text-sm mt-1">Try adjusting your filters or add a new provider</p>
@@ -639,58 +776,97 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
                 </tr>
               ) : (
                 providers.map((provider) => (
-                  <tr key={provider._id} className="border-b border-[var(--border-color)] table-row transition-colors hover:bg-[var(--bg-card-hover)]">
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-4">
+                  <tr key={provider._id} className="border-b border-[var(--border-color)] transition-all duration-200 hover:bg-[var(--bg-card-hover)] group">
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="flex items-center gap-3 md:gap-4">
                         {provider.logo ? (
                           <img 
                             src={provider.logo} 
                             alt={`${provider.businessName} logo`}
-                            className="w-12 h-12 rounded-xl object-cover border border-[var(--border-color)]"
+                            className="w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl object-cover border border-[var(--border-color)] shadow-sm"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-xl bg-[var(--primary-500)]/20 flex items-center justify-center text-xl">
+                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-gradient-to-br from-[var(--primary-500)]/20 to-[var(--primary-600)]/10 flex items-center justify-center text-lg md:text-xl border border-[var(--primary-500)]/30">
                             {categoryIcons[provider.category] || '⚙️'}
                           </div>
                         )}
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-[var(--text-primary)]">{provider.businessName}</p>
-                            {provider.verified && <CheckBadgeSolidIcon className="w-5 h-5 text-blue-500" />}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-sm md:text-base text-[var(--text-primary)] truncate">{provider.businessName}</p>
+                            {provider.verified && <CheckBadgeSolidIcon className="w-4 h-4 md:w-5 md:h-5 text-blue-500 flex-shrink-0" />}
                           </div>
-                          <p className="text-xs text-[var(--primary-500)] font-mono font-bold">ID: {provider.providerId}</p>
+                          <p className="text-xs text-[var(--primary-500)] font-mono font-bold mt-0.5">ID: {provider.providerId}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-5">
-                      <Badge variant="secondary" size="sm" className="capitalize">
-                        {categoryIcons[provider.category]} {provider.category?.replace('_', ' ')}
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <Badge variant="secondary" size="sm" className="capitalize whitespace-nowrap">
+                        <span className="mr-1">{categoryIcons[provider.category]}</span>
+                        <span className="hidden sm:inline">{provider.category?.replace('_', ' ')}</span>
+                        <span className="sm:hidden">{provider.category?.split('_')[0]}</span>
                       </Badge>
                     </td>
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                        <MapPinIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                        {provider.location?.city}, {provider.location?.state}
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="flex items-center gap-1.5 md:gap-2 text-xs md:text-sm text-[var(--text-secondary)]">
+                        <MapPinIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-[var(--text-muted)] flex-shrink-0" />
+                        <span className="truncate">{provider.location?.city || 'N/A'}{provider.location?.state ? `, ${provider.location.state}` : ''}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-5">
-                      {renderStars(provider.rating)}
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      {(() => {
+                        const assigned = providerAssignments[provider._id] || [];
+                        if (assigned.length === 0) {
+                          return (
+                            <span className="text-xs md:text-sm text-[var(--text-muted)] italic">Not assigned</span>
+                          );
+                        }
+                        return (
+                          <div className="space-y-1.5 min-w-[140px]">
+                            {assigned.slice(0, 2).map((report: any) => (
+                              <div key={report._id} className="flex items-center gap-1.5 md:gap-2 flex-wrap">
+                                <DocumentTextIcon className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                                <span className="font-mono font-semibold text-xs text-[var(--text-primary)]">{report.reportNumber}</span>
+                                <Badge 
+                                  variant={report.status === 'completed' ? 'success' : report.status === 'in_progress' ? 'warning' : 'info'} 
+                                  size="sm"
+                                  className="text-[10px] md:text-xs"
+                                >
+                                  {report.status?.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                </Badge>
+                              </div>
+                            ))}
+                            {assigned.length > 2 && (
+                              <p className="text-xs text-[var(--text-muted)] font-medium">+{assigned.length - 2} more</p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          i < Math.floor(provider.rating)
+                            ? <StarSolidIcon key={i} className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-400" />
+                            : <StarIcon key={i} className="w-3.5 h-3.5 md:w-4 md:h-4 text-[var(--border-color)]" />
+                        ))}
+                        <span className="ml-1 text-xs md:text-sm font-medium text-[var(--text-secondary)]">{provider.rating.toFixed(1)}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 md:px-6 py-4 md:py-5">
                       <div className="flex flex-col gap-1">
-                        <Badge variant={provider.verified ? 'success' : 'warning'} size="sm" dot>
+                        <Badge variant={provider.verified ? 'success' : 'warning'} size="sm" dot className="w-fit">
                           {provider.verified ? 'Verified' : 'Pending'}
                         </Badge>
                         {provider.is24x7Available && (
-                          <Badge variant="info" size="sm">24/7</Badge>
+                          <Badge variant="info" size="sm" className="w-fit text-[10px]">24/7</Badge>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-5">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-4 md:px-6 py-4 md:py-5">
+                      <div className="flex items-center justify-end gap-1.5 md:gap-2">
                         <button
                           onClick={() => openDetailModal(provider)}
-                          className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--primary-500)] hover:bg-[var(--primary-500)]/10 transition-colors"
+                          className="p-2 md:p-2.5 rounded-lg md:rounded-xl text-[var(--text-muted)] hover:text-[var(--primary-500)] hover:bg-[var(--primary-500)]/10 transition-all duration-200 active:scale-95"
                           title="View Details"
                         >
                           <EyeIcon className="w-4 h-4" />
@@ -698,8 +874,8 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
                         {canManage && (
                           <button
                             onClick={() => openEditModal(provider)}
-                            className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--info)] hover:bg-[var(--info)]/10 transition-colors"
-                            title="Edit"
+                            className="p-2 md:p-2.5 rounded-lg md:rounded-xl text-[var(--text-muted)] hover:text-blue-500 hover:bg-blue-500/10 transition-all duration-200 active:scale-95"
+                            title="Edit Provider"
                           >
                             <PencilIcon className="w-4 h-4" />
                           </button>
@@ -1584,6 +1760,61 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
               </p>
               {selectedProvider.isAvailableForEmergency && (
                 <p className="text-sm text-[var(--text-muted)] mt-1">Emergency charges: ${selectedProvider.emergencyCharges || 0}</p>
+              )}
+            </div>
+
+            {/* Assigned Damage Reports */}
+            <div>
+              <h4 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center gap-2">
+                <DocumentTextIcon className="w-4 h-4" />
+                Assigned Damage Reports ({assignedDamageReports.length})
+              </h4>
+              {isLoadingAssignedReports ? (
+                <div className="text-center py-8">
+                  <div className="inline-block w-8 h-8 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                  <p className="mt-4 text-sm text-[var(--text-muted)]">Loading assigned reports...</p>
+                </div>
+              ) : assignedDamageReports.length === 0 ? (
+                <div className="p-6 bg-[var(--bg-input)] rounded-xl text-center">
+                  <DocumentTextIcon className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-2" />
+                  <p className="text-sm text-[var(--text-muted)]">No damage reports assigned to this vendor</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {assignedDamageReports.map((report) => (
+                    <div key={report._id} className="p-4 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)] hover:border-[var(--primary-500)]/50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className="font-semibold text-[var(--text-primary)]">{report.reportNumber}</p>
+                            <Badge 
+                              variant={report.status === 'completed' ? 'success' : report.status === 'in_progress' ? 'warning' : 'info'} 
+                              size="sm"
+                            >
+                              {report.status?.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-[var(--text-secondary)] mb-1">
+                            {report.propertyOwner?.name} - {report.propertyAddress?.city}, {report.propertyAddress?.state}
+                          </p>
+                          <p className="text-xs text-[var(--text-muted)]">
+                            Damage Type: <span className="capitalize">{report.damageType}</span> | 
+                            Severity: <span className="capitalize">{report.severity}</span> | 
+                            Est. Cost: ${report.estimatedCost?.toLocaleString() || '0'}
+                          </p>
+                          {report.vendor?.status && (
+                            <p className="text-xs text-[var(--text-muted)] mt-1">
+                              Vendor Status: <span className="capitalize">{report.vendor.status.replace('_', ' ')}</span>
+                              {report.vendor.assignedDate && (
+                                <span> | Assigned: {new Date(report.vendor.assignedDate).toLocaleDateString()}</span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 

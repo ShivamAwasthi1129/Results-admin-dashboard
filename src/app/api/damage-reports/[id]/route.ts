@@ -89,6 +89,7 @@ export async function GET(
           totalFunding,
           fundingPercentage,
           remainingFunding: Math.max(0, (damageReport.estimatedCost || 0) - totalFunding),
+          vendor: damageReport.vendor,
         },
       },
     });
@@ -210,6 +211,17 @@ export async function PUT(
       body.reportDate = new Date(body.reportDate);
     }
 
+    // Handle vendor assignment - update assignedDate if vendor is being assigned/updated
+    if (body.vendor) {
+      if (body.vendor.assignedDate) {
+        body.vendor.assignedDate = new Date(body.vendor.assignedDate);
+      } else if (!existingReport.vendor || existingReport.vendor.vendorId !== body.vendor.vendorId) {
+        // New assignment or vendor change
+        body.vendor.assignedDate = new Date();
+        body.vendor.assignedBy = tokenPayload.userId;
+      }
+    }
+
     const damageReport = await DamageReport.findByIdAndUpdate(id, body, {
       new: true,
       runValidators: true,
@@ -239,6 +251,7 @@ export async function PUT(
           totalFunding,
           fundingPercentage,
           remainingFunding: Math.max(0, (damageReport.estimatedCost || 0) - totalFunding),
+          vendor: damageReport.vendor,
         },
       },
       message: 'Damage report updated successfully',
