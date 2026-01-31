@@ -12,4 +12,5 @@ export { default as InventoryItem } from './InventoryItem';
 export { default as StockLocation } from './StockLocation';
 export { default as StockEntry } from './StockEntry';
 export { default as Product } from './Product';
-
+export { default as DamageReport } from './DamageReport';
+export { default as Adjuster } from './Adjuster';

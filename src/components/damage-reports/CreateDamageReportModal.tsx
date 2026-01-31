@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Button, Input, Select } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
@@ -9,6 +9,8 @@ import {
   CurrencyDollarIcon,
   PhotoIcon,
   XMarkIcon,
+  UserIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 
 interface CreateDamageReportModalProps {
@@ -17,28 +19,18 @@ interface CreateDamageReportModalProps {
   onSuccess: () => void;
 }
 
-const defaultMilestones = [
-  { name: 'Initial Assessment', status: 'pending', order: 1 },
-  { name: 'Insurance Approval', status: 'pending', order: 2 },
-  { name: 'Contractor Assignment', status: 'pending', order: 3 },
-  { name: 'Repair Work Started', status: 'pending', order: 4 },
-  { name: 'Final Inspection', status: 'pending', order: 5 },
-  { name: 'Completion & Closeout', status: 'pending', order: 6 },
-];
-
-interface ServiceProvider {
+interface Customer {
   _id: string;
-  providerId: string;
-  businessName: string;
-  category: string;
-  contactPerson?: {
-    name?: string;
-    phone?: string;
-    email?: string;
-  };
-  location?: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  address?: {
+    street?: string;
     city?: string;
     state?: string;
+    pincode?: string;
+    zipCode?: string;
   };
 }
 
@@ -46,16 +38,17 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   const { token, user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<Array<{ url: string; file?: File }>>([]);
-  const [vendors, setVendors] = useState<ServiceProvider[]>([]);
-  const [isLoadingVendors, setIsLoadingVendors] = useState(false);
-  const [assignedVendorIds, setAssignedVendorIds] = useState<string[]>([]);
+  
+  // Customer selection
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
+  
   const [formData, setFormData] = useState({
-    // Property Owner
-    propertyOwnerName: '',
-    propertyOwnerPhone: '',
-    propertyOwnerEmail: '',
-    
-    // Property Address
+    // Property Address (can be different from customer address)
     propertyStreet: '',
     propertyCity: '',
     propertyState: '',
@@ -78,13 +71,89 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       selfPay: '',
       other: '',
     },
-    
-    // Vendor Assignment
-    selectedVendorId: '',
   });
+
+  // Fetch customers when modal opens
+  useEffect(() => {
+    if (isOpen && token) {
+      fetchCustomers();
+    }
+  }, [isOpen, token]);
+
+  // Handle click outside customer dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchCustomers = async () => {
+    setIsLoadingCustomers(true);
+    try {
+      const response = await fetch('/api/customers', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.customers) {
+          setCustomers(data.data.customers);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
+
+  const filteredCustomers = customers.filter((customer) => {
+    if (!customerSearchQuery) return true;
+    const searchLower = customerSearchQuery.toLowerCase();
+    return (
+      customer.firstName?.toLowerCase().includes(searchLower) ||
+      customer.lastName?.toLowerCase().includes(searchLower) ||
+      (customer.email && customer.email.toLowerCase().includes(searchLower)) ||
+      `${customer.firstName} ${customer.lastName}`.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const handleCustomerSelect = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setCustomerSearchQuery(`${customer.firstName} ${customer.lastName}`);
+    setShowCustomerDropdown(false);
+    
+    // Pre-fill property address from customer address if available
+    if (customer.address) {
+      setFormData((prev) => ({
+        ...prev,
+        propertyStreet: customer.address?.street || prev.propertyStreet,
+        propertyCity: customer.address?.city || prev.propertyCity,
+        propertyState: customer.address?.state || prev.propertyState,
+        propertyZipCode: customer.address?.pincode || customer.address?.zipCode || prev.propertyZipCode,
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!selectedCustomer) {
+      toast.error('Please select a customer first');
+      return;
+    }
+    if (fundingExceedsEstimated) {
+      toast.error('Total funding sources cannot exceed the estimated repair cost.');
+      return;
+    }
+    
     setIsSubmitting(true);
 
     try {
@@ -112,40 +181,26 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         fundingSources.push({ source: 'other', amount: parseFloat(formData.fundingSources.other) });
       }
 
-      // Convert uploaded images to base64 URLs
+      // Convert uploaded images to URLs
       const images = uploadedImages.map((img, idx) => ({
         url: img.url,
         alt: `Damage photo ${idx + 1}`,
         isPrimary: idx === 0,
       }));
 
-      // Get selected vendor details
-      let vendorData = undefined;
-      if (formData.selectedVendorId) {
-        const selectedVendor = vendors.find(v => v._id === formData.selectedVendorId);
-        if (selectedVendor) {
-          vendorData = {
-            vendorId: selectedVendor._id,
-            providerId: selectedVendor.providerId,
-            businessName: selectedVendor.businessName,
-            contactPerson: {
-              name: selectedVendor.contactPerson?.name || '',
-              phone: selectedVendor.contactPerson?.phone || '',
-              email: selectedVendor.contactPerson?.email || '',
-            },
-            category: selectedVendor.category,
-            assignedDate: new Date(),
-            assignedBy: user?.id || '',
-            status: 'assigned' as const,
-          };
-        }
-      }
-
       const payload = {
-        propertyOwner: {
-          name: formData.propertyOwnerName,
-          phone: formData.propertyOwnerPhone,
-          email: formData.propertyOwnerEmail || undefined,
+        customer: {
+          customerId: selectedCustomer._id,
+          firstName: selectedCustomer.firstName,
+          lastName: selectedCustomer.lastName,
+          email: selectedCustomer.email,
+          phone: selectedCustomer.phone,
+          address: selectedCustomer.address ? {
+            street: selectedCustomer.address.street,
+            city: selectedCustomer.address.city,
+            state: selectedCustomer.address.state,
+            zipCode: selectedCustomer.address.pincode || selectedCustomer.address.zipCode,
+          } : undefined,
         },
         propertyAddress: {
           street: formData.propertyStreet,
@@ -160,10 +215,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         affectedAreas: formData.affectedAreas,
         estimatedCost: parseFloat(formData.estimatedCost) || 0,
         fundingSources,
-        milestones: defaultMilestones,
         images,
-        status: 'reported',
-        vendor: vendorData,
       };
 
       const response = await fetch('/api/damage-reports', {
@@ -177,32 +229,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
 
       if (response.ok) {
         toast.success('Damage report created successfully');
-        // Reset form
-        setUploadedImages([]);
-        setFormData({
-          propertyOwnerName: '',
-          propertyOwnerPhone: '',
-          propertyOwnerEmail: '',
-          propertyStreet: '',
-          propertyCity: '',
-          propertyState: '',
-          propertyZipCode: '',
-          damageType: '',
-          severity: '',
-          description: '',
-          affectedAreas: [],
-          estimatedCost: '',
-          fundingSources: {
-            insurance: '',
-            fema: '',
-            floodInsurance: '',
-            nonProfit: '',
-            consolidatedNonProfit: '',
-            selfPay: '',
-            other: '',
-          },
-          selectedVendorId: '',
-        });
+        resetForm();
         onSuccess();
       } else {
         const data = await response.json();
@@ -215,59 +242,60 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
     }
   };
 
-  // Fetch vendors when modal opens
-  useEffect(() => {
-    if (isOpen && token) {
-      fetchVendors();
-      fetchAssignedVendors();
-    }
-  }, [isOpen, token]);
-
-  const fetchVendors = async () => {
-    setIsLoadingVendors(true);
-    try {
-      const response = await fetch('/api/services?limit=1000&verified=true&status=active', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data?.serviceProviders) {
-          setVendors(data.data.serviceProviders);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching vendors:', error);
-    } finally {
-      setIsLoadingVendors(false);
-    }
+  const resetForm = () => {
+    setUploadedImages([]);
+    setSelectedCustomer(null);
+    setCustomerSearchQuery('');
+    setFormData({
+      propertyStreet: '',
+      propertyCity: '',
+      propertyState: '',
+      propertyZipCode: '',
+      damageType: '',
+      severity: '',
+      description: '',
+      affectedAreas: [],
+      estimatedCost: '',
+      fundingSources: {
+        insurance: '',
+        fema: '',
+        floodInsurance: '',
+        nonProfit: '',
+        consolidatedNonProfit: '',
+        selfPay: '',
+        other: '',
+      },
+    });
   };
 
-  const fetchAssignedVendors = async () => {
-    try {
-      const response = await fetch('/api/damage-reports?limit=1000', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+  // Funding: estimated cost and total from form (for live share and cap)
+  const estimatedCostNum = parseFloat(String(formData.estimatedCost).replace(/[^0-9.-]/g, '')) || 0;
+  const fundingKeys = ['insurance', 'fema', 'floodInsurance', 'nonProfit', 'consolidatedNonProfit', 'selfPay', 'other'] as const;
+  const getFundingAmount = (key: (typeof fundingKeys)[number]) => parseFloat(String(formData.fundingSources[key]).replace(/[^0-9.-]/g, '')) || 0;
+  const totalFunding = fundingKeys.reduce((sum, key) => sum + getFundingAmount(key), 0);
+  const fundingExceedsEstimated = estimatedCostNum > 0 && totalFunding > estimatedCostNum;
+  const remainingBudget = Math.max(0, estimatedCostNum - totalFunding);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data?.damageReports) {
-          // Get all vendor IDs that are already assigned
-          const assignedIds = data.data.damageReports
-            .filter((report: any) => report.vendor?.vendorId)
-            .map((report: any) => report.vendor.vendorId);
-          setAssignedVendorIds(assignedIds);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching assigned vendors:', error);
+  const getMaxForFundingKey = (currentKey: (typeof fundingKeys)[number]) => {
+    const othersSum = fundingKeys.filter((k) => k !== currentKey).reduce((s, k) => s + getFundingAmount(k), 0);
+    return Math.max(0, estimatedCostNum - othersSum);
+  };
+
+  const handleFundingChange = (key: (typeof fundingKeys)[number], value: string) => {
+    const num = parseFloat(value.replace(/[^0-9.-]/g, ''));
+    if (Number.isNaN(num) || value === '' || value === '-') {
+      setFormData({
+        ...formData,
+        fundingSources: { ...formData.fundingSources, [key]: value },
+      });
+      return;
     }
+    const maxAllowed = getMaxForFundingKey(key);
+    const capped = estimatedCostNum > 0 ? Math.min(num, maxAllowed) : num;
+    setFormData({
+      ...formData,
+      fundingSources: { ...formData.fundingSources, [key]: String(capped) },
+    });
   };
 
   const handleAffectedAreaChange = (value: string) => {
@@ -291,43 +319,111 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       isOpen={isOpen}
       onClose={onClose}
       title="Create Damage Report"
-      subtitle="File a new property damage report for assessment and repair"
+      subtitle="File a new property damage report for a customer"
       size="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Property Owner Details */}
+        {/* Customer Selection - Required First Step */}
         <div className="space-y-4">
-          <h3 className="font-semibold text-[var(--text-primary)]">Property Owner Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Property Owner"
-              placeholder="Full name"
-              value={formData.propertyOwnerName}
-              onChange={(e) => setFormData({ ...formData, propertyOwnerName: e.target.value })}
-              required
-            />
-                    <PhoneInput
-                      label="Contact Phone"
-                      placeholder="(555) 123-4567"
-                      value={formData.propertyOwnerPhone}
-                      onChange={(value) => setFormData({ ...formData, propertyOwnerPhone: value || '' })}
-                      required
-                    />
-            <Input
-              label="Email (Optional)"
-              type="email"
-              placeholder="owner@example.com"
-              value={formData.propertyOwnerEmail}
-              onChange={(e) => setFormData({ ...formData, propertyOwnerEmail: e.target.value })}
-            />
+          <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <UserIcon className="w-5 h-5" />
+            Select Customer <span className="text-red-500">*</span>
+          </h3>
+          <div className="relative" ref={customerDropdownRef}>
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+              <input
+                type="text"
+                placeholder="Search customer by name or email..."
+                value={customerSearchQuery}
+                onChange={(e) => {
+                  setCustomerSearchQuery(e.target.value);
+                  setShowCustomerDropdown(true);
+                  if (!e.target.value) {
+                    setSelectedCustomer(null);
+                  }
+                }}
+                onFocus={() => setShowCustomerDropdown(true)}
+                className="input-field w-full pl-10"
+              />
+              {selectedCustomer && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setCustomerSearchQuery('');
+                  }}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            {showCustomerDropdown && !selectedCustomer && (
+              <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg">
+                {isLoadingCustomers ? (
+                  <div className="p-4 text-center">
+                    <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
+                    <p className="text-sm text-[var(--text-muted)] mt-2">Loading customers...</p>
+                  </div>
+                ) : filteredCustomers.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-[var(--text-muted)]">
+                    No customers found
+                  </div>
+                ) : (
+                  filteredCustomers.slice(0, 20).map((customer) => (
+                    <button
+                      key={customer._id}
+                      type="button"
+                      onClick={() => handleCustomerSelect(customer)}
+                      className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)] last:border-b-0"
+                    >
+                      <div className="font-medium text-[var(--text-primary)]">
+                        {customer.firstName} {customer.lastName}
+                      </div>
+                      <div className="text-sm text-[var(--text-muted)]">{customer.email}</div>
+                      {customer.address?.city && (
+                        <div className="text-xs text-[var(--text-muted)]">
+                          {customer.address.city}, {customer.address.state}
+                        </div>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
+          {selectedCustomer && (
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center text-green-700 dark:text-green-300 font-semibold">
+                  {selectedCustomer.firstName[0]}{selectedCustomer.lastName[0]}
+                </div>
+                <div>
+                  <p className="font-semibold text-[var(--text-primary)]">
+                    {selectedCustomer.firstName} {selectedCustomer.lastName}
+                  </p>
+                  <p className="text-sm text-[var(--text-muted)]">{selectedCustomer.email}</p>
+                  {selectedCustomer.phone && (
+                    <p className="text-sm text-[var(--text-muted)]">{selectedCustomer.phone}</p>
+                  )}
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    Customer ID: {selectedCustomer._id.slice(-8)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Property Address */}
         <div className="space-y-4">
           <h3 className="font-semibold text-[var(--text-primary)]">Property Address</h3>
+          <p className="text-sm text-[var(--text-muted)]">
+            {selectedCustomer?.address ? 'Pre-filled from customer address. Update if the damaged property is at a different location.' : 'Enter the address of the damaged property.'}
+          </p>
           <Input
-            label="Property Address"
+            label="Street Address"
             placeholder="Full property address"
             value={formData.propertyStreet}
             onChange={(e) => setFormData({ ...formData, propertyStreet: e.target.value })}
@@ -444,58 +540,6 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
           </div>
         </div>
 
-        {/* Vendor Assignment */}
-        <div className="space-y-4">
-          <h3 className="font-semibold text-[var(--text-primary)]">Assign Vendor/Service Provider (Optional)</h3>
-          <div>
-            {isLoadingVendors ? (
-              <div className="flex items-center gap-2 py-3 px-4 border border-[var(--border-color)] rounded-lg bg-[var(--bg-input)]">
-                <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin flex-shrink-0" />
-                <p className="text-sm text-[var(--text-muted)]">Loading vendors...</p>
-              </div>
-            ) : (
-              <Select
-                label="Select Vendor"
-                value={formData.selectedVendorId}
-                onChange={(value) => setFormData({ ...formData, selectedVendorId: value })}
-                options={[
-                  { value: '', label: 'No vendor assigned' },
-                  ...vendors
-                    .filter((vendor) => !assignedVendorIds.includes(vendor._id))
-                    .map((vendor) => ({
-                      value: vendor._id,
-                      label: `${vendor.businessName}${vendor.location?.city ? ` - ${vendor.location.city}, ${vendor.location.state}` : ''}${vendor.category ? ` (${vendor.category})` : ''}`,
-                    })),
-                ]}
-              />
-            )}
-            {!isLoadingVendors && vendors.filter((v) => !assignedVendorIds.includes(v._id)).length === 0 && vendors.length > 0 && (
-              <p className="text-sm text-amber-500 mt-2">All vendors are currently assigned to other damage reports.</p>
-            )}
-            {formData.selectedVendorId && (
-              <div className="mt-3 p-3 bg-[var(--bg-input)] rounded-lg">
-                {(() => {
-                  const selectedVendor = vendors.find(v => v._id === formData.selectedVendorId);
-                  return selectedVendor ? (
-                    <div className="space-y-1 text-sm">
-                      <p className="font-medium text-[var(--text-primary)]">{selectedVendor.businessName}</p>
-                      {selectedVendor.contactPerson?.phone && (
-                        <p className="text-[var(--text-muted)]">Phone: {selectedVendor.contactPerson.phone}</p>
-                      )}
-                      {selectedVendor.contactPerson?.email && (
-                        <p className="text-[var(--text-muted)]">Email: {selectedVendor.contactPerson.email}</p>
-                      )}
-                      {selectedVendor.location?.city && (
-                        <p className="text-[var(--text-muted)]">Location: {selectedVendor.location.city}, {selectedVendor.location.state}</p>
-                      )}
-                    </div>
-                  ) : null;
-                })()}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Financial Details */}
         <div className="space-y-4">
           <h3 className="font-semibold text-[var(--text-primary)]">Financial Details</h3>
@@ -509,116 +553,62 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
             <Input
               type="number"
               placeholder="0.00"
+              min={0}
               value={formData.estimatedCost}
               onChange={(e) => setFormData({ ...formData, estimatedCost: e.target.value })}
               required
             />
           </div>
           <div>
-            <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Funding Source(s) & Amounts</h4>
+            <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-2">Funding Source(s) & Amounts</h4>
+            <p className="text-xs text-[var(--text-muted)] mb-3">
+              Sum of funding sources cannot exceed estimated repair cost. Enter estimated cost first to see live share and remaining budget.
+            </p>
+            {estimatedCostNum > 0 && (
+              <div className={`mb-3 px-3 py-2 rounded-lg text-sm ${fundingExceedsEstimated ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'bg-[var(--bg-input)] text-[var(--text-secondary)]'}`}>
+                <span className="font-medium">Total funding: </span>
+                <span>${totalFunding.toFixed(2)}</span>
+                <span> / ${estimatedCostNum.toFixed(2)} estimated</span>
+                {estimatedCostNum > 0 && (
+                  <span> ({Math.round((totalFunding / estimatedCostNum) * 100)}% allocated)</span>
+                )}
+                {remainingBudget > 0 && totalFunding <= estimatedCostNum && (
+                  <span className="block mt-1 text-[var(--text-muted)]">Remaining budget: ${remainingBudget.toFixed(2)}</span>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <CurrencyDollarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-                  <label className="block text-sm font-medium text-[var(--text-secondary)]">
-                    FEMA
-                  </label>
-                </div>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={formData.fundingSources.fema}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    fundingSources: { ...formData.fundingSources, fema: e.target.value },
-                  })}
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <CurrencyDollarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-                  <label className="block text-sm font-medium text-[var(--text-secondary)]">
-                    Insurance (Homeowner's Insurance)
-                  </label>
-                </div>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={formData.fundingSources.insurance}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    fundingSources: { ...formData.fundingSources, insurance: e.target.value },
-                  })}
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <CurrencyDollarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-                  <label className="block text-sm font-medium text-[var(--text-secondary)]">
-                    Flood Insurance
-                  </label>
-                </div>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={formData.fundingSources.floodInsurance}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    fundingSources: { ...formData.fundingSources, floodInsurance: e.target.value },
-                  })}
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <CurrencyDollarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-                  <label className="block text-sm font-medium text-[var(--text-secondary)]">
-                    Non-Profit (R3sults or Other Organizations)
-                  </label>
-                </div>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={formData.fundingSources.nonProfit}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    fundingSources: { ...formData.fundingSources, nonProfit: e.target.value },
-                  })}
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <CurrencyDollarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-                  <label className="block text-sm font-medium text-[var(--text-secondary)]">
-                    Self Pay (Personal Payment)
-                  </label>
-                </div>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={formData.fundingSources.selfPay}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    fundingSources: { ...formData.fundingSources, selfPay: e.target.value },
-                  })}
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <CurrencyDollarIcon className="w-5 h-5 text-[var(--text-muted)]" />
-                  <label className="block text-sm font-medium text-[var(--text-secondary)]">
-                    Other (Additional Funding Sources)
-                  </label>
-                </div>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={formData.fundingSources.other}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    fundingSources: { ...formData.fundingSources, other: e.target.value },
-                  })}
-                />
-              </div>
+              {[
+                { key: 'fema' as const, label: 'FEMA' },
+                { key: 'insurance' as const, label: 'Insurance' },
+                { key: 'floodInsurance' as const, label: 'Flood Insurance' },
+                { key: 'nonProfit' as const, label: 'Non-Profit' },
+                { key: 'consolidatedNonProfit' as const, label: 'Consolidated Non-Profit' },
+                { key: 'selfPay' as const, label: 'Self Pay' },
+                { key: 'other' as const, label: 'Other' },
+              ].map(({ key, label }) => {
+                const amount = getFundingAmount(key);
+                const sharePct = estimatedCostNum > 0 && amount > 0 ? Math.round((amount / estimatedCostNum) * 100) : 0;
+                return (
+                  <div key={key}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <CurrencyDollarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+                      <label className="block text-sm font-medium text-[var(--text-secondary)]">{label}</label>
+                      {estimatedCostNum > 0 && amount > 0 && (
+                        <span className="text-xs text-[var(--text-muted)]">({sharePct}% of estimated)</span>
+                      )}
+                    </div>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      min={0}
+                      max={estimatedCostNum > 0 ? getMaxForFundingKey(key) : undefined}
+                      value={formData.fundingSources[key]}
+                      onChange={(e) => handleFundingChange(key, e.target.value)}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -687,10 +677,10 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border-color)]">
-          <Button variant="secondary" type="button" onClick={onClose}>
+          <Button variant="secondary" type="button" onClick={() => { resetForm(); onClose(); }}>
             Cancel
           </Button>
-          <Button type="submit" isLoading={isSubmitting}>
+          <Button type="submit" isLoading={isSubmitting} disabled={!selectedCustomer || fundingExceedsEstimated}>
             Submit Report
           </Button>
         </div>

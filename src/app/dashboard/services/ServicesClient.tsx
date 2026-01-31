@@ -376,11 +376,11 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data?.damageReports) {
-          // Group damage reports by vendor ID
+          // Group damage reports by vendor ID (from assignedVendors array)
           const assignments: Record<string, any[]> = {};
           providersList.forEach(provider => {
-            assignments[provider._id] = data.data.damageReports.filter((report: any) => 
-              report.vendor?.vendorId === provider._id
+            assignments[provider._id] = data.data.damageReports.filter((report: any) =>
+              report.assignedVendors?.some((v: any) => v.vendorId === provider._id)
             );
           });
           setProviderAssignments(assignments);
@@ -573,8 +573,8 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
         const data = await response.json();
         if (data.success && data.data?.damageReports) {
           // Filter reports assigned to this vendor
-          const assigned = data.data.damageReports.filter((report: any) => 
-            report.vendor?.vendorId === vendorId
+          const assigned = data.data.damageReports.filter((report: any) =>
+            report.assignedVendors?.some((v: any) => v.vendorId === vendorId)
           );
           setAssignedDamageReports(assigned);
         }
@@ -641,33 +641,33 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
     <DashboardLayout title="Service Providers" subtitle="Manage service providers and their services">
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-8">
-        <Card className="p-3 border-l-4 border-l-purple-500">
+        <Card className="p-3 border-l-4 border-l-[#991B1B]">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Total Providers</p>
-            <WrenchScrewdriverIcon className="w-5 h-5 text-purple-400" />
+            <WrenchScrewdriverIcon className="w-5 h-5 text-[#991B1B]" />
           </div>
-          <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.total}</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.total}</p>
         </Card>
-        <Card className="p-3 border-l-4 border-l-emerald-500">
+        <Card className="p-3 border-l-4 border-l-[#991B1B]">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Verified</p>
-            <CheckBadgeIcon className="w-5 h-5 text-emerald-400" />
+            <CheckBadgeIcon className="w-5 h-5 text-[var(--text-muted)]" />
           </div>
-          <p className="text-2xl font-bold text-emerald-400 leading-tight">{stats.verified}</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.verified}</p>
         </Card>
-        <Card className="p-3 border-l-4 border-l-amber-500">
+        <Card className="p-3 border-l-4 border-l-[#991B1B]">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Pending Verification</p>
-            <ClockIcon className="w-5 h-5 text-amber-400" />
+            <ClockIcon className="w-5 h-5 text-[var(--text-muted)]" />
           </div>
-          <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.pending}</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.pending}</p>
         </Card>
-        <Card className="p-3 border-l-4 border-l-teal-500">
+        <Card className="p-3 border-l-4 border-l-[#991B1B]">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Avg Rating</p>
-            <StarIcon className="w-5 h-5 text-teal-400" />
+            <StarIcon className="w-5 h-5 text-[var(--text-muted)]" />
           </div>
-          <p className="text-2xl font-bold text-teal-400 leading-tight">{stats.avgRating}</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.avgRating}</p>
         </Card>
       </div>
 
@@ -1781,39 +1781,46 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {assignedDamageReports.map((report) => (
-                    <div key={report._id} className="p-4 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)] hover:border-[var(--primary-500)]/50 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <p className="font-semibold text-[var(--text-primary)]">{report.reportNumber}</p>
-                            <Badge 
-                              variant={report.status === 'completed' ? 'success' : report.status === 'in_progress' ? 'warning' : 'info'} 
-                              size="sm"
-                            >
-                              {report.status?.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-[var(--text-secondary)] mb-1">
-                            {report.propertyOwner?.name} - {report.propertyAddress?.city}, {report.propertyAddress?.state}
-                          </p>
-                          <p className="text-xs text-[var(--text-muted)]">
-                            Damage Type: <span className="capitalize">{report.damageType}</span> | 
-                            Severity: <span className="capitalize">{report.severity}</span> | 
-                            Est. Cost: ${report.estimatedCost?.toLocaleString() || '0'}
-                          </p>
-                          {report.vendor?.status && (
-                            <p className="text-xs text-[var(--text-muted)] mt-1">
-                              Vendor Status: <span className="capitalize">{report.vendor.status.replace('_', ' ')}</span>
-                              {report.vendor.assignedDate && (
-                                <span> | Assigned: {new Date(report.vendor.assignedDate).toLocaleDateString()}</span>
-                              )}
+                  {assignedDamageReports.map((report) => {
+                    const vendorEntry = report.assignedVendors?.find((v: any) => v.vendorId === selectedProvider._id);
+                    const customerName = report.customerFullName || (report.customer ? `${report.customer.firstName || ''} ${report.customer.lastName || ''}`.trim() : '—');
+                    return (
+                      <div key={report._id} className="p-4 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)] hover:border-[var(--primary-500)]/50 transition-colors">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <p className="font-semibold text-[var(--text-primary)]">{report.reportNumber}</p>
+                              <Badge 
+                                variant={report.status === 'completed' ? 'success' : report.status === 'work_in_progress' ? 'warning' : 'info'} 
+                                size="sm"
+                              >
+                                {report.status?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-[var(--text-secondary)] mb-1">
+                              {customerName} — {report.propertyAddress?.city}, {report.propertyAddress?.state}
                             </p>
-                          )}
+                            <p className="text-xs text-[var(--text-muted)]">
+                              Damage Type: <span className="capitalize">{report.damageType}</span> | 
+                              Severity: <span className="capitalize">{report.severity}</span> | 
+                              Est. Cost: ${report.estimatedCost?.toLocaleString() || '0'}
+                            </p>
+                            {vendorEntry && (
+                              <p className="text-xs text-[var(--text-muted)] mt-1">
+                                Task: <span className="capitalize">{vendorEntry.taskName || '—'}</span>
+                                {vendorEntry.assignedDate && (
+                                  <span> | Assigned: {new Date(vendorEntry.assignedDate).toLocaleDateString()}</span>
+                                )}
+                                {vendorEntry.status && (
+                                  <span> | Status: <span className="capitalize">{String(vendorEntry.status).replace(/_/g, ' ')}</span></span>
+                                )}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

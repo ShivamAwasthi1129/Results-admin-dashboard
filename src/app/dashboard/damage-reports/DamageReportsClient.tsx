@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Card, Badge, Button, Input, Select, Table } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-toastify';
@@ -22,28 +23,60 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ArrowRightIcon,
   PhoneIcon,
   EnvelopeIcon,
   BuildingOfficeIcon,
+  Squares2X2Icon,
+  Bars3Icon,
+  UserIcon,
 } from '@heroicons/react/24/outline';
 import DamageReportModal from '@/components/damage-reports/DamageReportModal';
 import CreateDamageReportModal from '@/components/damage-reports/CreateDamageReportModal';
+
+// Column config for Edit columns (Stripe-style). Customer ID and Actions are fixed.
+const FIXED_START_ID = 'customerId';
+const FIXED_END_ID = 'actions';
+const ORDERABLE_COLUMNS: { id: string; label: string }[] = [
+  { id: 'reportNumber', label: 'Report #' },
+  { id: 'date', label: 'Date' },
+  { id: 'status', label: 'Status' },
+  { id: 'currentStep', label: 'Step' },
+  { id: 'damageType', label: 'Damage Type' },
+  { id: 'severity', label: 'Severity' },
+  { id: 'propertyAddress', label: 'Property Address' },
+  { id: 'estCost', label: 'Est. Cost' },
+  { id: 'adjuster', label: 'Adjuster' },
+  { id: 'vendors', label: 'Vendors' },
+  { id: 'funding', label: 'Funding' },
+];
+// Default visible orderable columns; some hidden by default
+const DEFAULT_VISIBLE_ORDERABLE = ['reportNumber', 'date', 'propertyAddress', 'currentStep', 'estCost', 'status'];
 
 interface DamageReport {
   _id: string;
   id: string;
   reportNumber: string;
   reportDate: string;
+  customer: {
+    customerId: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+    };
+  };
+  customerFullName?: string;
   reportedBy: {
     userId?: string;
     name: string;
     email?: string;
     phone?: string;
-  };
-  propertyOwner: {
-    name: string;
-    phone: string;
-    email?: string;
   };
   propertyAddress: {
     street: string;
@@ -65,36 +98,36 @@ interface DamageReport {
   totalFunding?: number;
   fundingPercentage?: number;
   remainingFunding?: number;
-  milestones: Array<{
+  workflowSteps: Array<{
+    stepNumber: number;
     name: string;
     status: string;
-    completionDate?: string;
-    order: number;
+    startedAt?: string;
+    completedAt?: string;
   }>;
+  currentStep: number;
+  assignedAdjuster?: {
+    adjusterId: string;
+    fullName: string;
+    email?: string;
+    phone?: string;
+    companyName?: string;
+    approvalStatus: string;
+  };
+  assignedVendors: Array<{
+    vendorId: string;
+    businessName: string;
+    category?: string;
+    estimatedCost: number;
+    status: string;
+  }>;
+  totalVendorCost?: number;
+  vendorWorkProgress?: number;
   images: Array<{
     url: string;
     alt?: string;
     isPrimary?: boolean;
   }>;
-  contractor?: {
-    name: string;
-    estimatedTimeline?: string;
-  };
-  vendor?: {
-    vendorId: string;
-    providerId?: string;
-    businessName?: string;
-    contactPerson?: {
-      name?: string;
-      phone?: string;
-      email?: string;
-    };
-    category?: string;
-    assignedDate?: string;
-    assignedBy?: string;
-    status?: 'assigned' | 'in_progress' | 'completed' | 'cancelled';
-    notes?: string;
-  };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -120,14 +153,31 @@ const getDamageTypeIcon = (type: string) => {
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
-    reported: 'info',
-    assessed: 'warning',
-    in_review: 'warning',
-    in_progress: 'warning',
+    report_created: 'info',
+    under_review: 'warning',
+    reviewed: 'info',
+    adjuster_assigned: 'warning',
+    adjuster_inspecting: 'warning',
+    adjuster_approved: 'success',
+    vendor_assigned: 'warning',
+    work_in_progress: 'warning',
     completed: 'success',
     cancelled: 'danger',
   };
   return colors[status] || 'secondary';
+};
+
+const getStepName = (step: number) => {
+  const steps: Record<number, string> = {
+    1: 'Report Created',
+    2: 'Under Review',
+    3: 'Assign Adjuster',
+    4: 'Adjuster Inspection',
+    5: 'Assign Vendors',
+    6: 'Vendor Work',
+    7: 'Completed',
+  };
+  return steps[step] || `Step ${step}`;
 };
 
 const getSeverityColor = (severity: string) => {
@@ -151,7 +201,32 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
   const [selectedReport, setSelectedReport] = useState<DamageReport | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [visibleOrderableIds, setVisibleOrderableIds] = useState<string[]>(DEFAULT_VISIBLE_ORDERABLE);
+  const [showEditColumnsDropdown, setShowEditColumnsDropdown] = useState(false);
+  const editColumnsDropdownRef = useRef<HTMLDivElement>(null);
+  const [workflowStepTooltip, setWorkflowStepTooltip] = useState<{
+    rect: DOMRect;
+    step: any;
+    report: DamageReport;
+    completedAt: string | null;
+    startedAt: string | null;
+    budgetItems: any[];
+    budgetTotal: number;
+    vendorsInProgress: number;
+    vendorsCompleted: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (editColumnsDropdownRef.current && !editColumnsDropdownRef.current.contains(e.target as Node)) {
+        setShowEditColumnsDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch reports
   const fetchReports = async () => {
@@ -214,22 +289,47 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
 
   // Filter reports
   const filteredReports = reports.filter((report) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchReport = report.reportNumber?.toLowerCase().includes(q) ||
+        report.customerFullName?.toLowerCase().includes(q) ||
+        `${report.customer?.firstName} ${report.customer?.lastName}`.toLowerCase().includes(q) ||
+        report.customer?.email?.toLowerCase().includes(q) ||
+        report.propertyAddress?.street?.toLowerCase().includes(q) ||
+        report.propertyAddress?.city?.toLowerCase().includes(q);
+      if (!matchReport) return false;
+    }
     if (statusFilter !== 'all' && report.status !== statusFilter) return false;
     if (damageTypeFilter !== 'all' && report.damageType !== damageTypeFilter) return false;
     if (severityFilter !== 'all' && report.severity !== severityFilter) return false;
     return true;
   });
 
-  // Toggle row expansion
-  const toggleRowExpansion = (id: string) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
+  // Group reports by customer (like Alert Management → sub-options)
+  const reportsByCustomer = useMemo(() => {
+    const map = new Map<string, { customerId: string; customerName: string; reports: DamageReport[] }>();
+    for (const report of filteredReports) {
+      const cid = report.customer?.customerId ?? report._id;
+      const name = report.customerFullName || `${report.customer?.firstName ?? ''} ${report.customer?.lastName ?? ''}`.trim() || 'Unknown';
+      if (!map.has(cid)) {
+        map.set(cid, { customerId: cid, customerName: name, reports: [] });
+      }
+      map.get(cid)!.reports.push(report);
     }
-    setExpandedRows(newExpanded);
+    return Array.from(map.values());
+  }, [filteredReports]);
+
+  const toggleCustomerExpand = (customerId: string) => {
+    const next = new Set(expandedCustomers);
+    if (next.has(customerId)) next.delete(customerId);
+    else next.add(customerId);
+    setExpandedCustomers(next);
   };
+
+  const reportForDetailPanel = useMemo(() => {
+    if (!selectedReportId) return null;
+    return reports.find((r) => r._id === selectedReportId) ?? null;
+  }, [selectedReportId, reports]);
 
   const getFundingSourceLabel = (source: string) => {
     const labels: Record<string, string> = {
@@ -244,39 +344,180 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
     return labels[source] || source;
   };
 
+  // DD/MM/YY (two-digit year)
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+    const d = new Date(dateString);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  };
+
+  const displayColumnIds = [FIXED_START_ID, ...visibleOrderableIds, FIXED_END_ID];
+  const availableColumnIds = ORDERABLE_COLUMNS.map((c) => c.id).filter((id) => !visibleOrderableIds.includes(id));
+
+  const getColumnLabel = (id: string) => {
+    if (id === FIXED_START_ID) return 'Customer';
+    if (id === FIXED_END_ID) return 'Actions';
+    return ORDERABLE_COLUMNS.find((c) => c.id === id)?.label ?? id;
+  };
+
+  const getReportCellValue = (report: DamageReport, columnId: string): React.ReactNode => {
+    switch (columnId) {
+      case 'reportNumber': return report.reportNumber ?? '—';
+      case 'date': return formatDate(report.reportDate);
+      case 'status': return report.status ? report.status.replace(/_/g, ' ') : '—';
+      case 'currentStep': {
+        if (report.currentStep == null) return '—';
+        const currentStepName = getStepName(report.currentStep);
+        const currentStepObj = report.workflowSteps?.find((s) => s.stepNumber === report.currentStep);
+        const step4 = report.workflowSteps?.find((s) => s.stepNumber === 4) as any;
+        const budgetItems = Array.isArray(step4?.stepData?.inspectionBudget) ? step4.stepData.inspectionBudget : [];
+        const budgetTotal = budgetItems.reduce((sum: number, b: any) => sum + (Number(b?.amount) || 0), 0);
+        const vendors = report.assignedVendors || [];
+        const vendorsInProgress = vendors.filter((v: any) => v.status === 'in_progress').length;
+        const vendorsCompleted = vendors.filter((v: any) => v.status === 'completed').length;
+
+        return (
+          <div className="relative group inline-flex items-center">
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-color)] text-sm text-[var(--text-primary)]">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[var(--bg-card)] border border-[var(--border-color)] text-xs font-bold text-[#991B1B]">
+                {report.currentStep}
+              </span>
+              <span className="font-medium">{currentStepName}</span>
+            </span>
+
+            {/* Tooltip */}
+            <div className="pointer-events-none absolute z-30 left-1/2 top-full mt-2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <div className="w-[280px] bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl rounded-xl p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-[var(--text-primary)] truncate">{currentStepName}</p>
+                    <p className="text-xs text-[var(--text-muted)] capitalize">
+                      Status: {String(currentStepObj?.status ?? report.status ?? '—').replace(/_/g, ' ')}
+                    </p>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-secondary)]">
+                    DR {report.reportNumber}
+                  </span>
+                </div>
+
+                <div className="mt-2 space-y-1 text-xs">
+                  {report.assignedAdjuster?.fullName && (
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-secondary)]">Adjuster</span>
+                      <span className="text-[var(--text-primary)] font-medium truncate max-w-[160px]">{report.assignedAdjuster.fullName}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-secondary)]">Budget items (Step 4)</span>
+                    <span className="text-[var(--text-primary)] font-medium">{budgetItems.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-secondary)]">Budget total</span>
+                    <span className="text-[var(--text-primary)] font-medium">${budgetTotal.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-secondary)]">Vendors</span>
+                    <span className="text-[var(--text-primary)] font-medium">{vendors.length} (IP {vendorsInProgress}, Done {vendorsCompleted})</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      case 'damageType': return report.damageType ? String(report.damageType) : '—';
+      case 'severity': return report.severity ? String(report.severity) : '—';
+      case 'propertyAddress': return report.propertyAddress ? `${report.propertyAddress.city}, ${report.propertyAddress.state}` : '—';
+      case 'estCost': return report.estimatedCost != null ? `$${Number(report.estimatedCost).toLocaleString()}` : '—';
+      case 'adjuster': return report.assignedAdjuster?.fullName ?? '—';
+      case 'vendors': return report.assignedVendors?.length ? `${report.assignedVendors.length} assigned` : '—';
+      case 'funding': return report.totalFunding != null ? `$${Number(report.totalFunding).toLocaleString()}` : '—';
+      default: return '—';
+    }
+  };
+
+  const toggleColumn = (id: string, visible: boolean) => {
+    if (visible) {
+      setVisibleOrderableIds((prev) => [...prev, id]);
+    } else {
+      setVisibleOrderableIds((prev) => prev.filter((x) => x !== id));
+    }
+  };
+
+  const moveColumn = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= visibleOrderableIds.length) return;
+    setVisibleOrderableIds((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, removed);
+      return next;
     });
+  };
+
+  const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null);
+
+  // Seed damage reports
+  const handleSeed = async () => {
+    if (!confirm('This will replace existing damage reports with sample data. Continue?')) return;
+
+    try {
+      const response = await fetch('/api/damage-reports/seed', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        toast.success('Damage reports seeded successfully');
+        fetchReports();
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Failed to seed damage reports');
+      }
+    } catch (error) {
+      toast.error('Error seeding damage reports');
+    }
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <DocumentTextIcon className="w-6 h-6" />
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] flex items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm">
+              <DocumentTextIcon className="w-7 h-7 text-[#991B1B]" />
+            </span>
             Damage Reports
           </h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">
-            Manage property damage reports and track repair progress
+          <p className="text-sm text-[var(--text-muted)] mt-2">
+            Track and manage property damage assessments, insurance claims, and repair workflows
           </p>
         </div>
-        <Button
-          onClick={() => setShowCreateModal(true)}
-          leftIcon={<PlusIcon className="w-5 h-5" />}
-        >
-          Create Report
-        </Button>
+        <div className="flex gap-2 flex-shrink-0">
+          {reports.length === 0 && (
+            <Button variant="secondary" onClick={handleSeed}>
+              Seed Reports
+            </Button>
+          )}
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            leftIcon={<PlusIcon className="w-5 h-5" />}
+            className="bg-[#991B1B] hover:bg-[#7F1D1D] text-white shadow-md"
+          >
+            Create Report
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+      <Card className="p-5 shadow-sm border border-[var(--border-color)] bg-[var(--bg-card)]">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
           <div className="lg:col-span-2">
             <div className="relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
@@ -304,10 +545,13 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
             onChange={setStatusFilter}
             options={[
               { value: 'all', label: 'All' },
-              { value: 'reported', label: 'Reported' },
-              { value: 'assessed', label: 'Assessed' },
-              { value: 'in_review', label: 'In Review' },
-              { value: 'in_progress', label: 'In Progress' },
+              { value: 'report_created', label: 'Report Created' },
+              { value: 'under_review', label: 'Under Review' },
+              { value: 'reviewed', label: 'Reviewed' },
+              { value: 'adjuster_assigned', label: 'Adjuster Assigned' },
+              { value: 'adjuster_approved', label: 'Adjuster Approved' },
+              { value: 'vendor_assigned', label: 'Vendor Assigned' },
+              { value: 'work_in_progress', label: 'Work In Progress' },
               { value: 'completed', label: 'Completed' },
               { value: 'cancelled', label: 'Cancelled' },
             ]}
@@ -341,6 +585,84 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
               { value: 'catastrophic', label: 'Catastrophic' },
             ]}
           />
+          {/* Edit Columns Button */}
+          <div className="relative" ref={editColumnsDropdownRef}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowEditColumnsDropdown((v) => !v)}
+              leftIcon={<Squares2X2Icon className="w-4 h-4" />}
+              className="h-[42px] mt-auto"
+            >
+              Edit columns
+            </Button>
+            {showEditColumnsDropdown && (
+              <div className="absolute right-0 top-full mt-1 z-50 min-w-[280px] rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg py-2">
+                <div className="px-3 py-2 border-b border-[var(--border-color)]">
+                  <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Fixed columns</span>
+                  <div className="mt-1.5 text-sm text-[var(--text-primary)]">Customer ID, Actions</div>
+                </div>
+                <div className="px-3 py-2 border-b border-[var(--border-color)]">
+                  <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Active columns</span>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">Drag to reorder</p>
+                  <div className="mt-2 space-y-1">
+                    {visibleOrderableIds.map((id, index) => {
+                      const col = ORDERABLE_COLUMNS.find((c) => c.id === id);
+                      if (!col) return null;
+                      return (
+                        <div
+                          key={id}
+                          draggable
+                          onDragStart={() => setDraggedColumnIndex(index)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (draggedColumnIndex === null) return;
+                            if (draggedColumnIndex !== index) moveColumn(draggedColumnIndex, index);
+                            setDraggedColumnIndex(null);
+                          }}
+                          onDragEnd={() => setDraggedColumnIndex(null)}
+                          className={`flex items-center gap-2 py-1.5 px-2 rounded hover:bg-[var(--bg-secondary)] ${draggedColumnIndex === index ? 'opacity-50' : ''}`}
+                        >
+                          <Bars3Icon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0 cursor-grab" aria-hidden />
+                          <input
+                            type="checkbox"
+                            checked
+                            onChange={() => toggleColumn(id, false)}
+                            className="rounded border-[var(--border-color)]"
+                          />
+                          <span className="text-sm text-[var(--text-primary)]">{col.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="px-3 py-2">
+                  <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Available columns</span>
+                  <div className="mt-2 space-y-1">
+                    {availableColumnIds.map((id) => {
+                      const col = ORDERABLE_COLUMNS.find((c) => c.id === id);
+                      if (!col) return null;
+                      return (
+                        <div key={id} className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-[var(--bg-secondary)]">
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            onChange={() => toggleColumn(id, true)}
+                            className="rounded border-[var(--border-color)]"
+                          />
+                          <span className="text-sm text-[var(--text-primary)]">{col.label}</span>
+                        </div>
+                      );
+                    })}
+                    {availableColumnIds.length === 0 && (
+                      <p className="text-xs text-[var(--text-muted)] py-1">All columns are visible</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         {(searchQuery || statusFilter !== 'all' || damageTypeFilter !== 'all' || severityFilter !== 'all') && (
           <div className="mt-4">
@@ -359,188 +681,196 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
           </div>
         )}
         <div className="mt-4 text-sm text-[var(--text-muted)]">
-          Showing {filteredReports.length} of {reports.length} reports
+          Showing {reportsByCustomer.length} customers ({filteredReports.length} reports)
         </div>
       </Card>
 
-      {/* Reports Table */}
-      <Card className="p-0">
+      {/* Outer table with column headers so Edit columns applies */}
+      <Card className="p-0 overflow-x-auto shadow-lg border-2 border-[var(--border-color)]">
         {isLoading ? (
           <div className="p-8 text-center">
             <div className="inline-block w-8 h-8 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
             <p className="mt-4 text-[var(--text-muted)]">Loading reports...</p>
           </div>
-        ) : filteredReports.length === 0 ? (
+        ) : reportsByCustomer.length === 0 ? (
           <div className="p-12 text-center">
             <DocumentTextIcon className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
             <p className="text-[var(--text-muted)]">
               {searchQuery || statusFilter !== 'all' || damageTypeFilter !== 'all' || severityFilter !== 'all'
-                ? 'No reports found matching your filters.'
+                ? 'No customers/reports found matching your filters.'
                 : 'No damage reports found. Create your first report to get started.'}
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[var(--border-color)] bg-[var(--bg-input)]">
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Report ID</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Date</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Status</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Damage Type</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Severity</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Owner</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Property Address</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Est. Cost</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Funding</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredReports.map((report) => {
-                  const fundingPercentage = report.fundingPercentage || 0;
-                  const isExpanded = expandedRows.has(report._id);
-                  const totalFunding = report.fundingSources?.reduce((sum, source) => sum + (source.amount || 0), 0) || 0;
-                  const remainingFunding = Math.max(0, (report.estimatedCost || 0) - totalFunding);
+          <table className="w-full min-w-[800px]">
+            <thead>
+              <tr className="border-b border-[var(--border-color)] bg-[var(--bg-input)]">
+                {displayColumnIds.map((id) => (
+                  <th key={id} className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                    {getColumnLabel(id)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-color)]">
+            {reportsByCustomer.map((group) => {
+              const isExpanded = expandedCustomers.has(group.customerId);
+              const hasSelectedReport = selectedReportId && group.reports.some((r) => r._id === selectedReportId);
+              const detailReport = hasSelectedReport ? reportForDetailPanel : null;
+              const firstReport = group.reports[0];
 
-                  return (
-                    <React.Fragment key={report._id}>
-                      <tr className="hover:bg-[var(--bg-secondary)]/60 transition-all duration-200 group border-b border-[var(--border-color)]/50">
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleRowExpansion(report._id)}
-                              className="p-1 -ml-1"
-                            >
-                              {isExpanded ? (
-                                <ChevronUpIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                              ) : (
-                                <ChevronDownIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                              )}
-                            </Button>
-                            <span className="text-lg">{getDamageTypeIcon(report.damageType)}</span>
-                            <span className="font-medium text-sm text-[var(--text-primary)]">{report.reportNumber}</span>
+              return (
+                <React.Fragment key={group.customerId}>
+                  {/* Customer row: one cell per column */}
+                  <tr className="bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)]/60">
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleCustomerExpand(group.customerId)}
+                        className="flex items-center gap-2 w-full text-left"
+                      >
+                        {isExpanded ? (
+                          <ChevronDownIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
+                        ) : (
+                          <ChevronRightIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
+                        )}
+                        <UserIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
+                        <div className="min-w-0 flex flex-col">
+                          <span className="font-medium text-sm text-[var(--text-primary)] truncate">{group.customerName}</span>
+                          <span className="text-xs text-[var(--text-muted)] mt-0.5">ID: {group.customerId}</span>
+                        </div>
+                        <Badge variant="secondary" size="sm" className="ml-1">{group.reports.length} report{group.reports.length !== 1 ? 's' : ''}</Badge>
+                      </button>
+                    </td>
+                    {visibleOrderableIds.map((colId) => (
+                      <td key={colId} className="px-4 py-3 text-sm text-[var(--text-primary)]">
+                        {firstReport ? getReportCellValue(firstReport, colId) : '—'}
+                      </td>
+                    ))}
+                    <td className="px-4 py-3">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { if (firstReport) { setSelectedReport(firstReport); setShowDetailModal(true); } }}
+                        leftIcon={<EyeIcon className="w-4 h-4" />}
+                      >
+                        View
+                      </Button>
+                    </td>
+                  </tr>
+
+                  {/* Expanded: sub-options (report IDs) + detail panel */}
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={displayColumnIds.length} className="px-4 py-0 align-top bg-[var(--bg-primary)]">
+                        <div className="ml-4 border-l-2 border-[var(--border-color)] pl-2 py-2 space-y-1 bg-[var(--bg-input)]/20">
+                          {group.reports.map((report) => {
+                            const isSelected = selectedReportId === report._id;
+                            return (
+                              <button
+                                key={report._id}
+                                type="button"
+                                onClick={() => setSelectedReportId(isSelected ? null : report._id)}
+                                className={`
+                                  w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left font-medium text-sm transition-all
+                                  ${isSelected
+                                    ? 'bg-[#991B1B] text-white shadow-md'
+                                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
+                                  }
+                                `}
+                              >
+                                <DocumentTextIcon className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-white' : 'text-[var(--text-muted)]'}`} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="truncate">{report.reportNumber}</div>
+                                  <div className={`text-[11px] ${isSelected ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
+                                    Report ID: {String(report._id).slice(-8)}
+                                  </div>
+                                </div>
+                                <span className={`text-xs ${isSelected ? 'text-white/90' : 'text-[var(--text-muted)]'}`}>
+                                  {formatDate(report.reportDate)} · {report.status.replace(/_/g, ' ')}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+
+                  {isExpanded && detailReport && (
+                    <tr>
+                      <td colSpan={displayColumnIds.length} className="px-4 py-6 bg-[var(--bg-card)] border-t border-[var(--border-color)]">
+                      <div className="flex items-center justify-between mb-5">
+                        <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                          <div className="p-1.5 bg-[var(--bg-input)] rounded-lg border border-[var(--border-color)]">
+                            <DocumentTextIcon className="w-5 h-5 text-[#991B1B]" />
                           </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className="text-sm text-[var(--text-secondary)]">
-                            {new Date(report.reportDate).toLocaleDateString()}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3">
-                          <Badge variant={getStatusColor(report.status) as any} size="sm">
-                            {report.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className="capitalize text-sm text-[var(--text-primary)]">{report.damageType}</span>
-                        </td>
-                        <td className="px-3 py-3">
-                          <Badge variant={getSeverityColor(report.severity) as any} size="sm">
-                            {report.severity.charAt(0).toUpperCase() + report.severity.slice(1)}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="space-y-1">
-                            <span className="text-sm text-[var(--text-primary)]">{report.propertyOwner.name}</span>
-                            {report.vendor && (
-                              <div className="flex items-center gap-1">
-                                <BuildingOfficeIcon className="w-3 h-3 text-blue-500" />
-                                <span className="text-xs text-blue-500 font-medium">{report.vendor.businessName}</span>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className="text-sm text-[var(--text-muted)] truncate max-w-[200px] block">
-                            {report.propertyAddress.street}, {report.propertyAddress.city}, {report.propertyAddress.state} {report.propertyAddress.zipCode.slice(0, 2)}...
-                          </span>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className="font-semibold text-sm text-[var(--text-primary)]">
-                            ${report.estimatedCost.toLocaleString()}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-semibold text-sm ${fundingPercentage >= 100 ? 'text-green-500' : 'text-[var(--text-primary)]'}`}>
-                              {fundingPercentage}%
-                            </span>
-                            {fundingPercentage >= 100 && (
-                              <CheckCircleIcon className="w-4 h-4 text-green-500" />
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedReport(report);
-                                setShowDetailModal(true);
-                              }}
-                              className="p-1"
-                            >
-                              <EyeIcon className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedReport(report);
-                                setShowDetailModal(true);
-                              }}
-                              className="p-1"
-                            >
-                              <PencilIcon className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(report._id)}
-                              className="p-1 text-red-500 hover:text-red-600"
-                            >
-                              <TrashIcon className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={10} className="px-3 py-6 bg-[var(--bg-input)]/30">
+                          {detailReport.reportNumber} — Detailed View
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setSelectedReport(detailReport); setShowDetailModal(true); }}
+                            leftIcon={<EyeIcon className="w-4 h-4" />}
+                          >
+                            View
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setSelectedReport(detailReport); setShowDetailModal(true); }}
+                            leftIcon={<PencilIcon className="w-4 h-4" />}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(detailReport._id)}
+                            className="text-red-500 hover:text-red-600"
+                            leftIcon={<TrashIcon className="w-4 h-4" />}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                      {(() => {
+                        const report = detailReport;
+                        const totalFunding = report.fundingSources?.reduce((sum, source) => sum + (source.amount || 0), 0) || 0;
+                        const remainingFunding = Math.max(0, (report.estimatedCost || 0) - totalFunding);
+                        return (
+                          <>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              {/* Contact Information */}
-                              <div>
-                                <h4 className="text-sm font-semibold text-red-600 mb-3 flex items-center gap-2">
-                                  <MapPinIcon className="w-4 h-4" />
-                                  Contact Information
+                              <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm">
+                                <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                  <MapPinIcon className="w-4 h-4 text-[#991B1B]" />
+                                  Customer Information
                                 </h4>
                                 <div className="space-y-2 text-sm">
-                                  {report.propertyOwner.phone && (
+                                  <div className="font-medium text-[var(--text-primary)]">
+                                    {report.customerFullName || `${report.customer?.firstName} ${report.customer?.lastName}`}
+                                  </div>
+                                  {report.customer?.phone && (
                                     <div className="flex items-center gap-2 text-[var(--text-primary)]">
                                       <PhoneIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                                      <span>{report.propertyOwner.phone}</span>
+                                      <span>{report.customer.phone}</span>
                                     </div>
                                   )}
-                                  {report.propertyOwner.email && (
+                                  {report.customer?.email && (
                                     <div className="flex items-center gap-2 text-[var(--text-primary)]">
                                       <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                                      <span>{report.propertyOwner.email}</span>
+                                      <span>{report.customer.email}</span>
                                     </div>
                                   )}
                                   <div className="text-[var(--text-primary)]">
-                                    {report.propertyAddress.street}, {report.propertyAddress.city}, {report.propertyAddress.state} {report.propertyAddress.zipCode}
+                                    {report.propertyAddress?.street}, {report.propertyAddress?.city}, {report.propertyAddress?.state} {report.propertyAddress?.zipCode}
                                   </div>
                                 </div>
                               </div>
-
-                              {/* Damage Details */}
-                              <div>
-                                <h4 className="text-sm font-semibold text-red-600 mb-3 flex items-center gap-2">
-                                  <DocumentTextIcon className="w-4 h-4" />
+                              <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm">
+                                <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                  <DocumentTextIcon className="w-4 h-4 text-[#991B1B]" />
                                   Damage Details
                                 </h4>
                                 <div className="space-y-2 text-sm text-[var(--text-primary)]">
@@ -553,11 +883,9 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                                   )}
                                 </div>
                               </div>
-
-                              {/* Funding Summary */}
-                              <div>
-                                <h4 className="text-sm font-semibold text-red-600 mb-3 flex items-center gap-2">
-                                  <CurrencyDollarIcon className="w-4 h-4" />
+                              <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm">
+                                <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                  <CurrencyDollarIcon className="w-4 h-4 text-[#991B1B]" />
                                   Funding Summary
                                 </h4>
                                 <div className="space-y-1 text-sm">
@@ -576,107 +904,93 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                                 </div>
                               </div>
                             </div>
-
-                            {/* Progress Milestones */}
                             <div className="mt-6 pt-6 border-t border-[var(--border-color)]">
-                              <h4 className="text-sm font-semibold text-red-600 mb-4 flex items-center gap-2">
-                                <ClockIcon className="w-4 h-4" />
-                                Progress Milestones
+                              <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                                <div className="p-1 bg-[var(--bg-card)] rounded-lg border border-[var(--border-color)]">
+                                  <ClockIcon className="w-4 h-4 text-[#991B1B]" />
+                                </div>
+                                Workflow Progress Timeline
                               </h4>
-                              {(() => {
-                                const milestones = report.milestones || [];
-                                if (milestones.length === 0) {
-                                  return <p className="text-sm text-[var(--text-muted)]">No milestones defined</p>;
-                                }
-                                
-                                // Sort milestones by order
-                                const sortedMilestones = [...milestones].sort((a, b) => (a.order || 0) - (b.order || 0));
-                                
-                                // Find the last completed milestone
-                                let lastCompletedIndex = -1;
-                                for (let i = sortedMilestones.length - 1; i >= 0; i--) {
-                                  if (sortedMilestones[i].status === 'completed') {
-                                    lastCompletedIndex = i;
-                                    break;
-                                  }
-                                }
-                                
-                                return (
-                                  <div className="space-y-6">
-                                    {/* Horizontal Progress Line */}
-                                    <div className="flex items-center gap-2 overflow-x-auto pb-4">
-                                      {sortedMilestones.map((milestone, idx) => {
-                                        const isCompleted = milestone.status === 'completed';
-                                        const isInProgress = milestone.status === 'in_progress';
-                                        const isLastCompleted = idx === lastCompletedIndex;
-                                        const isPending = milestone.status === 'pending';
-                                        
-                                        return (
-                                          <React.Fragment key={milestone.order || idx}>
-                                            <div className="flex flex-col items-center min-w-[120px]">
-                                              <div
-                                                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all relative z-10 ${
-                                                  isCompleted
-                                                    ? 'bg-green-500 text-white shadow-lg'
-                                                    : isInProgress
-                                                    ? 'bg-blue-500 text-white shadow-lg'
+                              {report.workflowSteps && report.workflowSteps.length > 0 ? (
+                                <div className="overflow-visible pb-4">
+                                  <div className="flex items-stretch w-full gap-0 min-w-0">
+                                    {[...report.workflowSteps].sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)).map((step, idx) => {
+                                      const isCompleted = step.status === 'completed';
+                                      const isCurrent = step.stepNumber === report.currentStep;
+                                      const completedAt = step.completedAt ? new Date(step.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+                                      const startedAt = step.startedAt ? new Date(step.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+                                      const budgetItems = Array.isArray((step as any)?.stepData?.inspectionBudget) ? (step as any).stepData.inspectionBudget : [];
+                                      const budgetTotal = budgetItems.reduce((sum: number, b: any) => sum + (Number(b?.amount) || 0), 0);
+                                      const vendors = report.assignedVendors || [];
+                                      const vendorsInProgress = vendors.filter((v: any) => v.status === 'in_progress').length;
+                                      const vendorsCompleted = vendors.filter((v: any) => v.status === 'completed').length;
+                                      return (
+                                        <React.Fragment key={step.stepNumber ?? idx}>
+                                          <div
+                                            className="relative group flex flex-col items-center  min-w-0 px-6"
+                                            onMouseEnter={(e) => {
+                                              const el = (e.currentTarget as HTMLElement).querySelector('[data-step-circle]');
+                                              const rect = (el || e.currentTarget).getBoundingClientRect();
+                                              setWorkflowStepTooltip({
+                                                rect,
+                                                step,
+                                                report,
+                                                completedAt,
+                                                startedAt,
+                                                budgetItems,
+                                                budgetTotal,
+                                                vendorsInProgress,
+                                                vendorsCompleted,
+                                              });
+                                            }}
+                                            onMouseLeave={() => setWorkflowStepTooltip(null)}
+                                          >
+                                            <div
+                                              data-step-circle
+                                              className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shadow-sm transition-all duration-300 flex-shrink-0 ${
+                                                isCompleted
+                                                  ? 'bg-green-500 text-white ring-2 ring-green-200 dark:ring-green-900/50'
+                                                  : isCurrent
+                                                    ? 'bg-[#991B1B] text-white ring-2 ring-[var(--glow-color)] animate-pulse'
                                                     : 'bg-[var(--bg-input)] text-[var(--text-muted)] border-2 border-[var(--border-color)]'
-                                                } ${isLastCompleted ? 'ring-2 ring-green-400 ring-offset-2' : ''}`}
-                                                style={isLastCompleted ? { animation: 'blink 1.5s ease-in-out infinite' } : {}}
-                                                title={milestone.name}
-                                              >
-                                                {isCompleted ? '✓' : isInProgress ? '→' : idx + 1}
-                                              </div>
-                                              <div className="mt-2 text-center">
-                                                <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{milestone.name}</p>
-                                                {milestone.completionDate && (
-                                                  <p className="text-xs text-[var(--text-muted)] mt-1">
-                                                    {formatDate(milestone.completionDate)}
-                                                  </p>
-                                                )}
-                                                <Badge
-                                                  variant={isCompleted ? 'success' : isInProgress ? 'info' : 'secondary'}
-                                                  size="sm"
-                                                  className="mt-1"
-                                                >
-                                                  {isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Pending'}
-                                                </Badge>
-                                              </div>
+                                              }`}
+                                            >
+                                              {isCompleted ? <CheckCircleIcon className="w-6 h-6" /> : step.stepNumber}
                                             </div>
-                                            {idx < sortedMilestones.length - 1 && (
-                                              <div className="flex items-center flex-1 min-w-[40px]" style={{ marginTop: '20px' }} title="Towards completion">
-                                                <div
-                                                  className={`h-1 flex-1 min-w-[20px] transition-all ${
-                                                    isCompleted
-                                                      ? 'bg-green-500'
-                                                      : 'bg-[var(--border-color)]'
-                                                  }`}
-                                                />
-                                                <ChevronRightIcon
-                                                  className={`w-5 h-5 flex-shrink-0 ${
-                                                    isCompleted ? 'text-green-500' : 'text-[var(--text-muted)]'
-                                                  }`}
-                                                  aria-hidden
-                                                />
-                                              </div>
+                                            <p className="mt-2 text-xs font-semibold text-[var(--text-primary)] text-center leading-tight">{step.name}</p>
+                                            <p className="mt-0.5 text-[10px] text-[var(--text-muted)] text-center capitalize">
+                                              {step.status?.replace(/_/g, ' ')}
+                                            </p>
+                                            {completedAt && (
+                                              <p className="mt-0.5 text-[10px] text-green-600 dark:text-green-400 font-medium">{completedAt}</p>
                                             )}
-                                          </React.Fragment>
-                                        );
-                                      })}
-                                    </div>
+                                          </div>
+                                          {idx < report.workflowSteps!.length - 1 && (
+                                            <div className="flex items-center flex-1 min-w-[12px] max-w-[24px] self-center pt-6 shrink-0" style={{ marginTop: '8px' }}>
+                                              <div className={`h-0.5 flex-1 min-w-0 rounded-full transition-colors duration-300 ${isCompleted ? 'bg-green-400 dark:bg-green-600' : 'bg-[var(--border-color)]'}`} />
+                                              <ArrowRightIcon className={`w-4 h-4 flex-shrink-0 -ml-0.5 ${isCompleted ? 'text-green-500' : 'text-[var(--text-muted)]'}`} aria-hidden />
+                                            </div>
+                                          )}
+                                        </React.Fragment>
+                                      );
+                                    })}
                                   </div>
-                                );
-                              })()}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-[var(--text-muted)]">No workflow steps defined</p>
+                              )}
                             </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                          </>
+                        );
+                      })()}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+            </tbody>
+          </table>
         )}
       </Card>
 
@@ -702,6 +1016,110 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
           fetchReports();
         }}
       />
+
+      {/* Workflow step tooltip portal (above timeline, never clipped) */}
+      {workflowStepTooltip &&
+        createPortal(
+          <div
+            className="fixed w-[260px] z-[9999] pointer-events-none -translate-y-full"
+            style={{
+              left: workflowStepTooltip.rect.left + workflowStepTooltip.rect.width / 2 - 130,
+              top: workflowStepTooltip.rect.top - 8,
+            }}
+          >
+            <div className="w-[260px] bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl rounded-xl p-3">
+              {(() => {
+                const { step, report } = workflowStepTooltip;
+                const isCompleted = step.status === 'completed';
+                const isCurrent = step.stepNumber === report.currentStep;
+                return (
+                  <>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-[var(--text-primary)] truncate">{step.name}</p>
+                        <p className="text-xs text-[var(--text-muted)] capitalize">{step.status?.replace(/_/g, ' ')}</p>
+                      </div>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                          isCompleted
+                            ? 'border-green-500/40 text-green-600 dark:text-green-400'
+                            : isCurrent
+                              ? 'border-[#991B1B]/40 text-[#991B1B]'
+                              : 'border-[var(--border-color)] text-[var(--text-muted)]'
+                        }`}
+                      >
+                        Step {step.stepNumber}
+                      </span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-xs text-[var(--text-secondary)]">
+                      {workflowStepTooltip.startedAt && (
+                        <div className="flex justify-between">
+                          <span>Started</span>
+                          <span className="text-[var(--text-primary)]">{workflowStepTooltip.startedAt}</span>
+                        </div>
+                      )}
+                      {workflowStepTooltip.completedAt && (
+                        <div className="flex justify-between">
+                          <span>Completed</span>
+                          <span className="text-[var(--text-primary)]">{workflowStepTooltip.completedAt}</span>
+                        </div>
+                      )}
+                    </div>
+                    {step.stepNumber === 3 && report.assignedAdjuster?.fullName && (
+                      <div className="mt-2 pt-2 border-t border-[var(--border-color)] text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-[var(--text-secondary)]">Adjuster</span>
+                          <span className="text-[var(--text-primary)] font-medium truncate max-w-[160px]">
+                            {report.assignedAdjuster.fullName}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {step.stepNumber === 4 && (
+                      <div className="mt-2 pt-2 border-t border-[var(--border-color)] text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-[var(--text-secondary)]">Budget items</span>
+                          <span className="text-[var(--text-primary)] font-medium">
+                            {workflowStepTooltip.budgetItems.length}
+                          </span>
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-[var(--text-secondary)]">Budget total</span>
+                          <span className="text-[var(--text-primary)] font-medium">
+                            ${workflowStepTooltip.budgetTotal.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {(step.stepNumber === 5 || step.stepNumber === 6) && (
+                      <div className="mt-2 pt-2 border-t border-[var(--border-color)] text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-[var(--text-secondary)]">Vendors</span>
+                          <span className="text-[var(--text-primary)] font-medium">
+                            {report.assignedVendors?.length ?? 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-[var(--text-secondary)]">In progress</span>
+                          <span className="text-[var(--text-primary)] font-medium">
+                            {workflowStepTooltip.vendorsInProgress}
+                          </span>
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-[var(--text-secondary)]">Completed</span>
+                          <span className="text-[var(--text-primary)] font-medium">
+                            {workflowStepTooltip.vendorsCompleted}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

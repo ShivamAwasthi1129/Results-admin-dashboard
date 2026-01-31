@@ -22,8 +22,6 @@ All requests must include a **Bearer token** in the `Authorization` header:
 Authorization: Bearer <your_token>
 ```
 
-- **How to get a token:** Log in as an **admin** or **super_admin** via this project’s `/api/auth/login` and use the returned `token` in the header.
-- **External website:** Your other site’s **backend** should hold this token (or a dedicated service-account token) and call the Products API from the server. Do not send this token from the browser to your public site; keep it server-side.
 
 ---
 

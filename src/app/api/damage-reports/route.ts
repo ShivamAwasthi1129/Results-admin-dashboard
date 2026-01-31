@@ -2,17 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth, canPerform } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import DamageReport from '@/models/DamageReport';
+import User from '@/models/User';
 
 // Helper function to add CORS headers
 function addCorsHeaders(response: NextResponse, request?: NextRequest) {
-  // Get origin from request or use configured URL
   let allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   
-  // If request origin matches our domain, use it (for production)
   if (request) {
     const requestOrigin = request.headers.get('origin');
     if (requestOrigin) {
-      // Allow same origin or configured origin
       const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
       if (configuredUrl && requestOrigin.includes(new URL(configuredUrl).hostname)) {
         allowedOrigin = requestOrigin;
@@ -34,6 +32,17 @@ export async function OPTIONS(request: NextRequest) {
   const response = new NextResponse(null, { status: 200 });
   return addCorsHeaders(response, request);
 }
+
+// Default workflow steps
+const DEFAULT_WORKFLOW_STEPS = [
+  { stepNumber: 1, name: 'Report Created', status: 'completed', startedAt: new Date(), completedAt: new Date() },
+  { stepNumber: 2, name: 'Under Review', status: 'pending' },
+  { stepNumber: 3, name: 'Assign Adjuster', status: 'pending' },
+  { stepNumber: 4, name: 'Adjuster Inspection & Approval', status: 'pending' },
+  { stepNumber: 5, name: 'Assign Vendors', status: 'pending' },
+  { stepNumber: 6, name: 'Vendor Work', status: 'pending' },
+  { stepNumber: 7, name: 'Completed', status: 'pending' },
+];
 
 // GET - List all damage reports with pagination, search, and filters
 export async function GET(request: NextRequest) {
@@ -67,6 +76,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || '';
     const damageType = searchParams.get('damageType') || '';
     const severity = searchParams.get('severity') || '';
+    const customerId = searchParams.get('customerId') || '';
     const city = searchParams.get('city') || '';
     const state = searchParams.get('state') || '';
 
@@ -76,7 +86,9 @@ export async function GET(request: NextRequest) {
     if (search) {
       query.$or = [
         { reportNumber: { $regex: search, $options: 'i' } },
-        { 'propertyOwner.name': { $regex: search, $options: 'i' } },
+        { 'customer.firstName': { $regex: search, $options: 'i' } },
+        { 'customer.lastName': { $regex: search, $options: 'i' } },
+        { 'customer.email': { $regex: search, $options: 'i' } },
         { 'propertyAddress.street': { $regex: search, $options: 'i' } },
         { 'propertyAddress.city': { $regex: search, $options: 'i' } },
         { 'propertyAddress.zipCode': { $regex: search, $options: 'i' } },
@@ -94,6 +106,10 @@ export async function GET(request: NextRequest) {
 
     if (severity) {
       query.severity = severity;
+    }
+
+    if (customerId) {
+      query['customer.customerId'] = customerId;
     }
 
     if (city) {
@@ -122,14 +138,19 @@ export async function GET(request: NextRequest) {
       const fundingPercentage = report.estimatedCost > 0 
         ? Math.round((totalFunding / report.estimatedCost) * 100) 
         : 0;
+      const totalVendorCost = report.assignedVendors?.reduce((sum: number, vendor: any) => sum + (vendor.estimatedCost || 0), 0) || 0;
+      const vendorWorkProgress = report.assignedVendors?.length > 0
+        ? Math.round((report.assignedVendors.filter((v: any) => v.status === 'completed').length / report.assignedVendors.length) * 100)
+        : 0;
 
       return {
         _id: report._id.toString(),
         id: report._id.toString(),
         reportNumber: report.reportNumber,
         reportDate: report.reportDate,
+        customer: report.customer,
+        customerFullName: report.customer ? `${report.customer.firstName} ${report.customer.lastName}` : 'N/A',
         reportedBy: report.reportedBy,
-        propertyOwner: report.propertyOwner,
         propertyAddress: report.propertyAddress,
         damageType: report.damageType,
         severity: report.severity,
@@ -142,10 +163,13 @@ export async function GET(request: NextRequest) {
         totalFunding,
         fundingPercentage,
         remainingFunding: Math.max(0, (report.estimatedCost || 0) - totalFunding),
-        milestones: report.milestones || [],
+        workflowSteps: report.workflowSteps || [],
+        currentStep: report.currentStep || 1,
+        assignedAdjuster: report.assignedAdjuster,
+        assignedVendors: report.assignedVendors || [],
+        totalVendorCost,
+        vendorWorkProgress,
         images: report.images || [],
-        contractor: report.contractor,
-        vendor: report.vendor,
         notes: report.notes,
         tags: report.tags || [],
         priority: report.priority,
@@ -207,13 +231,58 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // Validate required fields
-    if (!body.propertyOwner?.name || !body.propertyOwner?.phone || !body.propertyAddress || !body.damageType || !body.severity || !body.description) {
+    // Validate required fields - now requires customer selection
+    if (!body.customer?.customerId) {
       const response = NextResponse.json(
-        { success: false, error: 'Property owner, address, damage type, severity, and description are required' },
+        { success: false, error: 'Customer selection is required' },
         { status: 400 }
       );
       return addCorsHeaders(response, request);
+    }
+
+    if (!body.propertyAddress || !body.damageType || !body.severity || !body.description) {
+      const response = NextResponse.json(
+        { success: false, error: 'Property address, damage type, severity, and description are required' },
+        { status: 400 }
+      );
+      return addCorsHeaders(response, request);
+    }
+
+    const estimatedCost = Number(body.estimatedCost) || 0;
+    const fundingSources = Array.isArray(body.fundingSources) ? body.fundingSources : [];
+    const totalFunding = fundingSources.reduce((sum: number, s: { amount?: number }) => sum + (Number(s?.amount) || 0), 0);
+    if (estimatedCost > 0 && totalFunding > estimatedCost) {
+      const response = NextResponse.json(
+        { success: false, error: 'Sum of funding sources cannot exceed the estimated repair cost.' },
+        { status: 400 }
+      );
+      return addCorsHeaders(response, request);
+    }
+
+    // Fetch customer details from User model if only customerId provided
+    let customerData = body.customer;
+    if (body.customer.customerId && (!body.customer.firstName || !body.customer.lastName)) {
+      const user = await User.findById(body.customer.customerId).lean();
+      if (!user) {
+        const response = NextResponse.json(
+          { success: false, error: 'Customer not found' },
+          { status: 404 }
+        );
+        return addCorsHeaders(response, request);
+      }
+      customerData = {
+        customerId: user._id.toString(),
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        address: user.address ? {
+          street: user.address.street,
+          city: user.address.city,
+          state: user.address.state,
+          zipCode: user.address.pincode,
+        } : undefined,
+      };
     }
 
     // Check if report number already exists (if provided)
@@ -228,20 +297,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Set default milestones if not provided
-    const defaultMilestones = [
-      { name: 'Initial Assessment', status: 'pending', order: 1 },
-      { name: 'Insurance Approval', status: 'pending', order: 2 },
-      { name: 'Contractor Assignment', status: 'pending', order: 3 },
-      { name: 'Repair Work Started', status: 'pending', order: 4 },
-      { name: 'Final Inspection', status: 'pending', order: 5 },
-      { name: 'Completion & Closeout', status: 'pending', order: 6 },
-    ];
+    // Generate reportNumber before creating document (validation runs before pre-save hook)
+    let reportNumber = body.reportNumber?.trim()?.toUpperCase();
+    if (!reportNumber) {
+      const year = new Date().getFullYear();
+      const count = await DamageReport.countDocuments({
+        reportDate: { $gte: new Date(year, 0, 1), $lt: new Date(year + 1, 0, 1) },
+      });
+      reportNumber = `DR-${year}-${String(count + 1).padStart(3, '0')}`;
+    }
 
-    // Create new damage report
+    // Create new damage report with new structure
     const reportData = {
       ...body,
-      reportNumber: body.reportNumber?.toUpperCase(),
+      customer: customerData,
+      reportNumber,
       reportDate: body.reportDate ? new Date(body.reportDate) : new Date(),
       reportedBy: {
         userId: tokenPayload.userId,
@@ -249,14 +319,15 @@ export async function POST(request: NextRequest) {
         email: body.reportedBy?.email || tokenPayload.email,
         phone: body.reportedBy?.phone,
       },
+      status: 'report_created',
+      description: body.description || '',
+      affectedAreas: Array.isArray(body.affectedAreas) ? body.affectedAreas : [],
       estimatedCost: body.estimatedCost || 0,
       fundingSources: body.fundingSources || [],
-      milestones: body.milestones && body.milestones.length > 0 ? body.milestones : defaultMilestones,
+      workflowSteps: DEFAULT_WORKFLOW_STEPS,
+      currentStep: 1,
+      assignedVendors: [],
       images: body.images || [],
-      vendor: body.vendor ? {
-        ...body.vendor,
-        assignedDate: body.vendor.assignedDate ? new Date(body.vendor.assignedDate) : new Date(),
-      } : undefined,
       createdBy: tokenPayload.userId,
       lastModifiedBy: tokenPayload.userId,
     };
@@ -264,10 +335,10 @@ export async function POST(request: NextRequest) {
     const damageReport = new DamageReport(reportData);
     await damageReport.save();
 
-    // Calculate funding metrics
-    const totalFunding = damageReport.fundingSources.reduce((sum, source) => sum + (source.amount || 0), 0);
+    // Calculate metrics from saved document
+    const savedTotalFunding = damageReport.fundingSources.reduce((sum, source) => sum + (source.amount || 0), 0);
     const fundingPercentage = damageReport.estimatedCost > 0 
-      ? Math.round((totalFunding / damageReport.estimatedCost) * 100) 
+      ? Math.round((savedTotalFunding / damageReport.estimatedCost) * 100) 
       : 0;
 
     const response = NextResponse.json({
@@ -275,9 +346,12 @@ export async function POST(request: NextRequest) {
       data: {
         damageReport: {
           ...damageReport.toObject(),
-          totalFunding,
+          customerFullName: `${damageReport.customer.firstName} ${damageReport.customer.lastName}`,
+          totalFunding: savedTotalFunding,
           fundingPercentage,
-          remainingFunding: Math.max(0, damageReport.estimatedCost - totalFunding),
+          remainingFunding: Math.max(0, damageReport.estimatedCost - savedTotalFunding),
+          totalVendorCost: 0,
+          vendorWorkProgress: 0,
         },
       },
       message: 'Damage report created successfully',

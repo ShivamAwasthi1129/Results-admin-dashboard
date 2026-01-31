@@ -8,21 +8,25 @@ interface DamageReport {
   id: string;
   reportNumber: string;
   reportDate: string;
+  customer: {
+    customerId: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+    };
+  };
+  customerFullName?: string;
   reportedBy: {
     userId?: string;
     name: string;
     email?: string;
     phone?: string;
-  };
-  propertyOwner: {
-    name: string;
-    phone: string;
-    email?: string;
-    alternateContact?: {
-      name?: string;
-      phone?: string;
-      relation?: string;
-    };
   };
   propertyAddress: {
     street: string;
@@ -30,10 +34,6 @@ interface DamageReport {
     state: string;
     zipCode: string;
     country?: string;
-    coordinates?: {
-      lat: number;
-      lng: number;
-    };
   };
   damageType: string;
   severity: string;
@@ -53,15 +53,33 @@ interface DamageReport {
   totalFunding?: number;
   fundingPercentage?: number;
   remainingFunding?: number;
-  milestones: Array<{
+  workflowSteps: Array<{
+    stepNumber: number;
     name: string;
-    description?: string;
     status: string;
-    completionDate?: string;
-    dueDate?: string;
+    startedAt?: string;
+    completedAt?: string;
+    completedBy?: string;
     notes?: string;
-    order: number;
   }>;
+  currentStep: number;
+  assignedAdjuster?: {
+    adjusterId: string;
+    fullName: string;
+    email?: string;
+    phone?: string;
+    companyName?: string;
+    approvalStatus: string;
+  };
+  assignedVendors: Array<{
+    vendorId: string;
+    businessName: string;
+    category?: string;
+    estimatedCost: number;
+    status: string;
+  }>;
+  totalVendorCost?: number;
+  vendorWorkProgress?: number;
   images: Array<{
     url: string;
     alt?: string;
@@ -69,29 +87,6 @@ interface DamageReport {
     uploadedAt?: string;
     isPrimary?: boolean;
   }>;
-  contractor?: {
-    name: string;
-    contact?: string;
-    email?: string;
-    phone?: string;
-    estimatedTimeline?: string;
-    assignedDate?: string;
-  };
-  vendor?: {
-    vendorId: string;
-    providerId?: string;
-    businessName?: string;
-    contactPerson?: {
-      name?: string;
-      phone?: string;
-      email?: string;
-    };
-    category?: string;
-    assignedDate?: string;
-    assignedBy?: string;
-    status?: 'assigned' | 'in_progress' | 'completed' | 'cancelled';
-    notes?: string;
-  };
   notes?: string;
   tags?: string[];
   priority?: string;

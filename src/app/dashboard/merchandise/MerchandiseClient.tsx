@@ -159,6 +159,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
   const [vendorSearchQuery, setVendorSearchQuery] = useState('');
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
+  const [showAddVendorManual, setShowAddVendorManual] = useState(false);
   const vendorDropdownRef = useRef<HTMLDivElement>(null);
 
   // Form data for add/edit
@@ -352,9 +353,10 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
   // Handle vendor selection
   const handleVendorSelect = (vendor: Vendor) => {
     setSelectedVendorId(vendor._id);
+    setShowAddVendorManual(false);
     setVendorSearchQuery(vendor.businessName || '');
     setShowVendorDropdown(false);
-    
+
     // Auto-fill vendor information
     setFormData({
       ...formData,
@@ -471,6 +473,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
     setShowVariantModal(false);
     setSelectedProduct(null);
     setSelectedVendorId('');
+    setShowAddVendorManual(false);
     setVendorSearchQuery('');
     setShowVendorDropdown(false);
   };
@@ -1808,25 +1811,48 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                   placeholder="Search vendor from Vendor & Alliance Partners..."
                   className="pr-10"
                 />
-                {selectedVendorId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedVendorId('');
-                      setVendorSearchQuery('');
-                      setFormData({
-                        ...formData,
-                        vendorName: '',
-                        vendorContact: '',
-                        vendorEmail: '',
-                        vendorAddress: '',
-                      });
-                    }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-[var(--bg-input)] text-[var(--text-muted)]"
-                  >
-                    <XMarkIcon className="w-4 h-4" />
-                  </button>
-                )}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {showVendorDropdown && vendorSearchQuery && filteredVendors.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddVendorManual(true);
+                        setShowVendorDropdown(false);
+                        setFormData({
+                          ...formData,
+                          vendorName: vendorSearchQuery,
+                          vendorContact: '',
+                          vendorEmail: '',
+                          vendorAddress: '',
+                        });
+                      }}
+                      className="p-1.5 rounded-full hover:bg-[var(--bg-input)] text-purple-500 hover:text-purple-600"
+                      title="Add new vendor"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                  {(selectedVendorId || showAddVendorManual) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedVendorId('');
+                        setVendorSearchQuery('');
+                        setShowAddVendorManual(false);
+                        setFormData({
+                          ...formData,
+                          vendorName: '',
+                          vendorContact: '',
+                          vendorEmail: '',
+                          vendorAddress: '',
+                        });
+                      }}
+                      className="p-1 rounded-full hover:bg-[var(--bg-input)] text-[var(--text-muted)]"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
 
                 {showVendorDropdown && filteredVendors.length > 0 && (
                   <div className="absolute z-50 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
@@ -1856,55 +1882,55 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                   </div>
                 )}
                 {showVendorDropdown && vendorSearchQuery && filteredVendors.length === 0 && (
-                  <div className="absolute z-50 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg mt-1 p-4">
+                  <div className="absolute z-50 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg mt-1 p-3">
                     <p className="text-sm text-[var(--text-muted)] text-center">
-                      No vendor found. You can manually enter vendor information below.
+                      No vendor found. Click the <strong>+</strong> icon to add vendor details manually.
                     </p>
                   </div>
                 )}
               </div>
               <p className="text-xs text-[var(--text-muted)] mt-1">
-                Select a vendor from Vendor & Alliance Partners to auto-fill information, or enter manually below.
+                Select a vendor from the list or click + when not found to add vendor details.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Vendor Name</label>
-                <Input
-                  value={formData.vendorName}
-                  onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
-                  placeholder="Vendor company name"
-                />
+            {(selectedVendorId || showAddVendorManual) && (
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-[var(--border-color)]">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Vendor Name</label>
+                  <Input
+                    value={formData.vendorName}
+                    onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
+                    placeholder="Vendor company name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Contact</label>
+                  <Input
+                    value={formData.vendorContact}
+                    onChange={(e) => setFormData({ ...formData, vendorContact: e.target.value })}
+                    placeholder="Phone number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Email</label>
+                  <Input
+                    type="email"
+                    value={formData.vendorEmail}
+                    onChange={(e) => setFormData({ ...formData, vendorEmail: e.target.value })}
+                    placeholder="vendor@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Address</label>
+                  <Input
+                    value={formData.vendorAddress}
+                    onChange={(e) => setFormData({ ...formData, vendorAddress: e.target.value })}
+                    placeholder="Vendor address"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Contact</label>
-                <Input
-                  value={formData.vendorContact}
-                  onChange={(e) => setFormData({ ...formData, vendorContact: e.target.value })}
-                  placeholder="Phone number"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Email</label>
-                <Input
-                  type="email"
-                  value={formData.vendorEmail}
-                  onChange={(e) => setFormData({ ...formData, vendorEmail: e.target.value })}
-                  placeholder="vendor@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Address</label>
-                <Input
-                  value={formData.vendorAddress}
-                  onChange={(e) => setFormData({ ...formData, vendorAddress: e.target.value })}
-                  placeholder="Vendor address"
-                />
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Additional Options */}
