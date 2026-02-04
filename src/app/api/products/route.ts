@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth, canPerform } from '@/lib/auth';
+import { verifyAuth } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 
-// GET - List all products with pagination, search, and filters
+// CORS: allow any origin for public GET (use from another website)
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  return response;
+}
+
+export async function OPTIONS() {
+  const response = new NextResponse(null, { status: 204 });
+  addCorsHeaders(response);
+  return response;
+}
+
+// GET - List all products with pagination, search, and filters (public, no auth required)
 export async function GET(request: NextRequest) {
   try {
-    const tokenPayload = await verifyAuth(request);
-
-    if (!tokenPayload) {
-      return NextResponse.json(
-        { success: false, message: 'Not authorized. No token provided.' },
-        { status: 401 }
-      );
-    }
-
     await connectDB();
 
     // Get query parameters
@@ -119,7 +124,7 @@ export async function GET(request: NextRequest) {
       updatedAt: product.updatedAt,
     }));
 
-    return NextResponse.json({
+    const json = NextResponse.json({
       success: true,
       data: {
         products: transformedProducts,
@@ -131,6 +136,8 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+    addCorsHeaders(json);
+    return json;
   } catch (error: any) {
     console.error('Get products error:', error);
     return NextResponse.json(

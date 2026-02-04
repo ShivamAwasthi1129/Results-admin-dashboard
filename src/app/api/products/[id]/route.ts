@@ -1,39 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth, canPerform } from '@/lib/auth';
+import { verifyAuth } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 
-// GET - Get single product
+// CORS: allow any origin for public GET
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  return response;
+}
+
+export async function OPTIONS() {
+  const response = new NextResponse(null, { status: 204 });
+  addCorsHeaders(response);
+  return response;
+}
+
+// GET - Get single product (public, no auth required)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const tokenPayload = await verifyAuth(request);
     const { id } = await params;
-
-    if (!tokenPayload) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     await connectDB();
 
     const product = await Product.findById(id).lean();
 
     if (!product) {
-      return NextResponse.json(
+      const notFound = NextResponse.json(
         { success: false, error: 'Product not found' },
         { status: 404 }
       );
+      addCorsHeaders(notFound);
+      return notFound;
     }
 
-    return NextResponse.json({
+    const json = NextResponse.json({
       success: true,
       data: { product },
     });
+    addCorsHeaders(json);
+    return json;
   } catch (error) {
     console.error('Get product error:', error);
     return NextResponse.json(
