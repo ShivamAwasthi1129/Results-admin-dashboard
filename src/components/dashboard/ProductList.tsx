@@ -113,7 +113,7 @@ export default function ProductList({ products, isLoading = false }: ProductList
     // Remove duplicates by _id
     const firstIndex = self.findIndex(p => p._id === product._id);
     if (firstIndex !== index) return false;
-    
+
     // Apply search filter
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
@@ -130,14 +130,14 @@ export default function ProductList({ products, isLoading = false }: ProductList
   // Show all filtered products (table container will limit visible rows with max-height)
   const displayProducts = filteredProducts;
 
-  // Table columns definition - only essential columns
+  // Table columns with explicit widths to prevent overlap
   const columns = [
-    { key: 'image', label: '', sortable: false },
-    { key: 'name', label: 'Product Name', sortable: true },
-    { key: 'category', label: 'Category', sortable: true },
-    { key: 'price', label: 'Price', sortable: true },
-    { key: 'stock', label: 'Stock', sortable: true },
-    { key: 'actions', label: '', sortable: false },
+    { key: 'image', label: 'image', sortable: false, width: '56px' },
+    { key: 'name', label: 'Product Name', sortable: true, width: '40%' },
+    // { key: 'category', label: 'Category', sortable: true, width: '16%' },
+    { key: 'price', label: 'Price', sortable: true, width: '14%' },
+    { key: 'stock', label: 'Stock', sortable: true, width: '12%' },
+    { key: 'actions', label: 'Actions', sortable: false, width: '22%' },
   ];
 
   const handleProductClick = (product: Product) => {
@@ -214,87 +214,85 @@ export default function ProductList({ products, isLoading = false }: ProductList
               </p>
             </div>
           ) : (
-            <div className="p-2 overflow-y-auto scrollbar-thin" style={{ 
-              scrollbarWidth: 'thin', 
-              scrollbarColor: 'var(--border-color) var(--bg-input)', 
+            <div className="p-2 overflow-y-auto scrollbar-thin" style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'var(--border-color) var(--bg-input)',
               maxHeight: '380px', // Shows approximately 5 rows (60px per row + header)
               height: '100%'
             }}>
               <Table
                 columns={columns}
                 data={displayProducts.map((product) => {
-                const discountedPrice = product.discount
-                  ? product.sellingPrice * (1 - product.discount / 100)
-                  : product.sellingPrice;
-                const primaryImage = product.images?.find(img => img.isPrimary) || product.images?.[0];
+                  const discountedPrice = product.discount
+                    ? product.sellingPrice * (1 - product.discount / 100)
+                    : product.sellingPrice;
+                  const primaryImage = product.images?.find(img => img.isPrimary) || product.images?.[0];
 
-                return {
-                  image: (
-                    <div className="flex items-center justify-center w-12 h-12">
-                      {primaryImage ? (
-                        <img
-                          src={primaryImage.url}
-                          alt={primaryImage.alt || product.name}
-                          className="w-full h-12 object-cover rounded-lg"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                          <PhotoIcon className="w-6 h-6 text-purple-500" />
-                        </div>
-                      )}
-                    </div>
-                  ),
-                  name: (
-                    <div className="min-w-0">
-                      <p className="font-medium text-[var(--text-primary)] truncate max-w-[200px]">{product.name}</p>
-                      {product.sku && (
-                        <p className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">SKU: {product.sku}</p>
-                      )}
-                    </div>
-                  ),
-                  category: (
-                    <span className="capitalize text-sm truncate max-w-[100px] block">{product.category}</span>
-                  ),
-                  price: (
-                    <div className="min-w-0">
-                      {product.discount ? (
-                        <div className="flex flex-col gap-0.5">
+                  return {
+                    image: (
+                      <div className="flex items-center justify-center w-12 h-12 shrink-0">
+                        {primaryImage ? (
+                          <img
+                            src={primaryImage.url}
+                            alt={primaryImage.alt || product.name}
+                            className="w-full h-12 object-cover rounded-lg"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                            <PhotoIcon className="w-6 h-6 text-purple-500" />
+                          </div>
+                        )}
+                      </div>
+                    ),
+                    name: (
+                      <div className="min-w-0 w-full overflow-hidden flex flex-col">
+                        <p className="font-medium text-[var(--text-primary)] truncate">{product.name}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">SKU: {product.sku}</p>
+                      </div>
+                    ),
+                    // category: (
+                    //   <span className="capitalize text-sm truncate block min-w-0">{product.category}</span>
+                    // ),
+                    price: (
+                      <div className="min-w-0 flex flex-col gap-0.5">
+                        {product.discount ? (
+                          <>
+                            <span className="font-semibold text-sm text-[var(--text-primary)]">
+                              ${discountedPrice.toFixed(2)}
+                            </span>
+                            <span className="text-xs line-through text-[var(--text-muted)]">
+                              ${product.sellingPrice.toFixed(2)}
+                            </span>
+                          </>
+                        ) : (
                           <span className="font-semibold text-sm text-[var(--text-primary)]">
-                            ${discountedPrice.toFixed(2)}
-                          </span>
-                          <span className="text-xs line-through text-[var(--text-muted)]">
                             ${product.sellingPrice.toFixed(2)}
                           </span>
-                        </div>
-                      ) : (
-                        <span className="font-semibold text-sm text-[var(--text-primary)]">
-                          ${product.sellingPrice.toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                  ),
-                  stock: (
-                    <div className="flex items-center gap-1 text-sm">
-                      <CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
-                      <span>{product.stock.availableQuantity}</span>
-                    </div>
-                  ),
-                  actions: (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleProductClick(product)}
-                      className="flex items-center gap-1 text-xs px-2 py-1"
-                    >
-                      <EyeIcon className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">View Details</span>
-                      <span className="sm:hidden">View</span>
-                    </Button>
-                  ),
-                };
-              })}
-              compact
-            />
+                        )}
+                      </div>
+                    ),
+                    stock: (
+                      <div className="flex items-center gap-1 text-sm min-w-0">
+                        <CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        <span>{product.stock.availableQuantity}</span>
+                      </div>
+                    ),
+                    actions: (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleProductClick(product)}
+                        className="flex items-center gap-1 text-xs px-2 py-1 shrink-0"
+                      >
+                        <EyeIcon className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">View Details</span>
+                        <span className="sm:hidden">View</span>
+                      </Button>
+                    ),
+                  };
+                })}
+                compact
+              />
             </div>
           )}
         </div>

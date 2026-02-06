@@ -27,6 +27,10 @@ interface LiveDisasterMapProps {
   selectedId?: string;
   highlightedId?: string | null;
   onSelectDisaster?: (id: string) => void;
+  filterSeverity?: string;
+  onSeverityClick?: (severity: string) => void;
+  /** When set (e.g. volcanic, iceberg), map fits bounds to show only these disasters */
+  activeFilterType?: string;
 }
 
 const severityColors: Record<string, string> = {
@@ -36,26 +40,69 @@ const severityColors: Record<string, string> = {
   critical: '#ef4444',
 };
 
-const typeEmoji: Record<string, string> = {
-  wildfire: '🔥',
-  cyclone: '🌀',
-  flood: '🌊',
-  earthquake: '🌋',
-  volcanic: '🌋',
-  drought: '☀️',
-  landslide: '⛰️',
-  other: '⚠️',
+const typeColors: Record<string, string> = {
+  volcanic: '#dc2626',
+  iceberg: '#06b6d4',
+  wildfire: '#f59e0b',
+  earthquake: '#eab308',
+  cyclone: '#3b82f6',
+  flood: '#0ea5e9',
+  drought: '#f97316',
+  landslide: '#78716c',
+  other: '#94a3b8',
 };
+
+/** SVG-based marker HTML per disaster type for a more realistic map */
+function getMarkerSvg(type: string, color: string, size: number, isSelected: boolean, isHighlighted: boolean): string {
+  const stroke = isSelected ? 3 : 2;
+  const animClass = type === 'volcanic' ? 'marker-anim-eruption' : type === 'wildfire' ? 'marker-anim-flame' : type === 'earthquake' ? 'marker-anim-ripple' : type === 'iceberg' ? 'marker-anim-frost' : type === 'cyclone' ? 'marker-anim-spin' : '';
+  const base = `<div class="disaster-marker-wrap ${animClass}" style="width:${size}px;height:${size}px;position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;">`;
+  const ring = (isSelected || isHighlighted) ? `<div class="marker-ring" style="position:absolute;inset:-8px;border:2px solid ${color};border-radius:50%;opacity:0.6;animation:ripple-marker 1.5s infinite;"></div>` : '';
+  let svg = '';
+  switch (type) {
+    case 'volcanic':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><path fill="${color}" d="M16 4L6 20h4l-2 8h16l-2-8h4L16 4z"/><ellipse fill="#fbbf24" opacity="0.9" cx="16" cy="8" rx="4" ry="3"/><path fill="#fff" opacity="0.5" d="M14 6l2 4 2-4z"/></svg>`;
+      break;
+    case 'iceberg':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><path fill="${color}" d="M16 2l-6 12h4l-2 8h8l-2-8h4L16 2z"/><path fill="#e0f2fe" d="M14 10h4v2h-4z"/></svg>`;
+      break;
+    case 'wildfire':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 8px ${color});"><path fill="${color}" d="M16 4c-2 4-6 8-6 14 0 4 2.5 7 6 7s6-3 6-7c0-6-4-10-6-14z"/><path fill="#fef3c7" d="M16 8c1 2 3 5 3 10 0 2-1 4-3 4s-3-2-3-4c0-5 2-8 3-10z"/></svg>`;
+      break;
+    case 'earthquake':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><circle cx="16" cy="16" r="10" fill="none" stroke="${color}" stroke-width="${stroke}"/><circle cx="16" cy="16" r="6" fill="none" stroke="${color}" stroke-width="${stroke}" opacity="0.7"/><circle cx="16" cy="16" r="2" fill="${color}"/></svg>`;
+      break;
+    case 'cyclone':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><path fill="none" stroke="${color}" stroke-width="${stroke}" d="M16 4 Q24 8 24 16 Q24 24 16 28 Q8 24 8 16 Q8 8 16 4"/><path fill="${color}" d="M16 12v8l6-4-6-4z"/></svg>`;
+      break;
+    case 'flood':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><path fill="${color}" d="M4 20h24v4H4z"/><path fill="${color}" opacity="0.8" d="M8 14h16v4H8z"/><path fill="${color}" opacity="0.6" d="M12 8h8v4h-8z"/></svg>`;
+      break;
+    case 'drought':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><circle cx="16" cy="14" r="8" fill="${color}"/><path fill="#fef3c7" d="M16 6l2 8h-4z"/></svg>`;
+      break;
+    case 'landslide':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><path fill="${color}" d="M4 28l8-16 8 8 8-12v20H4z"/></svg>`;
+      break;
+    default:
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 4px ${color});"><circle cx="16" cy="16" r="10" fill="none" stroke="${color}" stroke-width="${stroke}"/><path fill="${color}" d="M16 10v8M14 14h4"/></svg>`;
+  }
+  return `${base}${ring}<div style="position:relative;z-index:1;background:rgba(0,0,0,0.4);border-radius:50%;padding:4px;border:2px solid rgba(255,255,255,0.5);box-shadow:0 4px 12px rgba(0,0,0,0.4);">${svg}</div></div>`;
+}
 
 export default function LiveDisasterMap({
   disasters,
   selectedId,
   highlightedId,
   onSelectDisaster,
+  filterSeverity,
+  onSeverityClick,
+  activeFilterType,
 }: LiveDisasterMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fitBoundsDoneRef = useRef(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -92,72 +139,20 @@ export default function LiveDisasterMap({
     // Clear existing markers
     markersRef.current.clearLayers();
 
-    // Add markers for each disaster
     disasters.forEach((disaster) => {
       if (!disaster.location?.coordinates) return;
 
       const { lat, lng } = disaster.location.coordinates;
-      const color = severityColors[disaster.severity] || severityColors.medium;
-      const emoji = typeEmoji[disaster.type] || typeEmoji.other;
+      const color = typeColors[disaster.type] || severityColors[disaster.severity] || severityColors.medium;
       const isSelected = selectedId === disaster.id;
       const isHighlighted = highlightedId === disaster.id;
 
-      // Create custom icon with enhanced interactivity
       const markerSize = isSelected ? 56 : isHighlighted ? 48 : 40;
       const icon = L.divIcon({
         className: 'custom-disaster-marker',
-        html: `
-          <div style="
-            position: relative;
-            width: ${markerSize}px;
-            height: ${markerSize}px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: ${color};
-            border-radius: 50%;
-            border: ${isSelected ? '5px' : '4px'} solid white;
-            box-shadow: 0 ${isSelected ? '6px' : '4px'} ${isSelected ? '20px' : '16px'} rgba(0,0,0,0.${isSelected ? '5' : '4'});
-            font-size: ${isSelected ? '24px' : isHighlighted ? '20px' : '18px'};
-            cursor: pointer;
-            transition: all 0.3s ease;
-            z-index: ${isSelected ? '1000' : isHighlighted ? '999' : '1'};
-            ${disaster.severity === 'critical' ? 'animation: pulse-marker 1.5s infinite;' : ''}
-            ${isHighlighted ? 'animation: highlight-marker 0.6s ease-in-out;' : ''}
-          ">
-            ${emoji}
-          </div>
-          ${(isSelected || isHighlighted) ? `
-            <div style="
-              position: absolute;
-              top: 50%;
-              left: 50%;
-              transform: translate(-50%, -50%);
-              width: ${isSelected ? '80px' : '70px'};
-              height: ${isSelected ? '80px' : '70px'};
-              border: 3px solid ${color};
-              border-radius: 50%;
-              opacity: 0.5;
-              animation: ripple-marker 1.5s infinite;
-            "></div>
-          ` : ''}
-          <style>
-            @keyframes pulse-marker {
-              0%, 100% { transform: scale(1); }
-              50% { transform: scale(1.15); }
-            }
-            @keyframes highlight-marker {
-              0%, 100% { transform: scale(1); }
-              50% { transform: scale(1.2); }
-            }
-            @keyframes ripple-marker {
-              0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-              100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
-            }
-          </style>
-        `,
-        iconSize: [markerSize, markerSize],
-        iconAnchor: [markerSize / 2, markerSize / 2],
+        html: getMarkerSvg(disaster.type, color, markerSize, isSelected, isHighlighted),
+        iconSize: [markerSize + 16, markerSize + 16],
+        iconAnchor: [(markerSize + 16) / 2, (markerSize + 16) / 2],
       });
 
       const marker = L.marker([lat, lng], { icon })
@@ -185,6 +180,7 @@ export default function LiveDisasterMap({
               align-items: center;
               gap: 8px;
               margin-bottom: 12px;
+              flex-wrap: wrap;
             ">
               <span style="
                 padding: 5px 10px;
@@ -203,6 +199,16 @@ export default function LiveDisasterMap({
                 font-size: 12px;
                 text-transform: capitalize;
               ">${disaster.type}</span>
+              ${disaster.source === 'database' ? `
+              <span style="
+                padding: 5px 10px;
+                background: rgba(34, 197, 94, 0.2);
+                color: #22c55e;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+              ">Custom disaster</span>
+              ` : ''}
             </div>
             <h3 style="
               font-size: 16px;
@@ -295,34 +301,22 @@ export default function LiveDisasterMap({
       });
     });
 
-    // Fit bounds to show all markers, but only if there are disasters
-    // Otherwise keep the USA view
-    if (disasters.length > 0) {
-      const validDisasters = disasters.filter(d => d.location?.coordinates);
-      if (validDisasters.length > 0) {
-        // Filter to USA disasters only for initial bounds
-        const usaDisasters = validDisasters.filter(d => {
-          const coords = d.location.coordinates!;
-          return coords.lat >= 24 && coords.lat <= 49 &&
-                 coords.lng >= -125 && coords.lng <= -66;
-        });
-        
-        if (usaDisasters.length > 0) {
-          // Fit bounds to USA disasters
-          const bounds = L.latLngBounds(
-            usaDisasters.map(d => [d.location.coordinates!.lat, d.location.coordinates!.lng])
-          );
-          mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 6 });
-        } else {
-          // If no USA disasters, keep USA view but allow user to zoom/pan
-          mapRef.current.setView([39.8283, -98.5795], 4);
-        }
-      }
-    } else {
-      // No disasters, keep USA view
-      mapRef.current.setView([39.8283, -98.5795], 4);
-    }
   }, [disasters, selectedId, highlightedId, onSelectDisaster]);
+
+  // When a top-button filter is active (e.g. Volcanic, Iceberg), fit map to show only those markers
+  useEffect(() => {
+    if (!mapRef.current || !activeFilterType || activeFilterType === 'all') {
+      fitBoundsDoneRef.current = false;
+      return;
+    }
+    const withCoords = disasters.filter(d => d.location?.coordinates);
+    if (withCoords.length === 0) return;
+    const bounds = L.latLngBounds(
+      withCoords.map(d => [d.location!.coordinates!.lat, d.location!.coordinates!.lng] as [number, number])
+    );
+    mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 12, animate: true });
+    fitBoundsDoneRef.current = true;
+  }, [disasters, activeFilterType]);
 
   // Pan to selected disaster
   useEffect(() => {
@@ -347,10 +341,26 @@ export default function LiveDisasterMap({
         minHeight: '500px'
       }}
     >
-      {/* Map Legend Overlay */}
+      <style>{`
+        @keyframes ripple-marker {
+          0% { transform: scale(1); opacity: 0.6; }
+          100% { transform: scale(1.8); opacity: 0; }
+        }
+        .marker-anim-eruption { animation: eruption-pulse 2s ease-in-out infinite; }
+        .marker-anim-flame { animation: flame-flicker 1.2s ease-in-out infinite; }
+        .marker-anim-ripple { animation: ripple-pulse 1.5s ease-out infinite; }
+        .marker-anim-frost { animation: frost-glow 2.5s ease-in-out infinite; }
+        .marker-anim-spin { animation: spin-slow 4s linear infinite; }
+        @keyframes eruption-pulse { 0%, 100% { filter: drop-shadow(0 0 6px rgba(220,38,38,0.8)); transform: scale(1); } 50% { filter: drop-shadow(0 0 14px rgba(220,38,38,0.9)); transform: scale(1.08); } }
+        @keyframes flame-flicker { 0%, 100% { filter: drop-shadow(0 0 8px rgba(245,158,11,0.9)); } 50% { filter: drop-shadow(0 0 14px rgba(251,191,36,0.95)); } }
+        @keyframes ripple-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.9; } }
+        @keyframes frost-glow { 0%, 100% { filter: drop-shadow(0 0 6px rgba(6,182,212,0.6)); } 50% { filter: drop-shadow(0 0 12px rgba(34,211,238,0.8)); } }
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
+      {/* Map Legend Overlay - clickable severity filter */}
       {disasters.length > 0 && (
         <div 
-          className="absolute top-4 right-4 z-[1000] rounded-lg p-3 shadow-xl"
+          className="absolute top-4 right-4 z-[1000] rounded-lg p-3 shadow-xl w-[20%]"
           style={{
             backgroundColor: 'rgba(26, 26, 46, 0.95)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -359,34 +369,34 @@ export default function LiveDisasterMap({
         >
           <div className="text-xs font-semibold mb-2" style={{ color: '#f8fafc' }}>Severity Levels</div>
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500 border border-white"></div>
-              <span className="text-xs" style={{ color: '#cbd5e1' }}>Critical</span>
-              <span className="text-xs ml-auto" style={{ color: '#64748b' }}>
-                ({disasters.filter(d => d.severity === 'critical').length})
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-orange-500 border border-white"></div>
-              <span className="text-xs" style={{ color: '#cbd5e1' }}>High</span>
-              <span className="text-xs ml-auto" style={{ color: '#64748b' }}>
-                ({disasters.filter(d => d.severity === 'high').length})
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-amber-500 border border-white"></div>
-              <span className="text-xs" style={{ color: '#cbd5e1' }}>Medium</span>
-              <span className="text-xs ml-auto" style={{ color: '#64748b' }}>
-                ({disasters.filter(d => d.severity === 'medium').length})
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500 border border-white"></div>
-              <span className="text-xs" style={{ color: '#cbd5e1' }}>Low</span>
-              <span className="text-xs ml-auto" style={{ color: '#64748b' }}>
-                ({disasters.filter(d => d.severity === 'low').length})
-              </span>
-            </div>
+            {(['critical', 'high', 'medium', 'low'] as const).map((severity) => {
+              const count = disasters.filter(d => d.severity === severity).length;
+              const isActive = filterSeverity === severity;
+              const colorClass = severity === 'critical' ? 'bg-red-500' : severity === 'high' ? 'bg-orange-500' : severity === 'medium' ? 'bg-amber-500' : 'bg-emerald-500';
+              const label = severity.charAt(0).toUpperCase() + severity.slice(1);
+              const content = (
+                <div className="flex items-center gap-2 w-full">
+                  <div className={`w-3 h-3 rounded-full border border-white shrink-0 ${colorClass}`} />
+                  <span className="text-xs flex-1" style={{ color: '#cbd5e1' }}>{label}</span>
+                  <span className="text-xs" style={{ color: '#64748b' }}>({count})</span>
+                </div>
+              );
+              return onSeverityClick ? (
+                <button
+                  key={severity}
+                  type="button"
+                  onClick={() => onSeverityClick(severity)}
+                  className={`w-full text-left rounded px-2 py-1 -mx-2 -my-0.5 transition-colors ${isActive ? 'bg-white/15 ring-1 ring-white/30' : 'hover:bg-white/10'}`}
+                  title={isActive ? `Click to show all severities` : `Filter by ${label}`}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div key={severity} className="flex items-center gap-2">
+                  {content}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

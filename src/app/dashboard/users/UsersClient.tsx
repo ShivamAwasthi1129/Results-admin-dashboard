@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout';
-import { Card, StatCard, Button, Input, Badge, Modal, Select, Avatar } from '@/components/ui';
+import { Card, Button, Input, Badge, Modal, Select, Avatar } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-toastify';
@@ -20,6 +20,10 @@ import {
   MapPinIcon,
   CalendarDaysIcon,
   IdentificationIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  CheckCircleIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline';
 import { US_STATES, BLOOD_GROUPS, GENDER_OPTIONS, RELATION_OPTIONS, USER_ROLES, USER_STATUS } from '@/lib/constants/usa';
 
@@ -103,8 +107,34 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
     driversLicenseExpiry: '',
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const canManageUsers = hasPermission(['super_admin', 'admin']);
+
+  // Password strength: 0-4 (length, uppercase, lowercase, number, special)
+  const getPasswordStrength = (pwd: string): { score: number; label: string; color: string; percent: number } => {
+    if (!pwd.length) return { score: 0, label: '', color: 'transparent', percent: 0 };
+    let score = 0;
+    if (pwd.length >= 6) score++;
+    if (pwd.length >= 10) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[a-z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+    const capped = Math.min(score, 4);
+    const percent = (capped / 4) * 100;
+    if (capped <= 1) return { score: capped, label: 'Weak', color: 'var(--danger)', percent };
+    if (capped <= 3) return { score: capped, label: 'Medium', color: 'var(--warning)', percent };
+    return { score: capped, label: 'Strong', color: 'var(--success)', percent };
+  };
+
+  const passwordStrength = getPasswordStrength(formData.password);
+  const passwordsMatch = !formData.password
+    ? null
+    : formData.password === formData.confirmPassword;
+  const confirmPasswordTouched = formData.confirmPassword.length > 0;
 
   const fetchUsers = async () => {
     try {
@@ -328,11 +358,29 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
   return (
     <DashboardLayout title="Users" subtitle="Manage all users in the system">
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <StatCard title="Total Users" value={stats.total} icon={<UsersIcon className="w-6 h-6" />} variant="purple" />
-        <StatCard title="Admins" value={stats.admins} icon={<ShieldCheckIcon className="w-6 h-6" />} variant="blue" />
-        <StatCard title="Super Admins" value={stats.superAdmins} icon={<ShieldCheckIcon className="w-6 h-6" />} variant="red" />
+      {/* Stats Cards Row - Dashboard style */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
+        <Card className="p-3 border-l-4 border-l-blue-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Total Users</p>
+            <UsersIcon className="w-5 h-5 text-blue-400" />
+          </div>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.total}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Admins</p>
+            <ShieldCheckIcon className="w-5 h-5 text-purple-400" />
+          </div>
+          <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.admins}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-red-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Super Admins</p>
+            <ShieldCheckIcon className="w-5 h-5 text-red-400" />
+          </div>
+          <p className="text-2xl font-bold text-red-400 leading-tight">{stats.superAdmins}</p>
+        </Card>
       </div>
 
       {/* Filters & Actions */}
@@ -702,32 +750,114 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
               />
               {!selectedUser && (
                 <>
-                  <Input 
-                    label="Password *" 
-                    type="password" 
-                    value={formData.password} 
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
-                    required
-                    placeholder="Min 6 characters"
-                  />
-                  <Input 
-                    label="Confirm Password *" 
-                    type="password" 
-                    value={formData.confirmPassword} 
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })} 
-                    required
-                    placeholder="Re-enter password"
-                  />
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Password *</label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        required
+                        placeholder="Min 6 characters"
+                        className="pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((p) => !p)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    {formData.password.length > 0 && (
+                      <div className="mt-1.5">
+                        <div className="flex gap-1 mb-1">
+                          {[1, 2, 3, 4].map((i) => (
+                            <div
+                              key={i}
+                              className="h-1 flex-1 rounded-full transition-colors"
+                              style={{
+                                backgroundColor: i <= passwordStrength.score ? passwordStrength.color : 'var(--bg-input)',
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <p className="text-xs" style={{ color: passwordStrength.color }}>
+                          Strength: {passwordStrength.label}
+                          {formData.password.length < 6 && formData.password.length > 0 && (
+                            <span className="ml-1">(min 6 characters)</span>
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Confirm Password *</label>
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={formData.confirmPassword}
+                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                        required
+                        placeholder="Re-enter password"
+                        className="pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((p) => !p)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    {confirmPasswordTouched && (
+                      <p className={`text-xs mt-1.5 flex items-center gap-1 ${passwordsMatch ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+                        {passwordsMatch ? <CheckCircleIcon className="w-4 h-4" /> : <XCircleIcon className="w-4 h-4" />}
+                        {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+                      </p>
+                    )}
+                  </div>
                 </>
               )}
               {selectedUser && (
-                <Input 
-                  label="New Password (optional)" 
-                  type="password" 
-                  value={formData.password} 
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
-                  placeholder="Leave blank to keep current"
-                />
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">New Password (optional)</label>
+                  <div className="relative">
+                    <Input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Leave blank to keep current"
+                      className="pr-12"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                      aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {formData.password.length > 0 && (
+                    <div className="mt-1.5">
+                      <div className="flex gap-1 mb-1">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div
+                            key={i}
+                            className="h-1 flex-1 rounded-full transition-colors"
+                            style={{
+                              backgroundColor: i <= passwordStrength.score ? passwordStrength.color : 'var(--bg-input)',
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs" style={{ color: passwordStrength.color }}>Strength: {passwordStrength.label}</p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

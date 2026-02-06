@@ -293,62 +293,42 @@ export default function UserManagementClient({ initialData }: UserManagementClie
 
   return (
     <DashboardLayout title="User Management" subtitle="Manage all users from external system">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-              <UsersIcon className="w-5 h-5 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-muted)]">Total Users</p>
-              <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</p>
-            </div>
+      {/* Stats Cards Row - Dashboard style */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
+        <Card className="p-3 border-l-4 border-l-blue-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Total Users</p>
+            <UsersIcon className="w-5 h-5 text-blue-400" />
           </div>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.total}</p>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-              <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-muted)]">Active</p>
-              <p className="text-2xl font-bold text-emerald-400">{stats.active}</p>
-            </div>
+        <Card className="p-3 border-l-4 border-l-emerald-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Active</p>
+            <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
           </div>
+          <p className="text-2xl font-bold text-emerald-400 leading-tight">{stats.active}</p>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <ShieldCheckIcon className="w-5 h-5 text-blue-400" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-muted)]">Verified</p>
-              <p className="text-2xl font-bold text-blue-400">{stats.verified}</p>
-            </div>
+        <Card className="p-3 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Verified</p>
+            <ShieldCheckIcon className="w-5 h-5 text-purple-400" />
           </div>
+          <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.verified}</p>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-              <UserGroupIcon className="w-5 h-5 text-amber-400" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-muted)]">Subscribers</p>
-              <p className="text-2xl font-bold text-amber-400">{stats.subscribers}</p>
-            </div>
+        <Card className="p-3 border-l-4 border-l-amber-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Subscribers</p>
+            <UserGroupIcon className="w-5 h-5 text-amber-400" />
           </div>
+          <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.subscribers}</p>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
-              <XCircleIcon className="w-5 h-5 text-red-400" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-muted)]">Inactive</p>
-              <p className="text-2xl font-bold text-red-400">{stats.inactive}</p>
-            </div>
+        <Card className="p-3 border-l-4 border-l-red-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Inactive</p>
+            <XCircleIcon className="w-5 h-5 text-red-400" />
           </div>
+          <p className="text-2xl font-bold text-red-400 leading-tight">{stats.inactive}</p>
         </Card>
       </div>
 

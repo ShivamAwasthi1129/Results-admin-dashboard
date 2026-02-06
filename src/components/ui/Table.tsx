@@ -9,6 +9,7 @@ interface Column<T> {
   render?: (item: T, index: number) => React.ReactNode;
   className?: string;
   align?: 'left' | 'center' | 'right';
+  width?: string;
 }
 
 interface TableProps<T> {
@@ -56,7 +57,7 @@ function Table<T extends Record<string, any>>({
 
   return (
     <div className={cn('w-full', className)}>
-      <div className="relative w-full overflow-x-hidden overflow-y-visible responsive-table-wrapper">
+      <div className="relative w-full overflow-x-auto overflow-y-visible responsive-table-wrapper">
         <table className="w-full table-fixed responsive-table" style={{ tableLayout: 'fixed', width: '100%' }}>
             <thead>
               <tr className="border-b border-[var(--border-color)]">
@@ -71,12 +72,14 @@ function Table<T extends Record<string, any>>({
                       column.className
                     )}
                     style={{ 
-                      width: column.key === 'image' ? '60px' : 
+                      width: column.width ??
+                             (column.key === 'image' ? '60px' : 
                              column.key === 'name' ? '30%' :
                              column.key === 'category' ? '15%' :
                              column.key === 'price' ? '15%' :
                              column.key === 'stock' ? '12%' :
-                             column.key === 'actions' ? 'auto' : 'auto'
+                             column.key === 'actions' ? 'auto' : 'auto'),
+                      minWidth: 0,
                     }}
                   >
                     {column.label}
@@ -135,17 +138,18 @@ function Table<T extends Record<string, any>>({
                     return (
                       <td
                         key={`cell-${index}-${colIndex}-${column.key as string}`}
-                      className={cn(
-                        compact ? 'px-2 py-2 sm:px-3 sm:py-2' : 'px-2 py-2 sm:px-3 sm:py-2 md:px-4 md:py-3',
-                        'text-xs sm:text-sm text-[var(--text-primary)]',
-                        alignClasses[column.align || 'left'],
-                        column.className
-                      )}
-                    >
+                        className={cn(
+                          compact ? 'px-2 py-2 sm:px-3 sm:py-2' : 'px-2 py-2 sm:px-3 sm:py-2 md:px-4 md:py-3',
+                          'text-xs sm:text-sm text-[var(--text-primary)]',
+                          alignClasses[column.align || 'left'],
+                          column.className
+                        )}
+                        style={{ minWidth: 0 }}
+                      >
                         {isCustomRender ? (
-                          <div className="min-w-0">{cellValue}</div>
+                          <div className="min-w-0 overflow-hidden">{cellValue}</div>
                         ) : (
-                          <div className="truncate max-w-full">
+                          <div className="min-w-0 truncate max-w-full">
                             {cellValue}
                           </div>
                         )}

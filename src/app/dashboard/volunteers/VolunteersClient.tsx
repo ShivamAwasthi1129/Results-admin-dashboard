@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout';
-import { Card, StatCard, Button, Input, Badge, Modal, Select, Avatar } from '@/components/ui';
+import { Card, Button, Input, Badge, Modal, Select, Avatar } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-toastify';
@@ -478,11 +478,36 @@ export default function VolunteersClient({
   return (
     <DashboardLayout title="Volunteers" subtitle="Manage volunteer activities and registrations">
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard title="Total Volunteers" value={stats.total} icon={<UserGroupIcon className="w-6 h-6" />} variant="purple" />
-        <StatCard title="Available" value={stats.available} icon={<CheckCircleIcon className="w-6 h-6" />} variant="green" />
-        <StatCard title="On Mission" value={stats.onMission} icon={<ClockIcon className="w-6 h-6" />} variant="orange" />
-        <StatCard title="Avg Rating" value={stats.avgRating} icon={<StarIcon className="w-6 h-6" />} variant="teal" />
+      {/* Stats Cards Row - Dashboard style */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
+        <Card className="p-3 border-l-4 border-l-purple-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Total Volunteers</p>
+            <UserGroupIcon className="w-5 h-5 text-purple-400" />
+          </div>
+          <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.total}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-emerald-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Available</p>
+            <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
+          </div>
+          <p className="text-2xl font-bold text-emerald-400 leading-tight">{stats.available}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-amber-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">On Mission</p>
+            <ClockIcon className="w-5 h-5 text-amber-400" />
+          </div>
+          <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.onMission}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-teal-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Avg Rating</p>
+            <StarIcon className="w-5 h-5 text-teal-400" />
+          </div>
+          <p className="text-2xl font-bold text-teal-400 leading-tight">{stats.avgRating}</p>
+        </Card>
       </div>
 
       {/* Filters & Actions */}

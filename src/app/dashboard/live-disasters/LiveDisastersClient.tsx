@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout';
 import { Card, Badge, Button, Input, Modal, Select, Table } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { useDataCache } from '@/context/DataCacheContext';
 import { toast } from 'react-toastify';
 import dynamic from 'next/dynamic';
 import {
@@ -34,6 +35,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   CheckCircleIcon,
+  BoltIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { USA_STATES } from '@/lib/geocoding';
@@ -70,9 +72,11 @@ const typeIcons: Record<string, any> = {
   wildfire: FireIcon,
   cyclone: CloudIcon,
   flood: CloudIcon,
-  earthquake: ExclamationTriangleIcon,
+  earthquake: BoltIcon,
   volcanic: FireIcon,
+  iceberg: CloudIcon,
   drought: SunIcon,
+  landslide: MapPinIcon,
   default: MapPinIcon,
 };
 
@@ -136,6 +140,7 @@ interface Volunteer {
 
 export default function LiveDisastersClient() {
   const { token, hasPermission } = useAuth();
+  const { getCachedData, updateCache } = useDataCache();
   const [liveDisasters, setLiveDisasters] = useState<LiveDisaster[]>([]);
   const [databaseDisasters, setDatabaseDisasters] = useState<ManagedDisaster[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -146,9 +151,16 @@ export default function LiveDisastersClient() {
   const [selectedDisaster, setSelectedDisaster] = useState<any | null>(null);
   const [filterType, setFilterType] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState('all');
-  const [filterCountry, setFilterCountry] = useState<string>('USA');
+  const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterCountries, setFilterCountries] = useState<string[]>([]);
   const [filterState, setFilterState] = useState('all');
+  const [filterSource, setFilterSource] = useState<'all' | 'database'>('all');
+  const [filterFromDate, setFilterFromDate] = useState<string>(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [filterToDate, setFilterToDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [highlightedDisasterId, setHighlightedDisasterId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedManagedDisaster, setSelectedManagedDisaster] = useState<ManagedDisaster | null>(null);
@@ -183,6 +195,7 @@ export default function LiveDisastersClient() {
   const [disasterSearchQuery, setDisasterSearchQuery] = useState('');
   const [showDisasterDropdown, setShowDisasterDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [listSearchQuery, setListSearchQuery] = useState('');
 
   const canManage = hasPermission(['super_admin', 'admin']);
 
@@ -212,83 +225,10 @@ export default function LiveDisastersClient() {
       const response = await fetch('/api/live-disasters');
       const data = await response.json();
       if (data.success) {
-        // Filter to only USA-based disasters
-        const usaDisasters = data.data.disasters.filter((d: LiveDisaster) => {
-          const country = d.location?.country || '';
-          const isUSA = country.toLowerCase().includes('united states') || 
-                       country.toLowerCase().includes('usa') || 
-                       country.toLowerCase().includes('u.s.') ||
-                       country.toLowerCase() === 'us';
-          
-          let coordinates;
-          if (d.location?.coordinates) {
-            coordinates = d.location.coordinates;
-          }
-          
-          const isInUSABounds = coordinates && 
-            coordinates.lat >= 24 && coordinates.lat <= 49 &&
-            coordinates.lng >= -125 && coordinates.lng <= -66;
-          
-          return isUSA || isInUSABounds;
-        });
-        setLiveDisasters(usaDisasters);
+        const allLiveFromApi = data.data.disasters || [];
+        setLiveDisasters(allLiveFromApi);
+        updateCache('disasters', allLiveFromApi);
         setLastUpdated(new Date(data.data.metadata.lastUpdated));
-        
-        // Update combined disasters
-        if (databaseDisasters.length > 0) {
-          const combined = [
-            ...liveDisasters.map((d: LiveDisaster) => ({
-              ...d,
-              id: d.id,
-              isLive: true,
-              source: 'live'
-            })),
-      ...databaseDisasters.map((d: ManagedDisaster) => {
-        // Handle coordinates - database stores as [lng, lat] (GeoJSON format)
-        let coordinates: { lat: number; lng: number } | undefined;
-        if (d.location?.coordinates) {
-          if (Array.isArray(d.location.coordinates) && d.location.coordinates.length === 2) {
-            // GeoJSON format: [lng, lat]
-            coordinates = {
-              lat: d.location.coordinates[1],
-              lng: d.location.coordinates[0]
-            };
-          } else if (typeof d.location.coordinates === 'object' && 'lat' in d.location.coordinates) {
-            // Object format: {lat, lng}
-            coordinates = d.location.coordinates as { lat: number; lng: number };
-          }
-        }
-        
-        return {
-          id: d._id,
-          title: d.title,
-          description: d.description,
-          type: d.type,
-          category: d.type,
-          severity: d.severity,
-          status: d.status,
-          location: {
-            coordinates: coordinates,
-            country: d.location?.country || 'USA',
-            state: d.location?.state,
-          },
-          date: d.createdAt,
-          isLive: false,
-          source: 'database',
-          affectedArea: d.affectedArea,
-          estimatedAffectedPeople: d.estimatedAffectedPeople,
-        };
-      })
-          ];
-          setAllDisasters(combined);
-        } else {
-          setAllDisasters(usaDisasters.map((d: LiveDisaster) => ({
-            ...d,
-            id: d.id,
-            isLive: true,
-            source: 'live'
-          })));
-        }
       }
     } catch (error) {
       console.error('Failed to fetch live disasters:', error);
@@ -327,45 +267,14 @@ export default function LiveDisastersClient() {
       const data = await response.json();
       if (data.success) {
         console.log('Fetched disasters from API:', data.data.disasters.length);
-        
+
         // Show ALL disasters from database, not just USA
         // The map will filter to USA, but the list shows all
-        const allDisasters = data.data.disasters || [];
-        setDatabaseDisasters(allDisasters);
-        
-        // For map display, filter to USA-based disasters only
-        const usaDisasters = allDisasters.filter((d: ManagedDisaster) => {
-          const country = d.location?.country || '';
-          const isUSA = country.toLowerCase().includes('usa') || 
-                       country.toLowerCase().includes('united states') ||
-                       country.toLowerCase() === 'us';
-          
-          // Also check coordinates if available (handle both array and object formats)
-          if (!isUSA && d.location?.coordinates) {
-            let lat: number | undefined;
-            let lng: number | undefined;
-            
-            if (Array.isArray(d.location.coordinates) && d.location.coordinates.length === 2) {
-              // GeoJSON format: [lng, lat]
-              lng = d.location.coordinates[0];
-              lat = d.location.coordinates[1];
-            } else if (typeof d.location.coordinates === 'object' && 'lat' in d.location.coordinates) {
-              // Object format: {lat, lng}
-              lat = (d.location.coordinates as any).lat;
-              lng = (d.location.coordinates as any).lng;
-            }
-            
-            if (lat !== undefined && lng !== undefined) {
-              return lat >= 24 && lat <= 49 &&
-                     lng >= -125 && lng <= -66;
-            }
-          }
-          return isUSA;
-        });
-        
-        // Transform database disasters for map display - handle coordinate format
-        // Use usaDisasters for map (filtered to USA), but allDisasters for the list
-        const transformedDatabaseDisasters = usaDisasters.map((d: ManagedDisaster) => {
+        const allDisastersFromApi = data.data.disasters || [];
+        setDatabaseDisasters(allDisastersFromApi);
+
+        // Transform ALL database disasters for map (worldwide)
+        const transformedDatabaseDisasters = allDisastersFromApi.map((d: ManagedDisaster) => {
           // Handle coordinates - database stores as [lng, lat] (GeoJSON format)
           let coordinates: { lat: number; lng: number } | undefined;
           if (d.location?.coordinates) {
@@ -380,7 +289,7 @@ export default function LiveDisastersClient() {
               coordinates = d.location.coordinates as { lat: number; lng: number };
             }
           }
-          
+
           return {
             id: d._id,
             title: d.title,
@@ -401,8 +310,8 @@ export default function LiveDisastersClient() {
             estimatedAffectedPeople: d.estimatedAffectedPeople,
           };
         });
-        
-        // Combine live and database disasters for display
+
+        // Combine live (worldwide) and database (worldwide) for display
         const combined = [
           ...liveDisasters.map(d => ({
             ...d,
@@ -413,7 +322,7 @@ export default function LiveDisastersClient() {
           ...transformedDatabaseDisasters
         ];
         setAllDisasters(combined);
-        console.log('Database disasters set:', allDisasters.length);
+        console.log('Database disasters set:', combined.length);
       } else {
         console.error('Failed to fetch disasters:', data);
         toast.error(data.error || 'Failed to fetch database disasters');
@@ -426,32 +335,42 @@ export default function LiveDisastersClient() {
     }
   };
 
-  // Fetch initial data on mount
+  // Render from cache immediately, then refresh in background
   useEffect(() => {
-    if (token) {
-      const loadInitialData = async () => {
-        setIsInitialLoading(true);
-        try {
-          // Fetch all data in parallel
-          await Promise.all([
-            fetchLiveDisasters(),
-            fetchDatabaseDisasters(),
-            fetchVolunteers(),
-          ]);
-        } catch (error) {
-          console.error('Error loading initial data:', error);
-        } finally {
-          setIsInitialLoading(false);
-        }
-      };
-      loadInitialData();
+    if (!token) return;
+    const cachedLive = getCachedData('disasters');
+    if (cachedLive && Array.isArray(cachedLive) && cachedLive.length > 0) {
+      setLiveDisasters(cachedLive);
     }
+    const loadInitialData = async () => {
+      setIsInitialLoading(true);
+      try {
+        await Promise.all([
+          fetchLiveDisasters(),
+          fetchDatabaseDisasters(),
+          fetchVolunteers(),
+        ]);
+      } catch (error) {
+        console.error('Error loading initial data:', error);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+    loadInitialData();
   }, [token]);
 
-  // Update combined disasters when either live or database disasters change
+  // Update combined disasters when either live or database disasters change (current year only)
   useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    const isCurrentYear = (dateStr: string | undefined) => {
+      if (!dateStr) return false;
+      const y = new Date(dateStr).getFullYear();
+      return !isNaN(y) && y === currentYear;
+    };
+    const dbCurrentYear = databaseDisasters.filter((d: ManagedDisaster) => isCurrentYear(d.createdAt));
+
     // Transform database disasters for map display
-    const transformedDatabaseDisasters = databaseDisasters.map((d: ManagedDisaster) => {
+    const transformedDatabaseDisasters = dbCurrentYear.map((d: ManagedDisaster) => {
       let coordinates: { lat: number; lng: number } | undefined;
       if (d.location?.coordinates) {
         if (Array.isArray(d.location.coordinates)) {
@@ -463,7 +382,7 @@ export default function LiveDisastersClient() {
           coordinates = d.location.coordinates as { lat: number; lng: number };
         }
       }
-      
+
       return {
         id: d._id,
         title: d.title,
@@ -484,7 +403,7 @@ export default function LiveDisastersClient() {
         estimatedAffectedPeople: d.estimatedAffectedPeople,
       };
     });
-    
+
     const combined = [
       ...liveDisasters.map(d => ({
         ...d,
@@ -554,7 +473,7 @@ export default function LiveDisastersClient() {
                   types: ['address'],
                   componentRestrictions: { country: 'us' },
                 });
-                
+
                 autocomplete.addListener('place_changed', () => {
                   const place = autocomplete.getPlace();
                   if (place.geometry) {
@@ -577,7 +496,7 @@ export default function LiveDisastersClient() {
 
   const handleSubmitDisaster = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate required fields
     if (!formData.title) {
       toast.error('Title is required');
@@ -591,11 +510,11 @@ export default function LiveDisastersClient() {
       toast.error('Range of disaster is required');
       return;
     }
-    
+
     try {
       const url = selectedManagedDisaster ? `/api/disasters/${selectedManagedDisaster._id}` : '/api/disasters';
       const method = selectedManagedDisaster ? 'PUT' : 'POST';
-      
+
       // Prepare coordinates - API expects [lng, lat] format for GeoJSON
       let coordinates: [number, number] | undefined;
       if (formData.lat && formData.lng) {
@@ -605,7 +524,7 @@ export default function LiveDisastersClient() {
           coordinates = [lng, lat]; // GeoJSON format: [longitude, latitude]
         }
       }
-      
+
       // Extract city and state from address if available
       let city = '';
       let state = '';
@@ -635,7 +554,7 @@ export default function LiveDisastersClient() {
         affectedArea: 0, // Removed field
         affectedPopulation: formData.estimatedAffectedPeople ? parseInt(formData.estimatedAffectedPeople) : 0,
       };
-      
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -704,11 +623,11 @@ export default function LiveDisastersClient() {
         return volunteer.userId.name;
       }
     }
-    
+
     // If not found, try to find in the fetched volunteers list
     if (typeof volunteer === 'object' && volunteer?._id) {
-      const volId = typeof volunteer._id === 'string' 
-        ? volunteer._id 
+      const volId = typeof volunteer._id === 'string'
+        ? volunteer._id
         : (typeof volunteer._id === 'object' && volunteer._id !== null ? String(volunteer._id) : '');
       if (volId) {
         const fullVolunteer = volunteers.find(v => v._id === volId);
@@ -722,18 +641,18 @@ export default function LiveDisastersClient() {
         }
       }
     }
-    
+
     // Fallback to volunteerId if available
     if (typeof volunteer === 'object' && volunteer?.volunteerId) {
       return volunteer.volunteerId;
     }
-    
+
     return 'Unknown Volunteer';
   };
 
   const handleRemoveVolunteerFromDisaster = async (disasterId: string, volunteerId: string) => {
     if (!confirm('Are you sure you want to remove this volunteer from the disaster?')) return;
-    
+
     try {
       const response = await fetch(`/api/disasters/${disasterId}/assign-volunteer?volunteerId=${volunteerId}`, {
         method: 'DELETE',
@@ -765,35 +684,67 @@ export default function LiveDisastersClient() {
     }
   };
 
+  const filterDisasterByDate = (d: { date?: string }) => {
+    const dateStr = d.date;
+    if (!dateStr) return true;
+    const eventDate = new Date(dateStr);
+    if (isNaN(eventDate.getTime())) return true;
+    const from = new Date(filterFromDate);
+    const to = new Date(filterToDate);
+    to.setHours(23, 59, 59, 999);
+    return eventDate >= from && eventDate <= to;
+  };
+
   const filteredDisasters = allDisasters.filter(d => {
+    if (!filterDisasterByDate(d)) return false;
     if (filterType !== 'all' && d.type !== filterType) return false;
     if (filterSeverity !== 'all' && d.severity !== filterSeverity) return false;
-    
-    // Always filter to USA only
-    const country = d.location?.country || '';
-    const isUSA = country.toLowerCase().includes('united states') || 
-                 country.toLowerCase().includes('usa') || 
-                 country.toLowerCase().includes('u.s.') ||
-                 country.toLowerCase() === 'us';
-    if (!isUSA) return false;
-    
+    if (filterCountry !== 'all' && (d.location?.country || '') !== filterCountry) return false;
     if (filterState !== 'all' && d.location?.state !== filterState) return false;
+    if (filterCountries.length > 0 && !filterCountries.includes(d.location?.country || '')) return false;
+    if (filterSource === 'database' && d.source !== 'database') return false;
     return true;
   });
 
+  // Search within the filtered list (title, description, location, type)
+  const listSearchLower = listSearchQuery.trim().toLowerCase();
+  const listFilteredDisasters = listSearchLower
+    ? filteredDisasters.filter(d => {
+      const title = (d.title || '').toLowerCase();
+      const desc = (d.description || '').toLowerCase();
+      const country = (d.location?.country || '').toLowerCase();
+      const state = (d.location?.state || '').toLowerCase();
+      const type = (d.type || '').toLowerCase();
+      const category = (d.category || '').toLowerCase();
+      return (
+        title.includes(listSearchLower) ||
+        desc.includes(listSearchLower) ||
+        country.includes(listSearchLower) ||
+        state.includes(listSearchLower) ||
+        type.includes(listSearchLower) ||
+        category.includes(listSearchLower)
+      );
+    })
+    : filteredDisasters;
+
+  const currentYear = new Date().getFullYear();
   const stats = {
     total: allDisasters.length,
-    critical: allDisasters.filter(d => d.severity === 'critical').length,
-    high: allDisasters.filter(d => d.severity === 'high').length,
+    volcanic: allDisasters.filter(d => d.type === 'volcanic').length,
+    iceberg: allDisasters.filter(d => d.type === 'iceberg').length,
     wildfires: allDisasters.filter(d => d.type === 'wildfire').length,
+    earthquakes: allDisasters.filter(d => d.type === 'earthquake').length,
     storms: allDisasters.filter(d => d.type === 'cyclone').length,
     live: liveDisasters.length,
-    database: databaseDisasters.length,
+    database: databaseDisasters.filter((d: ManagedDisaster) => {
+      const y = d.createdAt ? new Date(d.createdAt).getFullYear() : NaN;
+      return !isNaN(y) && y === currentYear;
+    }).length,
   };
 
   const uniqueTypes = Array.from(new Set(allDisasters.map(d => d.type))).sort();
   const uniqueCountries = Array.from(new Set(allDisasters.map(d => d.location?.country).filter(Boolean))).sort();
-  
+
   // Get states/provinces for the selected country dynamically from disaster data
   const getStatesForCountry = (country: string): string[] => {
     if (!country || country === 'all') return [];
@@ -804,9 +755,9 @@ export default function LiveDisastersClient() {
         .filter(Boolean) as string[]
     )).sort();
   };
-  
+
   const availableStates = filterCountry !== 'all' ? getStatesForCountry(filterCountry) : [];
-  
+
   // Auto-scroll to selected disaster in the list
   useEffect(() => {
     if (selectedDisaster) {
@@ -817,46 +768,302 @@ export default function LiveDisastersClient() {
     }
   }, [selectedDisaster]);
 
+  const clearAllFilters = () => {
+    setFilterType('all');
+    setFilterSeverity('all');
+    setFilterCountry('all');
+    setFilterState('all');
+    setFilterCountries([]);
+    setFilterSource('all');
+    setListSearchQuery('');
+    const d = new Date();
+    setFilterToDate(d.toISOString().slice(0, 10));
+    const from = new Date();
+    from.setMonth(from.getMonth() - 1);
+    setFilterFromDate(from.toISOString().slice(0, 10));
+    setSelectedDisaster(null);
+  };
+
+  const hasActiveFilters =
+    filterType !== 'all' ||
+    filterSeverity !== 'all' ||
+    filterCountry !== 'all' ||
+    filterState !== 'all' ||
+    filterCountries.length > 0 ||
+    filterSource !== 'all' ||
+    listSearchQuery.trim() !== '';
+
   return (
     <DashboardLayout title="Live Disasters" subtitle="Real-time global disaster monitoring">
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-        <Card padding="md" className="text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-purple-500/20 flex items-center justify-center">
+
+
+      {/* Quick Stats - clickable filter cards (type filters; map shifts to show selected) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <Card
+          className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 ${filterType === 'all' && filterSource === 'all' ? 'ring-2 ring-purple-500/40' : ''}`}
+          onClick={() => {
+            setFilterType('all');
+            setFilterSeverity('all');
+            setFilterSource('all');
+            setFilterCountry('all');
+            setFilterState('all');
+            setFilterCountries([]);
+            const d = new Date();
+            setFilterToDate(d.toISOString().slice(0, 10));
+            const from = new Date();
+            from.setMonth(from.getMonth() - 1);
+            setFilterFromDate(from.toISOString().slice(0, 10));
+          }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Active Events</p>
             <GlobeAltIcon className="w-5 h-5 text-purple-400" />
           </div>
-          <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</p>
-          <p className="text-xs text-[var(--text-muted)]">Active Events</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.total}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Worldwide</p>
         </Card>
-        <Card padding="md" className="text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-red-500/20 flex items-center justify-center">
-            <ExclamationTriangleIcon className="w-5 h-5 text-red-400" />
+        <Card
+          className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'volcanic' ? 'all' : 'volcanic'); setFilterSeverity('all'); }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Volcanic Eruptions</p>
+            <span className="text-lg" aria-hidden>🌋</span>
           </div>
-          <p className="text-2xl font-bold text-red-400">{stats.critical}</p>
-          <p className="text-xs text-[var(--text-muted)]">Critical</p>
+          <p className="text-2xl font-bold text-red-400 leading-tight">{stats.volcanic}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
-        <Card padding="md" className="text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-orange-500/20 flex items-center justify-center">
-            <ExclamationTriangleIcon className="w-5 h-5 text-orange-400" />
+        <Card
+          className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 ${filterType === 'iceberg' ? 'ring-2 ring-cyan-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'iceberg' ? 'all' : 'iceberg'); setFilterSeverity('all'); }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Iceberg / Sea Ice</p>
+            <span className="text-lg" aria-hidden>🧊</span>
           </div>
-          <p className="text-2xl font-bold text-orange-400">{stats.high}</p>
-          <p className="text-xs text-[var(--text-muted)]">High Severity</p>
+          <p className="text-2xl font-bold text-cyan-400 leading-tight">{stats.iceberg}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Events</p>
         </Card>
-        <Card padding="md" className="text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-amber-500/20 flex items-center justify-center">
+        <Card
+          className={`p-3 border-l-4 border-l-amber-500 cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30 ${filterType === 'wildfire' ? 'ring-2 ring-amber-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'wildfire' ? 'all' : 'wildfire'); setFilterSeverity('all'); }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Wildfires</p>
             <FireIcon className="w-5 h-5 text-amber-400" />
           </div>
-          <p className="text-2xl font-bold text-amber-400">{stats.wildfires}</p>
-          <p className="text-xs text-[var(--text-muted)]">Wildfires</p>
+          <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.wildfires}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
-        <Card padding="md" className="text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-blue-500/20 flex items-center justify-center">
+        <Card
+          className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'earthquake' ? 'all' : 'earthquake'); setFilterSeverity('all'); }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Earthquakes</p>
+            <BoltIcon className="w-5 h-5 text-yellow-400" />
+          </div>
+          <p className="text-2xl font-bold text-yellow-400 leading-tight">{stats.earthquakes}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Events</p>
+        </Card>
+        <Card
+          className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'cyclone' ? 'all' : 'cyclone'); setFilterSeverity('all'); }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Storms</p>
             <CloudIcon className="w-5 h-5 text-blue-400" />
           </div>
-          <p className="text-2xl font-bold text-blue-400">{stats.storms}</p>
-          <p className="text-xs text-[var(--text-muted)]">Storms</p>
+          <p className="text-2xl font-bold text-blue-400 leading-tight">{stats.storms}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Cyclones</p>
         </Card>
+      </div>
+      {/* Top filter row: all filters in ONE line with search taking more space */}
+      <div className="mb-6">
+        <div className="p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20 backdrop-blur-sm">
+          <div className="flex items-end gap-3 w-full">
+            {/* Search Bar - Takes 2x width */}
+            <div className="flex flex-col gap-1.5 flex-[2] min-w-0">
+              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                Search
+              </label> */}
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
+                <Input
+                  type="text"
+                  placeholder="Search disasters..."
+                  value={listSearchQuery}
+                  onChange={(e) => setListSearchQuery(e.target.value)}
+                  className="pl-12 pr-10 py-2.5 text-sm w-full bg-[var(--bg-card)] border-purple-500/30 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg shadow-sm transition-all duration-200"
+                />
+                {listSearchQuery && (
+                  <button
+                    onClick={() => setListSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-purple-500/10 rounded-md transition-colors"
+                  >
+                    <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Type Filter - Takes 1x width */}
+            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                Type
+              </label> */}
+              <select
+                value={filterType}
+                onChange={(e) => { setFilterType(e.target.value); setSelectedDisaster(null); }}
+                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+              >
+                <option value="all">All Types</option>
+                {uniqueTypes.map(type => (
+                  <option key={type} value={type} className="capitalize">{type}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Severity Filter - Takes 1x width */}
+            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                Severity
+              </label> */}
+              <select
+                value={filterSeverity}
+                onChange={(e) => { setFilterSeverity(e.target.value); setSelectedDisaster(null); }}
+                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+              >
+                <option value="all">All Severity</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+
+            {/* Country Filter - Takes 1x width */}
+            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                Country
+              </label> */}
+              <select
+                value={filterCountry}
+                onChange={(e) => { setFilterCountry(e.target.value); setFilterState('all'); setSelectedDisaster(null); }}
+                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+              >
+                <option value="all">All Countries</option>
+                {uniqueCountries.map(country => (
+                  <option key={country} value={country}>{country}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* State Filter - Takes 1x width (only shows when country is selected) */}
+            {filterCountry !== 'all' && availableStates.length > 0 && (
+              <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                  State
+                </label> */}
+                <select
+                  value={filterState}
+                  onChange={(e) => { setFilterState(e.target.value); setSelectedDisaster(null); }}
+                  className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                >
+                  <option value="all">All States</option>
+                  {availableStates.map(state => (
+                    <option key={state} value={state}>{state}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* From Date - Takes 1x width */}
+            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                From Date
+              </label> */}
+              <input
+                type="date"
+                value={filterFromDate}
+                onChange={(e) => setFilterFromDate(e.target.value)}
+                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+              />
+            </div>
+
+            {/* To Date - Takes 1x width */}
+            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                To Date
+              </label> */}
+              <input
+                type="date"
+                value={filterToDate}
+                onChange={(e) => setFilterToDate(e.target.value)}
+                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+              />
+            </div>
+
+            {/* Clear Filters Button - Fixed width */}
+            {hasActiveFilters && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-transparent uppercase tracking-wide">
+                  Clear
+                </label>
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="px-4 py-2.5 text-sm font-medium text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 whitespace-nowrap"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Active Filters Display (Optional - below the main row) */}
+          {hasActiveFilters && (
+            <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                  Active Filters:
+                </span>
+                {filterType !== 'all' && (
+                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                    Type: {filterType}
+                  </span>
+                )}
+                {filterSeverity !== 'all' && (
+                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                    Severity: {filterSeverity}
+                  </span>
+                )}
+                {filterCountry !== 'all' && (
+                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                    Country: {filterCountry}
+                  </span>
+                )}
+                {filterState !== 'all' && (
+                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                    State: {filterState}
+                  </span>
+                )}
+                {filterFromDate && (
+                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                    From: {filterFromDate}
+                  </span>
+                )}
+                {filterToDate && (
+                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                    To: {filterToDate}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Content */}
@@ -866,26 +1073,35 @@ export default function LiveDisastersClient() {
           <Card padding="none" className="h-[600px] overflow-hidden">
             <div className="h-full">
               <LiveDisasterMap
-                disasters={filteredDisasters.map((d: any) => ({
+                disasters={filteredDisasters.filter((d: any) => d.location?.coordinates).map((d: any) => ({
                   id: d.id,
                   title: d.title,
                   type: d.type,
                   severity: d.severity,
+                  description: d.description,
+                  date: d.date,
+                  magnitude: d.magnitude,
+                  magnitudeUnit: d.magnitudeUnit,
                   location: {
-                    coordinates: d.location?.coordinates
-                  }
+                    coordinates: d.location?.coordinates,
+                    country: d.location?.country,
+                    state: d.location?.state,
+                  },
+                  source: d.source === 'database' ? 'database' : 'live',
                 }))}
                 selectedId={selectedDisaster?.id}
                 highlightedId={highlightedDisasterId}
                 onSelectDisaster={(id) => {
-                  const disaster = filteredDisasters.find(d => d.id === id);
+                  const disaster = allDisasters.find(d => d.id === id) || filteredDisasters.find(d => d.id === id);
                   if (disaster) {
                     setSelectedDisaster(disaster);
                     setHighlightedDisasterId(id);
-                    // Clear highlight after animation
                     setTimeout(() => setHighlightedDisasterId(null), 2000);
                   }
                 }}
+                filterSeverity={filterSeverity}
+                onSeverityClick={(severity) => setFilterSeverity(prev => prev === severity ? 'all' : severity)}
+                activeFilterType={filterType !== 'all' ? filterType : undefined}
               />
             </div>
           </Card>
@@ -894,114 +1110,15 @@ export default function LiveDisastersClient() {
         {/* Sidebar - Events List */}
         <div className="lg:col-span-1">
           <Card padding="none" className="h-[600px] flex flex-col">
-            {/* Filters */}
-            <div className="p-4 border-b border-[var(--border-color)] bg-[var(--bg-input)]">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                  <FunnelIcon className="w-4 h-4" />
-                  Filters
-                </h3>
-                {(filterType !== 'all' || filterSeverity !== 'all' || filterCountry !== 'all' || filterCountries.length > 0 || filterState !== 'all') && (
-                  <button
-                    onClick={() => {
-                      setFilterType('all');
-                      setFilterSeverity('all');
-                      setFilterCountry('all');
-                      setFilterCountries([]);
-                      setFilterState('all');
-                    }}
-                    className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
-                  >
-                    <XMarkIcon className="w-3 h-3" />
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="space-y-3 mb-3">
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    value={filterType}
-                    onChange={(e) => {
-                      setFilterType(e.target.value);
-                      setSelectedDisaster(null);
-                    }}
-                    className="px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 transition-colors flex-1 min-w-[120px]"
-                  >
-                    <option value="all">All Types</option>
-                    {uniqueTypes.map(type => (
-                      <option key={type} value={type} className="capitalize">{type}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={filterSeverity}
-                    onChange={(e) => {
-                      setFilterSeverity(e.target.value);
-                      setSelectedDisaster(null);
-                    }}
-                    className="px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 transition-colors flex-1 min-w-[120px]"
-                  >
-                    <option value="all">All Severity</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {filterCountry === 'all' ? (
-                    <div className="flex-1 min-w-full">
-                      <MultiSelect
-                        label=""
-                        options={uniqueCountries.filter((country): country is string => Boolean(country)).map(country => ({ value: country, label: country }))}
-                        value={filterCountries}
-                        onChange={(values) => {
-                          setFilterCountries(values);
-                          setSelectedDisaster(null);
-                        }}
-                        placeholder="Select countries (or choose single country below)..."
-                      />
-                    </div>
-                  ) : (
-                    <select
-                      value={filterCountry}
-                      onChange={(e) => {
-                        setFilterCountry(e.target.value);
-                        setFilterState('all'); // Reset state when country changes
-                        setSelectedDisaster(null);
-                      }}
-                      className="px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 transition-colors flex-1 min-w-[140px]"
-                    >
-                      <option value="all">All Countries (Multi-select)</option>
-                      {uniqueCountries.map(country => (
-                        <option key={country} value={country}>{country}</option>
-                      ))}
-                    </select>
-                  )}
-                  {filterCountry !== 'all' && availableStates.length > 0 && (
-                    <select
-                      value={filterState}
-                      onChange={(e) => {
-                        setFilterState(e.target.value);
-                        setSelectedDisaster(null);
-                      }}
-                      className="px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 transition-colors flex-1 min-w-[140px]"
-                    >
-                      <option value="all">All States/Provinces</option>
-                      {availableStates.map(state => (
-                        <option key={state} value={state}>{state}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
+            <div className="p-3 border-b border-[var(--border-color)] bg-[var(--bg-input)] shrink-0">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--text-muted)]">
-                  Showing <span className="font-semibold text-[var(--text-primary)]">{filteredDisasters.length}</span> of <span className="font-semibold text-[var(--text-primary)]">{allDisasters.length}</span> events
+                  Showing <span className="font-semibold text-[var(--text-primary)]">{listFilteredDisasters.length}</span> of <span className="font-semibold text-[var(--text-primary)]">{allDisasters.length}</span> events
                 </p>
                 {selectedDisaster && (
                   <button
                     onClick={() => setSelectedDisaster(null)}
-                    className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                    className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 shrink-0"
                   >
                     <XMarkIcon className="w-3 h-3" />
                     Deselect
@@ -1021,9 +1138,15 @@ export default function LiveDisastersClient() {
                   <GlobeAltIcon className="w-12 h-12 text-[var(--text-muted)] mb-3" />
                   <p className="text-[var(--text-muted)]">No disasters matching filters</p>
                 </div>
+              ) : listFilteredDisasters.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                  <MagnifyingGlassIcon className="w-12 h-12 text-[var(--text-muted)] mb-3" />
+                  <p className="text-[var(--text-muted)]">No disasters match your search</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">Try a different search term</p>
+                </div>
               ) : (
                 <div className="divide-y divide-[var(--border-color)]">
-                  {filteredDisasters.map((disaster) => {
+                  {listFilteredDisasters.map((disaster) => {
                     const Icon = typeIcons[disaster.type] || typeIcons.default;
                     const colors = severityColors[disaster.severity] || severityColors.medium;
                     const isSelected = selectedDisaster?.id === disaster.id;
@@ -1037,13 +1160,12 @@ export default function LiveDisastersClient() {
                           setHighlightedDisasterId(disaster.id);
                           setTimeout(() => setHighlightedDisasterId(null), 2000);
                         }}
-                        className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-all duration-200 ${
-                          isSelected 
-                            ? 'bg-[var(--bg-input)] border-l-4 border-purple-500 shadow-lg' 
+                        className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-all duration-200 ${isSelected
+                            ? 'bg-[var(--bg-input)] border-l-4 border-purple-500 shadow-lg'
                             : highlightedDisasterId === disaster.id
-                            ? 'bg-purple-500/10 border-l-4 border-purple-400 animate-pulse'
-                            : 'border-l-4 border-transparent'
-                        }`}
+                              ? 'bg-purple-500/10 border-l-4 border-purple-400 animate-pulse'
+                              : 'border-l-4 border-transparent'
+                          }`}
                         onMouseEnter={() => setHighlightedDisasterId(disaster.id)}
                         onMouseLeave={() => {
                           if (highlightedDisasterId === disaster.id && !isSelected) {
@@ -1131,7 +1253,7 @@ export default function LiveDisastersClient() {
           <div>
             <h3 className="text-xl font-bold text-[var(--text-primary)]">All Disasters</h3>
             <p className="text-sm text-[var(--text-muted)]">
-              Showing {stats.live} live disasters and {stats.database} from database (USA only)
+              Showing {stats.live} live disasters and {stats.database} custom (worldwide)
             </p>
           </div>
           {canManage && (
@@ -1197,10 +1319,10 @@ export default function LiveDisastersClient() {
               if (searchQuery) {
                 const query = searchQuery.toLowerCase();
                 return d.title.toLowerCase().includes(query) ||
-                       d.description?.toLowerCase().includes(query) ||
-                       d.type.toLowerCase().includes(query) ||
-                       d.location?.city?.toLowerCase().includes(query) ||
-                       d.location?.state?.toLowerCase().includes(query);
+                  d.description?.toLowerCase().includes(query) ||
+                  d.type.toLowerCase().includes(query) ||
+                  d.location?.city?.toLowerCase().includes(query) ||
+                  d.location?.state?.toLowerCase().includes(query);
               }
               return true;
             })}
@@ -1210,17 +1332,18 @@ export default function LiveDisastersClient() {
               {
                 key: 'title',
                 label: 'Disaster',
+                width: '22%',
                 render: (disaster: ManagedDisaster) => {
                   const Icon = typeIcons[disaster.type] || typeIcons.default;
                   const colors = severityColors[disaster.severity] || severityColors.medium;
                   return (
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg ${colors.bg} flex items-center justify-center flex-shrink-0`}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-10 h-10 rounded-lg ${colors.bg} flex items-center justify-center shrink-0`}>
                         <Icon className={`w-5 h-5 ${colors.text}`} />
                       </div>
-                      <div>
-                        <div className="font-semibold text-[var(--text-primary)]">{disaster.title}</div>
-                        <div className="text-xs text-[var(--text-muted)]">{disaster.type}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-[var(--text-primary)] truncate" title={disaster.title}>{disaster.title}</div>
+                        <div className="text-xs text-[var(--text-muted)] truncate capitalize" title={disaster.type}>{disaster.type}</div>
                       </div>
                     </div>
                   );
@@ -1229,18 +1352,21 @@ export default function LiveDisastersClient() {
               {
                 key: 'location',
                 label: 'Location',
-                render: (disaster: ManagedDisaster) => (
-                  <div className="flex items-center gap-2">
-                    <MapPinIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                    <span className="text-sm">
-                      {disaster.location?.city || 'Unknown'}, {disaster.location?.state || 'Unknown'}
-                    </span>
-                  </div>
-                ),
+                width: '18%',
+                render: (disaster: ManagedDisaster) => {
+                  const loc = [disaster.location?.address, disaster.location?.city, disaster.location?.state].filter(Boolean).join(', ') || 'Unknown';
+                  return (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <MapPinIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                      <span className="text-sm truncate block min-w-0" title={loc}>{loc}</span>
+                    </div>
+                  );
+                },
               },
               {
                 key: 'severity',
                 label: 'Severity',
+                width: '10%',
                 render: (disaster: ManagedDisaster) => (
                   <Badge
                     variant={disaster.severity === 'critical' ? 'danger' : disaster.severity === 'high' ? 'warning' : 'secondary'}
@@ -1254,6 +1380,7 @@ export default function LiveDisastersClient() {
               {
                 key: 'status',
                 label: 'Status',
+                width: '10%',
                 render: (disaster: ManagedDisaster) => (
                   <Badge
                     variant={disaster.status === 'active' ? 'danger' : disaster.status === 'resolved' ? 'success' : 'secondary'}
@@ -1266,11 +1393,13 @@ export default function LiveDisastersClient() {
               {
                 key: 'assignedVolunteers',
                 label: 'Assigned Volunteers',
+                width: '25%',
                 render: (disaster: ManagedDisaster) => {
                   const assignedCount = disaster.assignedVolunteers?.length || 0;
                   return (
-                    <div className="flex items-center gap-2 w-full">
+                    <div className="flex items-center gap-2 min-w-0 overflow-hidden">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (assignedCount > 0) {
@@ -1278,154 +1407,113 @@ export default function LiveDisastersClient() {
                             setShowVolunteersModal(true);
                           }
                         }}
-                        className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer flex-1 text-left"
+                        className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer flex-1 text-left min-w-0"
                         disabled={assignedCount === 0}
                       >
-                      <UserGroupIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-                      <span className="text-sm font-medium shrink-0">{assignedCount}</span>
-                      {assignedCount > 0 && (
-                        <div className="flex-1 min-w-0 ml-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {disaster.assignedVolunteers?.slice(0, 2).map((av, idx) => {
-                              let volId = '';
-                              if (typeof av.volunteerId === 'object' && av.volunteerId?._id) {
-                                volId = typeof av.volunteerId._id === 'string' 
-                                  ? av.volunteerId._id 
-                                  : String(av.volunteerId._id);
-                              } else if (typeof av.volunteerId === 'string') {
-                                volId = av.volunteerId;
-                              }
-                              
-                              // Find full volunteer data from fetched volunteers list
-                              const fullVolunteer = volunteers.find(v => v._id === volId);
-                              
-                              // Get name from full volunteer data or fallback to getVolunteerName
-                              let volunteerName = 'Unknown';
-                              let volunteerEmail = '';
-                              let volunteerPhone = '';
-                              
-                              if (fullVolunteer?.userId) {
-                                if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
-                                  volunteerName = `${fullVolunteer.userId.firstName} ${fullVolunteer.userId.lastName}`;
-                                } else if (fullVolunteer.userId.name) {
-                                  volunteerName = fullVolunteer.userId.name;
+                        <UserGroupIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                        <span className="text-sm font-medium shrink-0">{assignedCount}</span>
+                        {assignedCount > 0 && (
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {disaster.assignedVolunteers?.slice(0, 2).map((av, idx) => {
+                                let volId = '';
+                                if (typeof av.volunteerId === 'object' && av.volunteerId?._id) {
+                                  volId = typeof av.volunteerId._id === 'string' ? av.volunteerId._id : String(av.volunteerId._id);
+                                } else if (typeof av.volunteerId === 'string') {
+                                  volId = av.volunteerId;
                                 }
-                                volunteerEmail = fullVolunteer.userId.email || '';
-                                volunteerPhone = fullVolunteer.userId.phone || '';
-                              } else {
-                                volunteerName = getVolunteerName(av.volunteerId);
-                                volunteerEmail = av.volunteerId?.userId?.email || '';
-                                volunteerPhone = av.volunteerId?.userId?.phone || '';
-                              }
-                              
-                              return (
-                                <div
-                                  key={idx}
-                                  className="flex items-center gap-1.5 px-2 py-1 bg-[var(--bg-input)] rounded-md border border-[var(--border-color)]"
-                                  title={`${volunteerName}${volunteerEmail ? ` - ${volunteerEmail}` : ''}${volunteerPhone ? ` - ${volunteerPhone}` : ''}`}
-                                >
-                                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                                    {volunteerName.charAt(0).toUpperCase()}
+                                const fullVolunteer = volunteers.find(v => v._id === volId);
+                                let volunteerName = 'Unknown';
+                                if (fullVolunteer?.userId) {
+                                  if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
+                                    volunteerName = `${fullVolunteer.userId.firstName} ${fullVolunteer.userId.lastName}`;
+                                  } else if (fullVolunteer.userId.name) {
+                                    volunteerName = fullVolunteer.userId.name;
+                                  }
+                                } else {
+                                  volunteerName = getVolunteerName(av.volunteerId);
+                                }
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center gap-1.5 px-1.5 py-0.5 bg-[var(--bg-input)] rounded-md border border-[var(--border-color)] shrink-0 max-w-[120px] min-w-0"
+                                    title={volunteerName}
+                                  >
+                                    <div className="w-4 h-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-[9px] font-bold shrink-0">
+                                      {volunteerName.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="text-xs text-[var(--text-primary)] truncate block min-w-0">
+                                      {volunteerName}
+                                    </span>
                                   </div>
-                                  <span className="text-xs text-[var(--text-primary)] truncate max-w-[100px]">
-                                    {volunteerName}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                            {assignedCount > 2 && (
-                              <div className="text-xs text-[var(--text-muted)] px-2 py-1 bg-[var(--bg-input)] rounded-md border border-[var(--border-color)]">
-                                +{assignedCount - 2} more
-                              </div>
-                            )}
+                                );
+                              })}
+                              {assignedCount > 2 && (
+                                <span className="text-xs text-[var(--text-muted)] shrink-0">+{assignedCount - 2} more</span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </button>
-                    {canManage && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedDisasterForAssign(disaster);
-                          setShowAssignVolunteerModal(true);
-                        }}
-                        className="p-1.5 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors shrink-0"
-                        title="Assign Volunteer"
-                      >
-                        <UserPlusIcon className="w-4 h-4" />
+                        )}
                       </button>
-                    )}
-                  </div>
+                    </div>
                   );
                 },
               },
               {
                 key: 'actions',
                 label: 'Actions',
+                width: '15%',
                 render: (disaster: ManagedDisaster) => {
+                  if (!canManage) return <span className="text-[var(--text-muted)] text-sm">—</span>;
+                  const openEdit = () => {
+                    const lat = Array.isArray(disaster.location?.coordinates) ? disaster.location.coordinates[1] : (disaster.location?.coordinates as any)?.lat;
+                    const lng = Array.isArray(disaster.location?.coordinates) ? disaster.location.coordinates[0] : (disaster.location?.coordinates as any)?.lng;
+                    setSelectedManagedDisaster(disaster);
+                    setFormData({
+                      title: disaster.title,
+                      type: disaster.type,
+                      description: disaster.description,
+                      severity: disaster.severity,
+                      status: disaster.status,
+                      address: disaster.location?.address || '',
+                      locationType: 'local',
+                      range: '',
+                      country: disaster.location?.country || 'USA',
+                      lat: lat?.toString() || '',
+                      lng: lng?.toString() || '',
+                      estimatedAffectedPeople: disaster.estimatedAffectedPeople?.toString() || '',
+                      selectedNasaDisasterId: '',
+                      useCustomDisaster: true,
+                    });
+                    setShowAddModal(true);
+                    fetchNasaDisasters().catch(err => console.error('Error fetching NASA disasters:', err));
+                  };
                   return (
-                    <div className="flex items-center gap-2">
-                      {canManage && (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const lat = Array.isArray(disaster.location?.coordinates) 
-                                ? disaster.location.coordinates[1]
-                                : (disaster.location?.coordinates as any)?.lat;
-                              const lng = Array.isArray(disaster.location?.coordinates)
-                                ? disaster.location.coordinates[0]
-                                : (disaster.location?.coordinates as any)?.lng;
-                              setSelectedManagedDisaster(disaster);
-                              setFormData({
-                                title: disaster.title,
-                                type: disaster.type,
-                                description: disaster.description,
-                                severity: disaster.severity,
-                                status: disaster.status,
-                                address: disaster.location?.address || '',
-                                locationType: 'local', // Default to local
-                                range: '',
-                                country: disaster.location?.country || 'USA',
-                                lat: lat?.toString() || '',
-                                lng: lng?.toString() || '',
-                                estimatedAffectedPeople: disaster.estimatedAffectedPeople?.toString() || '',
-                                selectedNasaDisasterId: '',
-                                useCustomDisaster: true,
-                              });
-                              // Open modal first, then fetch NASA disasters in background
-                              setShowAddModal(true);
-                              // Fetch NASA disasters when editing (non-blocking)
-                              fetchNasaDisasters().catch(err => console.error('Error fetching NASA disasters:', err));
-                            }}
-                            className="p-1.5 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
-                            title="Edit"
-                          >
-                            <PencilIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteDisaster(disaster._id);
-                            }}
-                            className="p-1.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
-                            title="Delete"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDisasterForAssign(disaster);
-                              setShowAssignVolunteerModal(true);
-                            }}
-                            className="p-1.5 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
-                            title="Assign Volunteer"
-                          >
-                            <UserPlusIcon className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setSelectedDisasterForAssign(disaster); setShowAssignVolunteerModal(true); }}
+                        className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/20 transition-colors"
+                        title="Assign Volunteer"
+                      >
+                        <UserPlusIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openEdit(); }}
+                        className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-colors"
+                        title="Edit"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteDisaster(disaster._id); }}
+                        className="p-2 rounded-lg text-red-400 hover:bg-red-500/20 transition-colors"
+                        title="Delete"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
                     </div>
                   );
                 },
@@ -1462,7 +1550,7 @@ export default function LiveDisastersClient() {
                 <div className="relative disaster-search-container">
                   <div className="relative">
                     <Input
-                      value={formData.selectedNasaDisasterId 
+                      value={formData.selectedNasaDisasterId
                         ? nasaDisasters.find(d => d.id === formData.selectedNasaDisasterId)?.title || formData.title || disasterSearchQuery
                         : formData.title || disasterSearchQuery
                       }
@@ -1471,11 +1559,11 @@ export default function LiveDisastersClient() {
                         setDisasterSearchQuery(query);
                         setShowDisasterDropdown(true);
                         // If user is typing, set as custom disaster title
-                        setFormData({ 
-                          ...formData, 
+                        setFormData({
+                          ...formData,
                           title: query,
                           selectedNasaDisasterId: '',
-                          useCustomDisaster: true 
+                          useCustomDisaster: true
                         });
                       }}
                       onFocus={() => setShowDisasterDropdown(true)}
@@ -1512,8 +1600,8 @@ export default function LiveDisastersClient() {
                         onClick={(e) => {
                           e.stopPropagation();
                           // Use the typed value as custom disaster
-                          setFormData({ 
-                            ...formData, 
+                          setFormData({
+                            ...formData,
                             title: disasterSearchQuery,
                             useCustomDisaster: true,
                             selectedNasaDisasterId: ''
@@ -1528,7 +1616,7 @@ export default function LiveDisastersClient() {
                       </button>
                     )}
                   </div>
-                  
+
                   {/* Searchable Dropdown */}
                   {showDisasterDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
@@ -1538,7 +1626,7 @@ export default function LiveDisastersClient() {
                           if (!disasterSearchQuery) return true;
                           const query = disasterSearchQuery.toLowerCase();
                           const titleMatch = disaster.title?.toLowerCase().includes(query);
-                          const locationMatch = 
+                          const locationMatch =
                             disaster.location?.state?.toLowerCase().includes(query) ||
                             disaster.location?.country?.toLowerCase().includes(query) ||
                             disaster.location?.region?.toLowerCase().includes(query);
@@ -1548,7 +1636,7 @@ export default function LiveDisastersClient() {
 
                         // Check if query doesn't match any disaster
                         const hasNoMatches = disasterSearchQuery && filteredDisasters.length === 0;
-                        const queryMatchesSelected = filteredDisasters.some(d => 
+                        const queryMatchesSelected = filteredDisasters.some(d =>
                           d.title?.toLowerCase() === disasterSearchQuery.toLowerCase()
                         );
 
@@ -1581,7 +1669,7 @@ export default function LiveDisastersClient() {
                                           addressParts.push('USA');
                                         }
                                         const address = addressParts.join(', ') || 'USA';
-                                        
+
                                         setFormData({
                                           ...formData,
                                           selectedNasaDisasterId: disaster.id,
@@ -1597,9 +1685,8 @@ export default function LiveDisastersClient() {
                                         setDisasterSearchQuery('');
                                         setShowDisasterDropdown(false);
                                       }}
-                                      className={`w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0 ${
-                                        isSelected ? 'bg-purple-500/10 border-l-4 border-purple-500' : ''
-                                      }`}
+                                      className={`w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0 ${isSelected ? 'bg-purple-500/10 border-l-4 border-purple-500' : ''
+                                        }`}
                                     >
                                       <div className="flex items-start gap-3">
                                         <div className="flex-1 min-w-0">
@@ -1628,14 +1715,14 @@ export default function LiveDisastersClient() {
                                 })}
                               </>
                             )}
-                            
+
                             {/* Show "Add Custom Disaster" option when no matches found */}
                             {hasNoMatches && !queryMatchesSelected && (
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setFormData({ 
-                                    ...formData, 
+                                  setFormData({
+                                    ...formData,
                                     title: disasterSearchQuery,
                                     useCustomDisaster: true,
                                     selectedNasaDisasterId: ''
@@ -1654,7 +1741,7 @@ export default function LiveDisastersClient() {
                                 </div>
                               </button>
                             )}
-                            
+
                             {!hasNoMatches && filteredDisasters.length === 0 && !disasterSearchQuery && (
                               <div className="p-4 text-center text-sm text-[var(--text-muted)]">
                                 Start typing to search disasters from NASA EONET API
@@ -1732,8 +1819,8 @@ export default function LiveDisastersClient() {
               required
             />
           </div>
-             {/* Affected People - Removed Affected Area */}
-             <div>
+          {/* Affected People - Removed Affected Area */}
+          <div>
             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Affected People</label>
             <Input
               type="number"
@@ -1827,7 +1914,7 @@ export default function LiveDisastersClient() {
             </div>
           </div>
 
-       
+
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-color)]">
             <Button
@@ -1872,21 +1959,21 @@ export default function LiveDisastersClient() {
                   const volunteer = av.volunteerId;
                   let volId = '';
                   if (typeof volunteer === 'object' && volunteer?._id) {
-                    volId = typeof volunteer._id === 'string' 
-                      ? volunteer._id 
+                    volId = typeof volunteer._id === 'string'
+                      ? volunteer._id
                       : String(volunteer._id);
                   } else if (typeof volunteer === 'string') {
                     volId = volunteer;
                   }
-                  
+
                   // Find full volunteer data from fetched volunteers list
                   const fullVolunteer = volunteers.find(v => v._id === volId);
-                  
+
                   // Get name from full volunteer data or fallback to getVolunteerName
                   let volunteerName = 'Unknown Volunteer';
                   let volunteerEmail = '';
                   let volunteerPhone = '';
-                  
+
                   if (fullVolunteer?.userId) {
                     if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
                       volunteerName = `${fullVolunteer.userId.firstName} ${fullVolunteer.userId.lastName}`;
@@ -1900,11 +1987,11 @@ export default function LiveDisastersClient() {
                     volunteerEmail = volunteer?.userId?.email || '';
                     volunteerPhone = volunteer?.userId?.phone || '';
                   }
-                  
+
                   const initials = volunteerName.charAt(0).toUpperCase();
                   const isExpanded = expandedVolunteers.has(volId);
-                  
-                  
+
+
                   const toggleExpand = () => {
                     const newExpanded = new Set(expandedVolunteers);
                     if (isExpanded) {
@@ -1914,7 +2001,7 @@ export default function LiveDisastersClient() {
                     }
                     setExpandedVolunteers(newExpanded);
                   };
-                  
+
                   return (
                     <div
                       key={idx}
@@ -1949,7 +2036,7 @@ export default function LiveDisastersClient() {
                               </button>
                             )}
                           </div>
-                          
+
                           {/* Basic Information - Always Visible */}
                           <div className="space-y-2 mb-3">
                             {/* Name - Always show */}
@@ -1957,7 +2044,7 @@ export default function LiveDisastersClient() {
                               <span className="text-[var(--text-muted)] font-medium text-sm">Name:</span>
                               <span className="text-[var(--text-primary)] font-semibold">{volunteerName}</span>
                             </div>
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                               {/* Volunteer ID */}
                               {volunteer?.volunteerId && (
@@ -1968,7 +2055,7 @@ export default function LiveDisastersClient() {
                                   </span>
                                 </div>
                               )}
-                              
+
                               {/* Email */}
                               {volunteerEmail && (
                                 <div className="flex items-center gap-2">
@@ -1978,7 +2065,7 @@ export default function LiveDisastersClient() {
                                   </span>
                                 </div>
                               )}
-                              
+
                               {/* Phone */}
                               {volunteerPhone && (
                                 <div className="flex items-center gap-2">
@@ -1988,7 +2075,7 @@ export default function LiveDisastersClient() {
                                   </span>
                                 </div>
                               )}
-                              
+
                               {/* Blood Group */}
                               {fullVolunteer?.bloodGroup && (
                                 <div className="flex items-center gap-2">
@@ -1996,7 +2083,7 @@ export default function LiveDisastersClient() {
                                   <span className="text-[var(--text-secondary)] font-semibold">{fullVolunteer.bloodGroup}</span>
                                 </div>
                               )}
-                              
+
                               {/* Assigned Date */}
                               {av.assignedAt && (
                                 <div className="flex items-center gap-2">
@@ -2008,17 +2095,17 @@ export default function LiveDisastersClient() {
                               )}
                             </div>
                           </div>
-                          
+
                           {/* Expandable Additional Details */}
                           {(() => {
-                            const volId = typeof volunteer?._id === 'string' 
-                              ? volunteer._id 
+                            const volId = typeof volunteer?._id === 'string'
+                              ? volunteer._id
                               : (volunteer as any)?._id?.toString() || '';
                             const isExpanded = expandedVolunteers.has(volId);
                             const fullVolunteer = volunteers.find(v => v._id === volId);
-                            
+
                             if (!fullVolunteer) return null;
-                            
+
                             const toggleExpand = () => {
                               const newExpanded = new Set(expandedVolunteers);
                               if (isExpanded) {
@@ -2028,7 +2115,7 @@ export default function LiveDisastersClient() {
                               }
                               setExpandedVolunteers(newExpanded);
                             };
-                            
+
                             return (
                               <div>
                                 <button
@@ -2047,84 +2134,84 @@ export default function LiveDisastersClient() {
                                     </>
                                   )}
                                 </button>
-                              
-                              {isExpanded && (
-                                <div className="mt-3 pt-3 border-t border-[var(--border-color)] space-y-3">
-                                  {/* Skills */}
-                                  {fullVolunteer.skills && fullVolunteer.skills.length > 0 && (
-                                    <div>
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <AcademicCapIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                                        <span className="text-xs font-semibold text-[var(--text-muted)] uppercase">Skills</span>
-                                      </div>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {fullVolunteer.skills.slice(0, 5).map((skill: string, i: number) => (
-                                          <Badge key={i} variant="primary" size="sm">{skill}</Badge>
-                                        ))}
-                                        {fullVolunteer.skills.length > 5 && (
-                                          <Badge variant="secondary" size="sm">+{fullVolunteer.skills.length - 5} more</Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  {/* Rating & Experience */}
-                                  <div className="grid grid-cols-2 gap-3">
-                                    {fullVolunteer.rating !== undefined && (
+
+                                {isExpanded && (
+                                  <div className="mt-3 pt-3 border-t border-[var(--border-color)] space-y-3">
+                                    {/* Skills */}
+                                    {fullVolunteer.skills && fullVolunteer.skills.length > 0 && (
                                       <div>
-                                        <div className="flex items-center gap-1 mb-1">
-                                          <StarSolidIcon className="w-4 h-4 text-amber-400" />
-                                          <span className="text-xs font-semibold text-[var(--text-muted)]">Rating</span>
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <AcademicCapIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                                          <span className="text-xs font-semibold text-[var(--text-muted)] uppercase">Skills</span>
                                         </div>
-                                        <p className="text-sm font-medium text-[var(--text-primary)]">
-                                          {fullVolunteer.rating.toFixed(1)} / 5.0
-                                          {fullVolunteer.totalReviews && (
-                                            <span className="text-xs text-[var(--text-muted)] ml-1">
-                                              ({fullVolunteer.totalReviews} reviews)
-                                            </span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {fullVolunteer.skills.slice(0, 5).map((skill: string, i: number) => (
+                                            <Badge key={i} variant="primary" size="sm">{skill}</Badge>
+                                          ))}
+                                          {fullVolunteer.skills.length > 5 && (
+                                            <Badge variant="secondary" size="sm">+{fullVolunteer.skills.length - 5} more</Badge>
                                           )}
-                                        </p>
+                                        </div>
                                       </div>
                                     )}
-                                    {fullVolunteer.completedMissions !== undefined && (
+
+                                    {/* Rating & Experience */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                      {fullVolunteer.rating !== undefined && (
+                                        <div>
+                                          <div className="flex items-center gap-1 mb-1">
+                                            <StarSolidIcon className="w-4 h-4 text-amber-400" />
+                                            <span className="text-xs font-semibold text-[var(--text-muted)]">Rating</span>
+                                          </div>
+                                          <p className="text-sm font-medium text-[var(--text-primary)]">
+                                            {fullVolunteer.rating.toFixed(1)} / 5.0
+                                            {fullVolunteer.totalReviews && (
+                                              <span className="text-xs text-[var(--text-muted)] ml-1">
+                                                ({fullVolunteer.totalReviews} reviews)
+                                              </span>
+                                            )}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {fullVolunteer.completedMissions !== undefined && (
+                                        <div>
+                                          <span className="text-xs font-semibold text-[var(--text-muted)]">Missions</span>
+                                          <p className="text-sm font-medium text-[var(--text-primary)]">
+                                            {fullVolunteer.completedMissions} completed
+                                          </p>
+                                        </div>
+                                      )}
+                                      {fullVolunteer.experience?.years !== undefined && (
+                                        <div>
+                                          <span className="text-xs font-semibold text-[var(--text-muted)]">Experience</span>
+                                          <p className="text-sm font-medium text-[var(--text-primary)]">
+                                            {fullVolunteer.experience.years} years
+                                          </p>
+                                        </div>
+                                      )}
+                                      {fullVolunteer.availability && (
+                                        <div>
+                                          <span className="text-xs font-semibold text-[var(--text-muted)]">Availability</span>
+                                          <p className="text-sm font-medium text-[var(--text-primary)] capitalize">
+                                            {fullVolunteer.availability.replace('_', ' ')}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Address */}
+                                    {fullVolunteer.address && (fullVolunteer.address.city || fullVolunteer.address.state) && (
                                       <div>
-                                        <span className="text-xs font-semibold text-[var(--text-muted)]">Missions</span>
-                                        <p className="text-sm font-medium text-[var(--text-primary)]">
-                                          {fullVolunteer.completedMissions} completed
-                                        </p>
-                                      </div>
-                                    )}
-                                    {fullVolunteer.experience?.years !== undefined && (
-                                      <div>
-                                        <span className="text-xs font-semibold text-[var(--text-muted)]">Experience</span>
-                                        <p className="text-sm font-medium text-[var(--text-primary)]">
-                                          {fullVolunteer.experience.years} years
-                                        </p>
-                                      </div>
-                                    )}
-                                    {fullVolunteer.availability && (
-                                      <div>
-                                        <span className="text-xs font-semibold text-[var(--text-muted)]">Availability</span>
-                                        <p className="text-sm font-medium text-[var(--text-primary)] capitalize">
-                                          {fullVolunteer.availability.replace('_', ' ')}
+                                        <span className="text-xs font-semibold text-[var(--text-muted)]">Location</span>
+                                        <p className="text-sm text-[var(--text-secondary)]">
+                                          {[fullVolunteer.address.city, fullVolunteer.address.state]
+                                            .filter(Boolean)
+                                            .join(', ')}
                                         </p>
                                       </div>
                                     )}
                                   </div>
-                                  
-                                  {/* Address */}
-                                  {fullVolunteer.address && (fullVolunteer.address.city || fullVolunteer.address.state) && (
-                                    <div>
-                                      <span className="text-xs font-semibold text-[var(--text-muted)]">Location</span>
-                                      <p className="text-sm text-[var(--text-secondary)]">
-                                        {[fullVolunteer.address.city, fullVolunteer.address.state]
-                                          .filter(Boolean)
-                                          .join(', ')}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                                )}
                               </div>
                             );
                           })()}
@@ -2184,7 +2271,7 @@ export default function LiveDisastersClient() {
                       'Content-Type': 'application/json',
                       Authorization: `Bearer ${token}`
                     },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                       volunteerId,
                       fromDate: assignmentFromDate,
                       toDate: assignmentToDate
@@ -2194,7 +2281,7 @@ export default function LiveDisastersClient() {
 
                 const responses = await Promise.all(assignPromises);
                 const results = await Promise.all(responses.map(r => r.json()));
-                
+
                 const successCount = results.filter(r => r.success).length;
                 const failCount = results.length - successCount;
 
@@ -2269,7 +2356,7 @@ export default function LiveDisastersClient() {
                       return typeof volId === 'string' ? volId : (volId as any)?._id?.toString() || '';
                     }
                   ) || [];
-                  
+
                   // Filter out volunteers who are on mission
                   const now = new Date();
                   const hasActiveAssignments = v.assignedDisasters?.some(
@@ -2279,9 +2366,9 @@ export default function LiveDisastersClient() {
                       return toDate > now && (status === 'assigned' || status === 'active');
                     }
                   );
-                  
+
                   const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
-                  
+
                   return !assignedVolunteerIds.includes(v._id) && !isOnMission;
                 }).length === 0 ? (
                   <p className="text-sm text-[var(--text-muted)] text-center py-4">
@@ -2296,7 +2383,7 @@ export default function LiveDisastersClient() {
                           return typeof volId === 'string' ? volId : (volId as any)?._id?.toString() || '';
                         }
                       ) || [];
-                      
+
                       const now = new Date();
                       const hasActiveAssignments = v.assignedDisasters?.some(
                         (ad: any) => {
@@ -2306,7 +2393,7 @@ export default function LiveDisastersClient() {
                         }
                       );
                       const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
-                      
+
                       return !assignedVolunteerIds.includes(v._id) && !isOnMission;
                     })
                     .map((volunteer) => {
@@ -2314,15 +2401,14 @@ export default function LiveDisastersClient() {
                         ? `${volunteer.userId.firstName} ${volunteer.userId.lastName}`
                         : volunteer.userId?.name || volunteer.volunteerId || 'Unknown';
                       const isChecked = selectedVolunteerIds.includes(volunteer._id);
-                      
+
                       return (
                         <label
                           key={volunteer._id}
-                          className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            isChecked
+                          className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isChecked
                               ? 'bg-purple-500/10 border-purple-500/50'
                               : 'bg-[var(--bg-input)] border-[var(--border-color)] hover:border-purple-500/30'
-                          }`}
+                            }`}
                         >
                           <input
                             type="checkbox"

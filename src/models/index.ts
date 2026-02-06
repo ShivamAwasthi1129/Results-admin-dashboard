@@ -14,3 +14,4 @@ export { default as StockEntry } from './StockEntry';
 export { default as Product } from './Product';
 export { default as DamageReport } from './DamageReport';
 export { default as Adjuster } from './Adjuster';
+export { default as Order } from './Order';

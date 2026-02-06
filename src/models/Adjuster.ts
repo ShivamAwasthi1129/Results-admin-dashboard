@@ -11,6 +11,13 @@ export interface ICertification {
   notes?: string;
 }
 
+// Document (for adjuster documents: license, insurance card, etc.) — documentType is the document name
+export interface IAdjusterDocument {
+  documentNumber: string;
+  documentType: string; // driving_license, insurance_card, id_card, professional_certification, w9_form, etc.
+  photoUrl: string;
+}
+
 // Address interface
 export interface IAdjusterAddress {
   street?: string;
@@ -51,6 +58,10 @@ export interface IAdjuster extends Document {
   licenseNumber?: string;
   yearsOfExperience?: number;
   status: AdjusterStatus;
+  // Documents (driving license, insurance card, etc.)
+  documents: IAdjusterDocument[];
+  // USA states where adjuster is licensed / works
+  states: string[];
   
   // Assignment tracking
   assignedReports: IReportAssignment[];
@@ -84,6 +95,12 @@ const CertificationSchema = new Schema<ICertification>({
   expiryDate: { type: Date },
   photoUrl: { type: String, trim: true },
   notes: { type: String, trim: true },
+}, { _id: true });
+
+const AdjusterDocumentSchema = new Schema<IAdjusterDocument>({
+  documentNumber: { type: String, required: true, trim: true },
+  documentType: { type: String, required: true, trim: true },
+  photoUrl: { type: String, required: true, trim: true },
 }, { _id: true });
 
 const AdjusterAddressSchema = new Schema<IAdjusterAddress>({
@@ -166,6 +183,14 @@ const AdjusterSchema = new Schema<IAdjuster>(
       default: [],
     },
     specializations: {
+      type: [String],
+      default: [],
+    },
+    documents: {
+      type: [AdjusterDocumentSchema],
+      default: [],
+    },
+    states: {
       type: [String],
       default: [],
     },

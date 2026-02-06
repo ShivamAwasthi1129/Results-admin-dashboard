@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout';
-import { Card, Badge, Button, Input, Select } from '@/components/ui';
+import { Card, Badge, Button, Input, Select, PhoneInput } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-toastify';
 import {
@@ -20,8 +20,12 @@ import {
   CheckCircleIcon,
   DocumentTextIcon,
   StarIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
 import DamageReportModal from '@/components/damage-reports/DamageReportModal';
+
+const MAX_DOCUMENT_SIZE = 500 * 1024; // 500KB
+const ALLOWED_DOCUMENT_EXT = ['image/jpeg', 'image/jpg', 'image/png'];
 
 interface Certification {
   name: string;
@@ -31,6 +35,12 @@ interface Certification {
   expiryDate?: string;
   photoUrl?: string;
   notes?: string;
+}
+
+export interface AdjusterDocument {
+  documentNumber: string;
+  documentType: string;
+  photoUrl: string;
 }
 
 interface AssignedReport {
@@ -61,6 +71,8 @@ interface Adjuster {
     zipCode?: string;
   };
   certifications: Certification[];
+  documents?: AdjusterDocument[];
+  states?: string[];
   specializations: string[];
   licenseNumber?: string;
   yearsOfExperience?: number;
@@ -76,6 +88,22 @@ interface Adjuster {
   createdAt?: string;
   updatedAt?: string;
 }
+
+const DOCUMENT_TYPES = [
+  { value: 'driving_license', label: 'Driving License' },
+  { value: 'insurance_card', label: 'Insurance Card' },
+  { value: 'id_card', label: 'ID Card' },
+  { value: 'professional_certification', label: 'Professional Certification' },
+  { value: 'w9_form', label: 'W-9 Form' },
+  { value: 'adjuster_license', label: 'Adjuster License' },
+  { value: 'bond_certificate', label: 'Bond Certificate' },
+  { value: 'e_o_insurance', label: 'E&O Insurance' },
+  { value: 'other', label: 'Other' },
+];
+
+const USA_STATES_WITH_NAMES: { code: string; name: string }[] = [
+  { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' }, { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' }, { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' }, { code: 'ID', name: 'Idaho' }, { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' }, { code: 'IA', name: 'Iowa' }, { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' }, { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' }, { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' }, { code: 'MS', name: 'Mississippi' }, { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' }, { code: 'NE', name: 'Nebraska' }, { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' }, { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' }, { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' }, { code: 'OK', name: 'Oklahoma' }, { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' }, { code: 'RI', name: 'Rhode Island' }, { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' }, { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' }, { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' }, { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' }, { code: 'DC', name: 'District of Columbia' },
+];
 
 interface AdjustersClientProps {
   initialAdjusters: Adjuster[];
@@ -123,7 +151,22 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
     yearsOfExperience: '',
     specializations: '',
     notes: '',
+    documents: [] as AdjusterDocument[],
+    states: [] as string[],
   });
+  const [documentUploadingIdx, setDocumentUploadingIdx] = useState<number | null>(null);
+  const [statesDropdownOpen, setStatesDropdownOpen] = useState(false);
+  const statesDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (statesDropdownRef.current && !statesDropdownRef.current.contains(e.target as Node)) {
+        setStatesDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch adjusters
   const fetchAdjusters = async () => {
@@ -205,6 +248,8 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
         yearsOfExperience: formData.yearsOfExperience ? parseInt(formData.yearsOfExperience) : undefined,
         specializations: formData.specializations ? formData.specializations.split(',').map(s => s.trim()).filter(Boolean) : [],
         notes: formData.notes || undefined,
+        documents: formData.documents.filter((d) => d.documentNumber && d.photoUrl),
+        states: formData.states,
         status: 'active',
         isAvailable: true,
       };
@@ -257,6 +302,8 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
         yearsOfExperience: formData.yearsOfExperience ? parseInt(formData.yearsOfExperience) : undefined,
         specializations: formData.specializations ? formData.specializations.split(',').map(s => s.trim()).filter(Boolean) : [],
         notes: formData.notes || undefined,
+        documents: formData.documents.filter((d) => d.documentNumber && d.photoUrl),
+        states: formData.states,
       };
 
       const response = await fetch(`/api/adjusters/${selectedAdjuster._id}`, {
@@ -325,8 +372,103 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
       yearsOfExperience: '',
       specializations: '',
       notes: '',
+      documents: [],
+      states: [],
     });
   };
+
+  const uploadDocumentFile = async (file: File, documentType: string, documentNumber: string): Promise<string | null> => {
+    const mime = (file.type || '').toLowerCase();
+    if (!ALLOWED_DOCUMENT_EXT.includes(mime)) {
+      toast.error('Only PNG, JPG, and JPEG images are allowed.');
+      return null;
+    }
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      toast.error('File size must not exceed 500KB.');
+      return null;
+    }
+    const baseUrl = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_DOMAIN_NAME) ? process.env.NEXT_PUBLIC_DOMAIN_NAME.replace(/\/$/, '') : '';
+    if (!baseUrl) {
+      toast.error('Upload URL is not configured (NEXT_PUBLIC_DOMAIN_NAME).');
+      return null;
+    }
+    const form = new FormData();
+    form.append('file', file);
+    form.append('folder', 'adjuster-docs');
+    const safeName = [documentType, documentNumber].filter(Boolean).join('-').replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 80) || undefined;
+    if (safeName) form.append('fileName', safeName);
+    const res = await fetch(`${baseUrl}/api/upload/file`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(data.error || data.message || 'Upload failed.');
+      return null;
+    }
+    const url = data.url ?? data.data?.url ?? data.link ?? data.photoUrl ?? data.fileUrl ?? null;
+    if (!url) {
+      toast.error('Upload did not return a file URL.');
+      return null;
+    }
+    return url;
+  };
+
+  const addDocument = () => {
+    setFormData((prev) => ({
+      ...prev,
+      documents: [...prev.documents, { documentNumber: '', documentType: DOCUMENT_TYPES[0].value, photoUrl: '' }],
+    }));
+  };
+
+  const updateDocument = (idx: number, field: keyof AdjusterDocument, value: string) => {
+    setFormData((prev) => {
+      const docs = [...prev.documents];
+      docs[idx] = { ...docs[idx], [field]: value };
+      return { ...prev, documents: docs };
+    });
+  };
+
+  const removeDocument = (idx: number) => {
+    setFormData((prev) => ({ ...prev, documents: prev.documents.filter((_, i) => i !== idx) }));
+  };
+
+  const handleDocumentFileChange = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const mime = (file.type || '').toLowerCase();
+    if (!ALLOWED_DOCUMENT_EXT.includes(mime)) {
+      toast.error('Only PNG, JPG, and JPEG images are allowed.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      toast.error('File size must not exceed 500KB.');
+      e.target.value = '';
+      return;
+    }
+    setDocumentUploadingIdx(idx);
+    const doc = formData.documents[idx];
+    const url = await uploadDocumentFile(file, doc.documentType, doc.documentNumber);
+    if (url) {
+      updateDocument(idx, 'photoUrl', url);
+    }
+    setDocumentUploadingIdx(null);
+    e.target.value = '';
+  };
+
+  const toggleState = (stateCode: string) => {
+    setFormData((prev) => {
+      const has = prev.states.includes(stateCode);
+      const states = has ? prev.states.filter((s) => s !== stateCode) : [...prev.states, stateCode];
+      return { ...prev, states };
+    });
+  };
+
+  const selectedStatesLabel = formData.states.length
+    ? formData.states.map((code) => { const s = USA_STATES_WITH_NAMES.find((x) => x.code === code); return s ? `${s.name} (${s.code})` : code; }).join(', ')
+    : 'Select states...';
 
   const fetchAssignedReportDetails = async (reportIds: string[]) => {
     if (reportIds.length === 0) return;
@@ -375,7 +517,10 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
       yearsOfExperience: adjuster.yearsOfExperience?.toString() || '',
       specializations: adjuster.specializations?.join(', ') || '',
       notes: adjuster.notes || '',
+      documents: adjuster.documents || [],
+      states: adjuster.states || [],
     });
+    setStatesDropdownOpen(false);
     setShowModal(true);
   };
 
@@ -396,7 +541,10 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
       yearsOfExperience: adjuster.yearsOfExperience?.toString() || '',
       specializations: adjuster.specializations?.join(', ') || '',
       notes: adjuster.notes || '',
+      documents: adjuster.documents || [],
+      states: adjuster.states || [],
     });
+    setStatesDropdownOpen(false);
     setShowModal(true);
   };
 
@@ -459,7 +607,7 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
               </Button>
             )}
             <Button
-              onClick={() => { resetForm(); setShowCreateModal(true); }}
+              onClick={() => { resetForm(); setStatesDropdownOpen(false); setShowCreateModal(true); }}
               leftIcon={<PlusIcon className="w-5 h-5" />}
               className="bg-[#991B1B] hover:bg-[#7F1D1D] text-white"
             >
@@ -645,11 +793,14 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                 />
-                <Input
-                  label="Phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                />
+                <div className="col-span-2">
+                  <PhoneInput
+                    label="Phone"
+                    value={formData.phone}
+                    onChange={(v) => setFormData({ ...formData, phone: v || '' })}
+                    placeholder="Enter phone number"
+                  />
+                </div>
               </div>
               <Input
                 label="Company Name"
@@ -699,6 +850,104 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
                 value={formData.specializations}
                 onChange={(e) => setFormData({ ...formData, specializations: e.target.value })}
               />
+
+              {/* States (USA) - multi-select dropdown */}
+              <div ref={statesDropdownRef}>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">States (where adjuster works)</label>
+                <button
+                  type="button"
+                  onClick={() => setStatesDropdownOpen((o) => !o)}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]/50"
+                >
+                  <span className={formData.states.length ? '' : 'text-[var(--text-muted)]'}>{selectedStatesLabel}</span>
+                  <svg className={`w-5 h-5 text-[var(--text-muted)] transition-transform ${statesDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {statesDropdownOpen && (
+                  <div className="mt-1 max-h-56 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg z-10">
+                    {USA_STATES_WITH_NAMES.map((s) => (
+                      <button
+                        key={s.code}
+                        type="button"
+                        onClick={() => toggleState(s.code)}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-[var(--bg-input)] ${formData.states.includes(s.code) ? 'bg-[var(--bg-input)] text-[#991B1B] font-medium' : 'text-[var(--text-primary)]'}`}
+                      >
+                        {s.name} ({s.code})
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Documents */}
+              <div className="border-t border-[var(--border-color)] pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                    <DocumentTextIcon className="w-5 h-5" />
+                    Documents
+                  </h3>
+                  <Button type="button" variant="secondary" size="sm" onClick={addDocument} leftIcon={<PlusIcon className="w-4 h-4" />}>
+                    Add Document
+                  </Button>
+                </div>
+                {formData.documents.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)]">No documents added. Add driving license, insurance card, etc.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {formData.documents.map((doc, idx) => (
+                      <div key={idx} className="p-4 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] space-y-3">
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-medium text-[var(--text-primary)]">Document {idx + 1}</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeDocument(idx)} className="text-red-500 hover:text-red-600">
+                            <XMarkIcon className="w-5 h-5" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Select
+                            label="Document Type"
+                            value={doc.documentType}
+                            onChange={(value) => updateDocument(idx, 'documentType', value)}
+                            options={DOCUMENT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+                          />
+                          <Input
+                            label="Document Number"
+                            value={doc.documentNumber}
+                            onChange={(e) => updateDocument(idx, 'documentNumber', e.target.value)}
+                            placeholder="e.g. DL-12345"
+                          />
+                          <div className="col-span-2">
+                            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Document photo (PNG, JPG, JPEG only, max 500KB)</label>
+                            <div className="flex flex-col sm:flex-row gap-3 items-start">
+                              <label className="cursor-pointer shrink-0">
+                                <input
+                                  type="file"
+                                  accept=".jpg,.jpeg,.png,image/jpeg,image/jpg,image/png"
+                                  className="hidden"
+                                  onChange={(e) => handleDocumentFileChange(idx, e)}
+                                  disabled={documentUploadingIdx !== null}
+                                />
+                                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] hover:bg-[var(--bg-input)]">
+                                  {documentUploadingIdx === idx ? 'Uploading...' : doc.photoUrl ? 'Change photo' : <><PhotoIcon className="w-4 h-4" /> Upload</>}
+                                </span>
+                              </label>
+                              {doc.photoUrl && (
+                                <div className="flex items-center gap-3">
+                                  <div className="w-24 h-24 rounded-lg border border-[var(--border-color)] overflow-hidden bg-[var(--bg-primary)] shrink-0">
+                                    <img src={doc.photoUrl} alt="Document preview" className="w-full h-full object-cover" />
+                                  </div>
+                                  <a href={doc.photoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#991B1B] hover:underline">Open in new tab</a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Notes</label>
                 <textarea
@@ -759,12 +1008,15 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
                   required
                   disabled={viewOnlyModal}
                 />
-                <Input
-                  label="Phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  disabled={viewOnlyModal}
-                />
+                <div className="col-span-2">
+                  <PhoneInput
+                    label="Phone"
+                    value={formData.phone}
+                    onChange={(v) => setFormData({ ...formData, phone: v || '' })}
+                    placeholder="Enter phone number"
+                    disabled={viewOnlyModal}
+                  />
+                </div>
               </div>
               <Input
                 label="Company Name"
@@ -822,6 +1074,133 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
                 onChange={(e) => setFormData({ ...formData, specializations: e.target.value })}
                 disabled={viewOnlyModal}
               />
+
+              {/* States (USA) - multi-select dropdown */}
+              <div ref={viewOnlyModal ? undefined : statesDropdownRef}>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">States (where adjuster works)</label>
+                {viewOnlyModal ? (
+                  <p className="text-sm text-[var(--text-primary)]">
+                    {formData.states.length
+                      ? formData.states.map((code) => { const s = USA_STATES_WITH_NAMES.find((x) => x.code === code); return s ? `${s.name} (${s.code})` : code; }).join(', ')
+                      : '—'}
+                  </p>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setStatesDropdownOpen((o) => !o)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]/50"
+                    >
+                      <span className={formData.states.length ? '' : 'text-[var(--text-muted)]'}>{selectedStatesLabel}</span>
+                      <svg className={`w-5 h-5 text-[var(--text-muted)] transition-transform ${statesDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {statesDropdownOpen && (
+                      <div className="mt-1 max-h-56 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg z-10">
+                        {USA_STATES_WITH_NAMES.map((s) => (
+                          <button
+                            key={s.code}
+                            type="button"
+                            onClick={() => toggleState(s.code)}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-[var(--bg-input)] ${formData.states.includes(s.code) ? 'bg-[var(--bg-input)] text-[#991B1B] font-medium' : 'text-[var(--text-primary)]'}`}
+                          >
+                            {s.name} ({s.code})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Documents */}
+              <div className="border-t border-[var(--border-color)] pt-4">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                  <DocumentTextIcon className="w-5 h-5" />
+                  Documents ({formData.documents.length})
+                </h3>
+                {formData.documents.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)]">No documents added.</p>
+                ) : viewOnlyModal ? (
+                  <div className="space-y-3">
+                    {formData.documents.map((doc, idx) => (
+                      <div key={idx} className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] flex flex-wrap items-center gap-3">
+                        {doc.photoUrl && (
+                          <div className="w-16 h-16 rounded border border-[var(--border-color)] overflow-hidden bg-[var(--bg-primary)] shrink-0">
+                            <img src={doc.photoUrl} alt="Document" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <span className="font-medium text-[var(--text-primary)]">{DOCUMENT_TYPES.find((t) => t.value === doc.documentType)?.label ?? doc.documentType}</span>
+                          <span className="text-sm text-[var(--text-muted)] ml-2">{doc.documentNumber}</span>
+                          {doc.photoUrl && (
+                            <a href={doc.photoUrl} target="_blank" rel="noopener noreferrer" className="block text-xs text-[#991B1B] hover:underline mt-1">View full size</a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <Button type="button" variant="secondary" size="sm" onClick={addDocument} className="mb-3" leftIcon={<PlusIcon className="w-4 h-4" />}>
+                      Add Document
+                    </Button>
+                    <div className="space-y-4">
+                      {formData.documents.map((doc, idx) => (
+                        <div key={idx} className="p-4 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] space-y-3">
+                          <div className="flex justify-between items-start">
+                            <span className="text-sm font-medium text-[var(--text-primary)]">Document {idx + 1}</span>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removeDocument(idx)} className="text-red-500 hover:text-red-600">
+                              <XMarkIcon className="w-5 h-5" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Select
+                              label="Document Type"
+                              value={doc.documentType}
+                              onChange={(value) => updateDocument(idx, 'documentType', value)}
+                              options={DOCUMENT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+                            />
+                            <Input
+                              label="Document Number"
+                              value={doc.documentNumber}
+                              onChange={(e) => updateDocument(idx, 'documentNumber', e.target.value)}
+                              placeholder="e.g. DL-12345"
+                            />
+                            <div className="col-span-2">
+                              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Document photo (PNG, JPG, JPEG only, max 500KB)</label>
+                              <div className="flex flex-col sm:flex-row gap-3 items-start">
+                                <label className="cursor-pointer shrink-0">
+                                  <input
+                                    type="file"
+                                    accept=".jpg,.jpeg,.png,image/jpeg,image/jpg,image/png"
+                                    className="hidden"
+                                    onChange={(e) => handleDocumentFileChange(idx, e)}
+                                    disabled={documentUploadingIdx !== null}
+                                  />
+                                  <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] hover:bg-[var(--bg-input)]">
+                                    {documentUploadingIdx === idx ? 'Uploading...' : doc.photoUrl ? 'Change photo' : <><PhotoIcon className="w-4 h-4" /> Upload</>}
+                                  </span>
+                                </label>
+                                {doc.photoUrl && (
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-24 h-24 rounded-lg border border-[var(--border-color)] overflow-hidden bg-[var(--bg-primary)] shrink-0">
+                                      <img src={doc.photoUrl} alt="Document preview" className="w-full h-full object-cover" />
+                                    </div>
+                                    <a href={doc.photoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#991B1B] hover:underline">Open in new tab</a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Notes</label>
                 <textarea

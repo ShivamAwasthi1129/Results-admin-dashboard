@@ -183,31 +183,12 @@ export default function DashboardClient() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingPlayRef = useRef(false);
 
-  // Helper function to process disasters
+  // Helper function to process disasters (all worldwide; map shows USA first, user can pan/zoom)
   const processDisasters = (disasters: any[]) => {
     return disasters
       .filter((d: any) => {
         const hasCoordinates = d.location?.coordinates || (d.location?.lat && d.location?.lng);
-        if (!hasCoordinates) return false;
-        
-        const country = d.location?.country || '';
-        const isUSA = country.toLowerCase().includes('united states') || 
-                     country.toLowerCase().includes('usa') || 
-                     country.toLowerCase().includes('u.s.') ||
-                     country.toLowerCase() === 'us';
-        
-        let coordinates;
-        if (d.location?.coordinates) {
-          coordinates = d.location.coordinates;
-        } else if (d.location?.lat && d.location?.lng) {
-          coordinates = { lat: d.location.lat, lng: d.location.lng };
-        }
-        
-        const isInUSABounds = coordinates && 
-          coordinates.lat >= 24 && coordinates.lat <= 49 &&
-          coordinates.lng >= -125 && coordinates.lng <= -66;
-        
-        return isUSA || isInUSABounds;
+        return !!hasCoordinates;
       })
       .map((d: any) => {
         let coordinates;

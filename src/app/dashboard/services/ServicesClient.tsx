@@ -639,35 +639,35 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
 
   return (
     <DashboardLayout title="Service Providers" subtitle="Manage service providers and their services">
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-8">
-        <Card className="p-3 border-l-4 border-l-[#991B1B]">
+      {/* Stats Cards Row - Dashboard style */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
+        <Card className="p-3 border-l-4 border-l-blue-500">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Total Providers</p>
-            <WrenchScrewdriverIcon className="w-5 h-5 text-[#991B1B]" />
+            <WrenchScrewdriverIcon className="w-5 h-5 text-blue-400" />
           </div>
           <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.total}</p>
         </Card>
-        <Card className="p-3 border-l-4 border-l-[#991B1B]">
+        <Card className="p-3 border-l-4 border-l-emerald-500">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Verified</p>
-            <CheckBadgeIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <CheckBadgeIcon className="w-5 h-5 text-emerald-400" />
           </div>
-          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.verified}</p>
+          <p className="text-2xl font-bold text-emerald-400 leading-tight">{stats.verified}</p>
         </Card>
-        <Card className="p-3 border-l-4 border-l-[#991B1B]">
+        <Card className="p-3 border-l-4 border-l-amber-500">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Pending Verification</p>
-            <ClockIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <ClockIcon className="w-5 h-5 text-amber-400" />
           </div>
-          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.pending}</p>
+          <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.pending}</p>
         </Card>
-        <Card className="p-3 border-l-4 border-l-[#991B1B]">
+        <Card className="p-3 border-l-4 border-l-purple-500">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Avg Rating</p>
-            <StarIcon className="w-5 h-5 text-[var(--text-muted)]" />
+            <StarIcon className="w-5 h-5 text-purple-400" />
           </div>
-          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.avgRating}</p>
+          <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.avgRating}</p>
         </Card>
       </div>
 

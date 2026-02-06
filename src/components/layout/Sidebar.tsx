@@ -29,6 +29,7 @@ import {
   ShieldExclamationIcon,
   IdentificationIcon,
   ShoppingBagIcon,
+  ShoppingCartIcon,
   DocumentTextIcon,
   ClipboardDocumentCheckIcon,
 } from '@heroicons/react/24/outline';
@@ -79,6 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Adjusters', href: '/dashboard/adjusters', icon: ClipboardDocumentCheckIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCartIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const },

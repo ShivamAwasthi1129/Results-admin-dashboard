@@ -29,7 +29,7 @@ export async function GET() {
     
     let response: Response;
     try {
-      response = await fetch(`${EONET_API}?status=open&limit=50`, {
+      response = await fetch(`${EONET_API}?status=open&limit=200`, {
         next: { revalidate: 300 }, // Cache for 5 minutes
         signal: controller.signal,
         headers: {
@@ -83,7 +83,7 @@ export async function GET() {
         'earthquakes': 'earthquake',
         'floods': 'flood',
         'landslides': 'landslide',
-        'seaLakeIce': 'other',
+        'seaLakeIce': 'iceberg',
         'snow': 'other',
         'drought': 'drought',
         'dustHaze': 'other',
@@ -129,6 +129,14 @@ export async function GET() {
       };
     });
 
+    const currentYear = new Date().getFullYear();
+    const isCurrentYear = (dateStr: string | undefined) => {
+      if (!dateStr) return false;
+      const y = new Date(dateStr).getFullYear();
+      return !isNaN(y) && y === currentYear;
+    };
+    const disastersCurrentYear = disasters.filter(d => isCurrentYear(d.date));
+
     // Also fetch some additional data from ReliefWeb API for context
     let reliefWebData: any[] = [];
     try {
@@ -158,7 +166,7 @@ export async function GET() {
       
       if (reliefWebResponse.ok) {
         const rwData = await reliefWebResponse.json();
-        reliefWebData = (rwData.data || []).map((item: any) => ({
+        const mapped = (rwData.data || []).map((item: any) => ({
           id: `rw-${item.id}`,
           title: item.fields?.name || 'Unknown Disaster',
           description: item.fields?.description || '',
@@ -175,6 +183,7 @@ export async function GET() {
           isLive: true,
           fromReliefWeb: true
         }));
+        reliefWebData = mapped.filter((d: { date?: string }) => isCurrentYear(d.date));
       }
     } catch (e) {
       console.log('ReliefWeb fetch failed, continuing with EONET data');
@@ -183,12 +192,13 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        disasters: [...disasters, ...reliefWebData],
+        disasters: [...disastersCurrentYear, ...reliefWebData],
         metadata: {
-          eonetCount: disasters.length,
+          eonetCount: disastersCurrentYear.length,
           reliefWebCount: reliefWebData.length,
           lastUpdated: new Date().toISOString(),
-          sources: ['NASA EONET', 'ReliefWeb']
+          sources: ['NASA EONET', 'ReliefWeb'],
+          filter: `Current year (${currentYear}) only`
         }
       }
     });
