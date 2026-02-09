@@ -3,7 +3,7 @@
 Two APIs for the mobile app: **volunteer login** and **fetch volunteer details by ID**.  
 **No authorization token is required** for either endpoint.
 
-**Base URL:** `https://your-domain.com` (e.g. `https://results-admin-dashboard.vercel.app`)
+**Base URL:** `https://results-admin-dashboard.vercel.app`
 
 ---
 

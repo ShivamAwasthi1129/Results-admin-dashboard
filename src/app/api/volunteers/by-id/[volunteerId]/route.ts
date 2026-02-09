@@ -39,12 +39,12 @@ export async function GET(
       );
     }
 
-    const v = volunteer as Record<string, unknown>;
+    const v = volunteer as unknown as Record<string, unknown>;
     let userData: { firstName?: string; lastName?: string; name?: string; email?: string; phone?: string } = {};
     if (v.userId) {
       const user = await User.findById(v.userId).select('firstName lastName name email phone').lean();
       if (user) {
-        const u = user as Record<string, unknown>;
+        const u = user as unknown as Record<string, unknown>;
         userData = {
           firstName: u.firstName as string,
           lastName: u.lastName as string,
@@ -59,7 +59,7 @@ export async function GET(
     if (v.teamId) {
       const team = await VolunteerTeam.findById(v.teamId).select('teamId name specialization').lean();
       if (team) {
-        const t = team as Record<string, unknown>;
+        const t = team as unknown as Record<string, unknown>;
         teamData = {
           _id: t._id?.toString(),
           teamId: t.teamId as string,
