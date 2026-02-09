@@ -647,7 +647,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
   };
 
   return (
-    <DashboardLayout title="In-Stock Management" subtitle="Manage inventory stock across multiple warehouses">
+    <DashboardLayout title="In-Stock Management" subtitle="Manage inventory stock across multiple warehouses" icon={<CubeIcon className="w-7 h-7" />}>
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
         <Card className="p-4 border-l-4 border-l-[var(--primary-500)]">

@@ -24,10 +24,11 @@ import ResultsLogo from '@/Results_logo.png';
 interface HeaderProps {
   title?: string;
   subtitle?: string;
+  icon?: React.ReactNode;
   onMenuClick?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ title, subtitle, onMenuClick }) => {
+const Header: React.FC<HeaderProps> = ({ title, subtitle, icon, onMenuClick }) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { openSearch } = useSearch();
@@ -61,7 +62,11 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, onMenuClick }) => {
           </button>
           
           <div className="flex items-center gap-4">
-          
+            {icon && (
+              <div className="p-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border-color)] text-purple-500 shrink-0">
+                {icon}
+              </div>
+            )}
             <div>
               {title && (
                 <h1 className="text-2xl font-bold text-[var(--text-primary)]">
@@ -70,7 +75,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, onMenuClick }) => {
               )}
               {subtitle && (
                 <p className="text-sm text-[var(--text-muted)] flex items-center gap-1.5 mt-0.5">
-                  <span>👋</span> {subtitle}
+                  {subtitle}
                 </p>
               )}
             </div>

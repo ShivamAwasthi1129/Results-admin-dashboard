@@ -224,7 +224,7 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
   );
 
   return (
-    <DashboardLayout title="Volunteer Teams" subtitle="Manage volunteer teams and assignments">
+    <DashboardLayout title="Volunteer Teams" subtitle="Manage volunteer teams and assignments" icon={<UserGroupIcon className="w-7 h-7" />}>
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard title="Total Teams" value={stats.total} icon={<UserGroupIcon className="w-6 h-6" />} variant="purple" />

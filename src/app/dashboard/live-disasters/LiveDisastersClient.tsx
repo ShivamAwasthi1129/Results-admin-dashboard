@@ -794,10 +794,7 @@ export default function LiveDisastersClient() {
     listSearchQuery.trim() !== '';
 
   return (
-    <DashboardLayout title="Live Disasters" subtitle="Real-time global disaster monitoring">
-
-
-
+    <DashboardLayout title="Live Disasters" subtitle="Real-time global disaster monitoring" icon={<GlobeAltIcon className="w-7 h-7" />}>
       {/* Quick Stats - clickable filter cards (type filters; map shifts to show selected) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         <Card

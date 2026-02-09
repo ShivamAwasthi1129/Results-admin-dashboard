@@ -1,4 +1,5 @@
 import { DashboardLayout } from '@/components/layout';
+import { ShoppingCartIcon } from '@heroicons/react/24/outline';
 import OrdersClient from './OrdersClient';
 import { fetchWithTimeout } from '@/lib/server-api';
 import { cookies } from 'next/headers';
@@ -89,7 +90,7 @@ export default async function OrdersPage() {
   const initialOrders = await fetchOrders();
 
   return (
-    <DashboardLayout title="Orders" subtitle="View and manage all orders">
+    <DashboardLayout title="Orders" subtitle="View and manage all orders" icon={<ShoppingCartIcon className="w-7 h-7" />}>
       <OrdersClient initialOrders={initialOrders} />
     </DashboardLayout>
   );

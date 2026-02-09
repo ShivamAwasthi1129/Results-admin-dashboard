@@ -692,7 +692,7 @@ export default function SOSPage() {
   ];
 
   return (
-    <DashboardLayout title="SOS Alerts - USA" subtitle="Emergency distress signals and rescue requests across United States">
+    <DashboardLayout title="SOS Alerts - USA" subtitle="Emergency distress signals and rescue requests across United States" icon={<BellAlertIcon className="w-7 h-7" />}>
       {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <Card className="p-4 border-l-4 border-l-[var(--primary-500)] bg-gradient-to-r from-[var(--bg-card)] to-red-500/5">

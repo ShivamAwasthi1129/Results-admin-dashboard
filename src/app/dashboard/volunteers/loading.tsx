@@ -1,10 +1,11 @@
 import { DashboardLayout } from '@/components/layout';
 import { Card } from '@/components/ui';
 import { Loader } from '@/components/ui';
+import { UserGroupIcon } from '@heroicons/react/24/outline';
 
 export default function Loading() {
   return (
-    <DashboardLayout title="Volunteers" subtitle="Manage volunteer information">
+    <DashboardLayout title="Volunteers" subtitle="Manage volunteer information" icon={<UserGroupIcon className="w-7 h-7" />}>
       <div className="space-y-6">
         <Card className="p-6">
           <div className="flex items-center justify-center h-64">

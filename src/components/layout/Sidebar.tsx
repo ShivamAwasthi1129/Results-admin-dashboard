@@ -84,15 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const },
-    { 
-      name: 'Volunteers', 
-      icon: UserGroupIcon, 
-      roles: ['super_admin', 'admin'] as const,
-      children: [
-        { name: 'Volunteers', href: '/dashboard/volunteers', icon: UserGroupIcon, roles: ['super_admin', 'admin'] as const },
-        { name: 'Team Management', href: '/dashboard/volunteer-teams', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
-      ]
-    },
+    { name: 'Volunteers', href: '/dashboard/volunteers', icon: UserGroupIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Vendor & Alliance Partners', href: '/dashboard/services', icon: WrenchScrewdriverIcon, roles: ['super_admin', 'admin', 'service_provider'] as const },
     { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const },
   ];
@@ -210,11 +202,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         </div>
 
         {/* Role Badge */}
-        <div className="px-6 py-4 shrink-0">
+        {/* <div className="px-6 py-4 shrink-0">
           <span className={`text-xs font-semibold uppercase tracking-wider ${textSecondary}`}>
             {user?.role?.replace('_', ' ')}
           </span>
-        </div>
+        </div> */}
 
         {/* Navigation - Scrollable if needed */}
         <nav className="flex-1 px-4 pb-4 overflow-y-auto scrollbar-thin">
@@ -314,30 +306,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         </nav>
 
         {/* User Profile - Fixed at bottom */}
-        <div className={`p-4 border-t ${sidebarBorder} shrink-0`}>
-          <div className={`flex items-center gap-3 p-3 rounded-xl ${userCardBg} mb-3`}>
-            <Avatar name={user?.name || 'User'} size="md" src={user?.avatar} />
-            <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold ${textPrimary} truncate`}>
-                {user?.name}
-              </p>
-              <p className={`text-xs ${textSecondary} truncate`}>
-                {user?.email}
-              </p>
-            </div>
-          </div>
-
-          {/* Logout Button */}
-          <button
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl
-              bg-[#991B1B] text-white font-semibold text-sm
-              hover:bg-[#7F1D1D] transition-colors shadow-lg shadow-red-900/20"
-          >
-            <ArrowRightOnRectangleIcon className="w-5 h-5" />
-            Logout
-          </button>
-        </div>
+       
       </aside>
     </>
   );

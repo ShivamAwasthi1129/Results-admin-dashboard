@@ -638,7 +638,7 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
   const currentSubcategories = SUBCATEGORIES[formData.category] || SUBCATEGORIES.other;
 
   return (
-    <DashboardLayout title="Service Providers" subtitle="Manage service providers and their services">
+    <DashboardLayout title="Service Providers" subtitle="Manage service providers and their services" icon={<WrenchScrewdriverIcon className="w-7 h-7" />}>
       {/* Stats Cards Row - Dashboard style */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
         <Card className="p-3 border-l-4 border-l-blue-500">

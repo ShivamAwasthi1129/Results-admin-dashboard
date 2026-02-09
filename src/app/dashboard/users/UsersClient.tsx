@@ -357,7 +357,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
   };
 
   return (
-    <DashboardLayout title="Users" subtitle="Manage all users in the system">
+    <DashboardLayout title="Users" subtitle="Manage all users in the system" icon={<UsersIcon className="w-7 h-7" />}>
       {/* Stats Cards Row - Dashboard style */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
         <Card className="p-3 border-l-4 border-l-blue-500">

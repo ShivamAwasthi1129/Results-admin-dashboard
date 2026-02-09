@@ -468,7 +468,7 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
   };
 
   return (
-    <DashboardLayout title="Shelters & Relief Camps" subtitle="Manage temporary shelters and relief camps">
+    <DashboardLayout title="Shelters & Relief Camps" subtitle="Manage temporary shelters and relief camps" icon={<HomeModernIcon className="w-7 h-7" />}>
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <Card className="p-4">

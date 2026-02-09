@@ -1,4 +1,3 @@
-import { DashboardLayout } from '@/components/layout';
 import ProductsClient from './MerchandiseClient';
 import { fetchWithTimeout } from '@/lib/server-api';
 import { cookies } from 'next/headers';
@@ -107,9 +106,5 @@ async function fetchProducts(): Promise<Product[]> {
 export default async function ProductsPage() {
   const initialProducts = await fetchProducts();
 
-  return (
-    <DashboardLayout>
-      <ProductsClient initialProducts={initialProducts} />
-    </DashboardLayout>
-  );
+  return <ProductsClient initialProducts={initialProducts} />;
 }

@@ -152,7 +152,7 @@ export default function EmergenciesClient({ initialEmergencies }: EmergenciesCli
   };
 
   return (
-    <DashboardLayout title="Emergencies" subtitle="Track and respond to emergency calls">
+    <DashboardLayout title="Emergencies" subtitle="Track and respond to emergency calls" icon={<ExclamationTriangleIcon className="w-7 h-7" />}>
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
         <StatCard title="Total" value={stats.total} icon={<ExclamationTriangleIcon className="w-6 h-6" />} variant="purple" />

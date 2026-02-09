@@ -486,116 +486,109 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] flex items-center gap-3">
-            <span className="p-2.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-sm">
-              <DocumentTextIcon className="w-7 h-7 text-[#991B1B]" />
-            </span>
-            Damage Reports
-          </h1>
-          <p className="text-sm text-[var(--text-muted)] mt-2">
-            Track and manage property damage assessments, insurance claims, and repair workflows
-          </p>
-        </div>
-        <div className="flex gap-2 flex-shrink-0">
-          {reports.length === 0 && (
-            <Button variant="secondary" onClick={handleSeed}>
-              Seed Reports
-            </Button>
-          )}
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            leftIcon={<PlusIcon className="w-5 h-5" />}
-            className="bg-[#991B1B] hover:bg-[#7F1D1D] text-white shadow-md"
-          >
-            Create Report
-          </Button>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <Card className="p-5 shadow-sm border border-[var(--border-color)] bg-[var(--bg-card)]">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-          <div className="lg:col-span-2">
+      {/* Filters - single row: search, status, damage type, severity, create report, edit columns */}
+      <div className="p-5 shadow-sm border border-[var(--border-color)] bg-[var(--bg-card)] rounded-lg">
+        <div className="flex flex-wrap items-end gap-3 min-w-0">
+          <div className="flex-1 min-w-[160px] max-w-[280px]">
+            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Search</label>
             <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] z-10" />
               <Input
                 type="text"
-                label="Search"
-                placeholder="Search by report number, owner, or address..."
+                placeholder="Report #, owner, address..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-[42px]"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] z-10"
                 >
                   <XMarkIcon className="w-5 h-5" />
                 </button>
               )}
             </div>
           </div>
-          <Select
-            label="Status"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'report_created', label: 'Report Created' },
-              { value: 'under_review', label: 'Under Review' },
-              { value: 'reviewed', label: 'Reviewed' },
-              { value: 'adjuster_assigned', label: 'Adjuster Assigned' },
-              { value: 'adjuster_approved', label: 'Adjuster Approved' },
-              { value: 'vendor_assigned', label: 'Vendor Assigned' },
-              { value: 'work_in_progress', label: 'Work In Progress' },
-              { value: 'completed', label: 'Completed' },
-              { value: 'cancelled', label: 'Cancelled' },
-            ]}
-          />
-          <Select
-            label="Damage Type"
-            value={damageTypeFilter}
-            onChange={setDamageTypeFilter}
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'hurricane', label: 'Hurricane' },
-              { value: 'flood', label: 'Flood' },
-              { value: 'wind', label: 'Wind' },
-              { value: 'fire', label: 'Fire' },
-              { value: 'earthquake', label: 'Earthquake' },
-              { value: 'tornado', label: 'Tornado' },
-              { value: 'storm', label: 'Storm' },
-              { value: 'hail', label: 'Hail' },
-              { value: 'other', label: 'Other' },
-            ]}
-          />
-          <Select
-            label="Severity"
-            value={severityFilter}
-            onChange={setSeverityFilter}
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'minor', label: 'Minor' },
-              { value: 'moderate', label: 'Moderate' },
-              { value: 'severe', label: 'Severe' },
-              { value: 'catastrophic', label: 'Catastrophic' },
-            ]}
-          />
-          {/* Edit Columns Button */}
-          <div className="relative" ref={editColumnsDropdownRef}>
+
+          <div className="w-[130px]">
+            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Status</label>
+            <Select
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'report_created', label: 'Report Created' },
+                { value: 'under_review', label: 'Under Review' },
+                { value: 'reviewed', label: 'Reviewed' },
+                { value: 'adjuster_assigned', label: 'Adjuster Assigned' },
+                { value: 'adjuster_approved', label: 'Adjuster Approved' },
+                { value: 'vendor_assigned', label: 'Vendor Assigned' },
+                { value: 'work_in_progress', label: 'Work In Progress' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ]}
+              className="h-[42px]"
+            />
+          </div>
+
+          <div className="w-[130px]">
+            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Damage Type</label>
+            <Select
+              value={damageTypeFilter}
+              onChange={setDamageTypeFilter}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'hurricane', label: 'Hurricane' },
+                { value: 'flood', label: 'Flood' },
+                { value: 'wind', label: 'Wind' },
+                { value: 'fire', label: 'Fire' },
+                { value: 'earthquake', label: 'Earthquake' },
+                { value: 'tornado', label: 'Tornado' },
+                { value: 'storm', label: 'Storm' },
+                { value: 'hail', label: 'Hail' },
+                { value: 'other', label: 'Other' },
+              ]}
+              className="h-[42px]"
+            />
+          </div>
+
+          <div className="w-[120px]">
+            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Severity</label>
+            <Select
+              value={severityFilter}
+              onChange={setSeverityFilter}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'minor', label: 'Minor' },
+                { value: 'moderate', label: 'Moderate' },
+                { value: 'severe', label: 'Severe' },
+                { value: 'catastrophic', label: 'Catastrophic' },
+              ]}
+              className="h-[42px]"
+            />
+          </div>
+
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            leftIcon={<PlusIcon className="w-5 h-5" />}
+            className="h-[42px] shrink-0 bg-[#991B1B] hover:bg-[#7F1D1D] text-white shadow-md px-4"
+          >
+            Create Report
+          </Button>
+
+          <div className="relative shrink-0" ref={editColumnsDropdownRef}>
             <Button
               variant="secondary"
               size="sm"
               onClick={() => setShowEditColumnsDropdown((v) => !v)}
               leftIcon={<Squares2X2Icon className="w-4 h-4" />}
-              className="h-[42px] mt-auto"
+              className="h-[42px]"
             >
               Edit columns
             </Button>
+
             {showEditColumnsDropdown && (
               <div className="absolute right-0 top-full mt-1 z-50 min-w-[280px] rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg py-2">
                 <div className="px-3 py-2 border-b border-[var(--border-color)]">
@@ -664,6 +657,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
             )}
           </div>
         </div>
+
         {(searchQuery || statusFilter !== 'all' || damageTypeFilter !== 'all' || severityFilter !== 'all') && (
           <div className="mt-4">
             <Button
@@ -680,10 +674,11 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
             </Button>
           </div>
         )}
+
         <div className="mt-4 text-sm text-[var(--text-muted)]">
           Showing {reportsByCustomer.length} customers ({filteredReports.length} reports)
         </div>
-      </Card>
+      </div>
 
       {/* Outer table with column headers so Edit columns applies */}
       <Card className="p-0 overflow-x-auto shadow-lg border-2 border-[var(--border-color)]">
@@ -713,282 +708,283 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-color)]">
-            {reportsByCustomer.map((group) => {
-              const isExpanded = expandedCustomers.has(group.customerId);
-              const hasSelectedReport = selectedReportId && group.reports.some((r) => r._id === selectedReportId);
-              const detailReport = hasSelectedReport ? reportForDetailPanel : null;
-              const firstReport = group.reports[0];
+              {reportsByCustomer.map((group) => {
+                const isExpanded = expandedCustomers.has(group.customerId);
+                const hasSelectedReport = selectedReportId && group.reports.some((r) => r._id === selectedReportId);
+                const detailReport = hasSelectedReport ? reportForDetailPanel : null;
+                const firstReport = group.reports[0];
 
-              return (
-                <React.Fragment key={group.customerId}>
-                  {/* Customer row: one cell per column */}
-                  <tr className="bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)]/60">
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => toggleCustomerExpand(group.customerId)}
-                        className="flex items-center gap-2 w-full text-left"
-                      >
-                        {isExpanded ? (
-                          <ChevronDownIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
-                        ) : (
-                          <ChevronRightIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
-                        )}
-                        <UserIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
-                        <div className="min-w-0 flex flex-col">
-                          <span className="font-medium text-sm text-[var(--text-primary)] truncate">{group.customerName}</span>
-                          <span className="text-xs text-[var(--text-muted)] mt-0.5">ID: {group.customerId}</span>
-                        </div>
-                        <Badge variant="secondary" size="sm" className="ml-1">{group.reports.length} report{group.reports.length !== 1 ? 's' : ''}</Badge>
-                      </button>
-                    </td>
-                    {visibleOrderableIds.map((colId) => (
-                      <td key={colId} className="px-4 py-3 text-sm text-[var(--text-primary)]">
-                        {firstReport ? getReportCellValue(firstReport, colId) : '—'}
+                return (
+                  <React.Fragment key={group.customerId}>
+                    {/* Customer row: one cell per column */}
+                    <tr className="bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)]/60">
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleCustomerExpand(group.customerId)}
+                          className="flex items-center gap-2 w-full text-left"
+                        >
+                          {isExpanded ? (
+                            <ChevronDownIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
+                          ) : (
+                            <ChevronRightIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
+                          )}
+                          <UserIcon className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
+                          <div className="min-w-0 flex flex-col">
+                            <span className="font-medium text-sm text-[var(--text-primary)] truncate">{group.customerName}</span>
+                            <span className="text-xs text-[var(--text-muted)] mt-0.5">ID: {group.customerId}</span>
+                          </div>
+                          <Badge variant="secondary" size="sm" className="ml-1">{group.reports.length} report{group.reports.length !== 1 ? 's' : ''}</Badge>
+                        </button>
                       </td>
-                    ))}
-                    <td className="px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => { if (firstReport) { setSelectedReport(firstReport); setShowDetailModal(true); } }}
-                        leftIcon={<EyeIcon className="w-4 h-4" />}
-                      >
-                        View
-                      </Button>
-                    </td>
-                  </tr>
+                      {visibleOrderableIds.map((colId) => (
+                        <td key={colId} className="px-4 py-3 text-sm text-[var(--text-primary)]">
+                          {firstReport ? getReportCellValue(firstReport, colId) : '—'}
+                        </td>
+                      ))}
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { if (firstReport) { setSelectedReport(firstReport); setShowDetailModal(true); } }}
+                          leftIcon={<EyeIcon className="w-4 h-4" />}
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
 
-                  {/* Expanded: sub-options (report IDs) + detail panel */}
-                  {isExpanded && (
-                    <tr>
-                      <td colSpan={displayColumnIds.length} className="px-4 py-0 align-top bg-[var(--bg-primary)]">
-                        <div className="ml-4 border-l-2 border-[var(--border-color)] pl-2 py-2 space-y-1 bg-[var(--bg-input)]/20">
-                          {group.reports.map((report) => {
-                            const isSelected = selectedReportId === report._id;
-                            return (
-                              <button
-                                key={report._id}
-                                type="button"
-                                onClick={() => setSelectedReportId(isSelected ? null : report._id)}
-                                className={`
+                    {/* Expanded: sub-options (report IDs) + detail panel */}
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={displayColumnIds.length} className="px-4 py-0 align-top bg-[var(--bg-primary)]">
+                          <div className="ml-4 border-l-2 border-[var(--border-color)] pl-2 py-2 space-y-1 bg-[var(--bg-input)]/20">
+                            {group.reports.map((report) => {
+                              const isSelected = selectedReportId === report._id;
+                              return (
+                                <button
+                                  key={report._id}
+                                  type="button"
+                                  onClick={() => setSelectedReportId(isSelected ? null : report._id)}
+                                  className={`
                                   w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left font-medium text-sm transition-all
                                   ${isSelected
-                                    ? 'bg-[#991B1B] text-white shadow-md'
-                                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
-                                  }
+                                      ? 'bg-[#991B1B] text-white shadow-md'
+                                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
+                                    }
                                 `}
-                              >
-                                <DocumentTextIcon className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-white' : 'text-[var(--text-muted)]'}`} />
-                                <div className="flex-1 min-w-0">
-                                  <div className="truncate">{report.reportNumber}</div>
-                                  <div className={`text-[11px] ${isSelected ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
-                                    Report ID: {String(report._id).slice(-8)}
+                                >
+                                  <DocumentTextIcon className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-white' : 'text-[var(--text-muted)]'}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="truncate">{report.reportNumber}</div>
+                                    <div className={`text-[11px] ${isSelected ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
+                                      Report ID: {String(report._id).slice(-8)}
+                                    </div>
                                   </div>
-                                </div>
-                                <span className={`text-xs ${isSelected ? 'text-white/90' : 'text-[var(--text-muted)]'}`}>
-                                  {formatDate(report.reportDate)} · {report.status.replace(/_/g, ' ')}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-
-                  {isExpanded && detailReport && (
-                    <tr>
-                      <td colSpan={displayColumnIds.length} className="px-4 py-6 bg-[var(--bg-card)] border-t border-[var(--border-color)]">
-                      <div className="flex items-center justify-between mb-5">
-                        <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-                          <div className="p-1.5 bg-[var(--bg-input)] rounded-lg border border-[var(--border-color)]">
-                            <DocumentTextIcon className="w-5 h-5 text-[#991B1B]" />
+                                  <span className={`text-xs ${isSelected ? 'text-white/90' : 'text-[var(--text-muted)]'}`}>
+                                    {formatDate(report.reportDate)} · {report.status.replace(/_/g, ' ')}
+                                  </span>
+                                </button>
+                              );
+                            })}
                           </div>
-                          {detailReport.reportNumber} — Detailed View
-                        </h3>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => { setSelectedReport(detailReport); setShowDetailModal(true); }}
-                            leftIcon={<EyeIcon className="w-4 h-4" />}
-                          >
-                            View
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => { setSelectedReport(detailReport); setShowDetailModal(true); }}
-                            leftIcon={<PencilIcon className="w-4 h-4" />}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(detailReport._id)}
-                            className="text-red-500 hover:text-red-600"
-                            leftIcon={<TrashIcon className="w-4 h-4" />}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                      {(() => {
-                        const report = detailReport;
-                        const totalFunding = report.fundingSources?.reduce((sum, source) => sum + (source.amount || 0), 0) || 0;
-                        const remainingFunding = Math.max(0, (report.estimatedCost || 0) - totalFunding);
-                        return (
-                          <>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                              <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm">
-                                <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                                  <MapPinIcon className="w-4 h-4 text-[#991B1B]" />
-                                  Customer Information
-                                </h4>
-                                <div className="space-y-2 text-sm">
-                                  <div className="font-medium text-[var(--text-primary)]">
-                                    {report.customerFullName || `${report.customer?.firstName} ${report.customer?.lastName}`}
-                                  </div>
-                                  {report.customer?.phone && (
-                                    <div className="flex items-center gap-2 text-[var(--text-primary)]">
-                                      <PhoneIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                                      <span>{report.customer.phone}</span>
-                                    </div>
-                                  )}
-                                  {report.customer?.email && (
-                                    <div className="flex items-center gap-2 text-[var(--text-primary)]">
-                                      <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                                      <span>{report.customer.email}</span>
-                                    </div>
-                                  )}
-                                  <div className="text-[var(--text-primary)]">
-                                    {report.propertyAddress?.street}, {report.propertyAddress?.city}, {report.propertyAddress?.state} {report.propertyAddress?.zipCode}
-                                  </div>
+                        </td>
+                      </tr>
+                    )}
+
+                    {isExpanded && detailReport && (
+                      <tr>
+                        <td colSpan={displayColumnIds.length} className="px-4 py-6 bg-[var(--bg-card)] border-t border-[var(--border-color)]">
+                          <div className="w-full min-w-0 max-w-[85%]">
+                            <div className="flex items-center justify-between mb-5">
+                              <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                                <div className="p-1.5 bg-[var(--bg-input)] rounded-lg border border-[var(--border-color)]">
+                                  <DocumentTextIcon className="w-5 h-5 text-[#991B1B]" />
                                 </div>
-                              </div>
-                              <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm">
-                                <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                                  <DocumentTextIcon className="w-4 h-4 text-[#991B1B]" />
-                                  Damage Details
-                                </h4>
-                                <div className="space-y-2 text-sm text-[var(--text-primary)]">
-                                  <p>{report.description}</p>
-                                  {report.affectedAreas && report.affectedAreas.length > 0 && (
-                                    <div>
-                                      <span className="font-medium">Affected Area: </span>
-                                      <span>{report.affectedAreas.join(', ')}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm">
-                                <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                                  <CurrencyDollarIcon className="w-4 h-4 text-[#991B1B]" />
-                                  Funding Summary
-                                </h4>
-                                <div className="space-y-1 text-sm">
-                                  {report.fundingSources?.map((source, idx) => (
-                                    <div key={idx} className="flex justify-between text-[var(--text-primary)]">
-                                      <span>{getFundingSourceLabel(source.source)}:</span>
-                                      <span className="font-medium">${source.amount.toLocaleString()}</span>
-                                    </div>
-                                  ))}
-                                  <div className="flex justify-between text-[var(--text-primary)] pt-2 border-t border-[var(--border-color)]">
-                                    <span className="font-medium">Remaining:</span>
-                                    <span className={`font-bold ${remainingFunding < 0 ? 'text-red-500' : 'text-[var(--text-primary)]'}`}>
-                                      ${remainingFunding.toLocaleString()}
-                                    </span>
-                                  </div>
-                                </div>
+                                {detailReport.reportNumber} — Detailed View
+                              </h3>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => { setSelectedReport(detailReport); setShowDetailModal(true); }}
+                                  leftIcon={<EyeIcon className="w-4 h-4" />}
+                                >
+                                  View
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => { setSelectedReport(detailReport); setShowDetailModal(true); }}
+                                  leftIcon={<PencilIcon className="w-4 h-4" />}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(detailReport._id)}
+                                  className="text-red-500 hover:text-red-600"
+                                  leftIcon={<TrashIcon className="w-4 h-4" />}
+                                >
+                                  Delete
+                                </Button>
                               </div>
                             </div>
-                            <div className="mt-6 pt-6 border-t border-[var(--border-color)]">
-                              <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                                <div className="p-1 bg-[var(--bg-card)] rounded-lg border border-[var(--border-color)]">
-                                  <ClockIcon className="w-4 h-4 text-[#991B1B]" />
-                                </div>
-                                Workflow Progress Timeline
-                              </h4>
-                              {report.workflowSteps && report.workflowSteps.length > 0 ? (
-                                <div className="overflow-visible pb-4">
-                                  <div className="flex items-stretch w-full gap-0 min-w-0">
-                                    {[...report.workflowSteps].sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)).map((step, idx) => {
-                                      const isCompleted = step.status === 'completed';
-                                      const isCurrent = step.stepNumber === report.currentStep;
-                                      const completedAt = step.completedAt ? new Date(step.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
-                                      const startedAt = step.startedAt ? new Date(step.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
-                                      const budgetItems = Array.isArray((step as any)?.stepData?.inspectionBudget) ? (step as any).stepData.inspectionBudget : [];
-                                      const budgetTotal = budgetItems.reduce((sum: number, b: any) => sum + (Number(b?.amount) || 0), 0);
-                                      const vendors = report.assignedVendors || [];
-                                      const vendorsInProgress = vendors.filter((v: any) => v.status === 'in_progress').length;
-                                      const vendorsCompleted = vendors.filter((v: any) => v.status === 'completed').length;
-                                      return (
-                                        <React.Fragment key={step.stepNumber ?? idx}>
-                                          <div
-                                            className="relative group flex flex-col items-center  min-w-0 px-6"
-                                            onMouseEnter={(e) => {
-                                              const el = (e.currentTarget as HTMLElement).querySelector('[data-step-circle]');
-                                              const rect = (el || e.currentTarget).getBoundingClientRect();
-                                              setWorkflowStepTooltip({
-                                                rect,
-                                                step,
-                                                report,
-                                                completedAt,
-                                                startedAt,
-                                                budgetItems,
-                                                budgetTotal,
-                                                vendorsInProgress,
-                                                vendorsCompleted,
-                                              });
-                                            }}
-                                            onMouseLeave={() => setWorkflowStepTooltip(null)}
-                                          >
-                                            <div
-                                              data-step-circle
-                                              className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shadow-sm transition-all duration-300 flex-shrink-0 ${
-                                                isCompleted
-                                                  ? 'bg-green-500 text-white ring-2 ring-green-200 dark:ring-green-900/50'
-                                                  : isCurrent
-                                                    ? 'bg-[#991B1B] text-white ring-2 ring-[var(--glow-color)] animate-pulse'
-                                                    : 'bg-[var(--bg-input)] text-[var(--text-muted)] border-2 border-[var(--border-color)]'
-                                              }`}
-                                            >
-                                              {isCompleted ? <CheckCircleIcon className="w-6 h-6" /> : step.stepNumber}
-                                            </div>
-                                            <p className="mt-2 text-xs font-semibold text-[var(--text-primary)] text-center leading-tight">{step.name}</p>
-                                            <p className="mt-0.5 text-[10px] text-[var(--text-muted)] text-center capitalize">
-                                              {step.status?.replace(/_/g, ' ')}
-                                            </p>
-                                            {completedAt && (
-                                              <p className="mt-0.5 text-[10px] text-green-600 dark:text-green-400 font-medium">{completedAt}</p>
-                                            )}
+                            {(() => {
+                              const report = detailReport;
+                              const totalFunding = report.fundingSources?.reduce((sum, source) => sum + (source.amount || 0), 0) || 0;
+                              const remainingFunding = Math.max(0, (report.estimatedCost || 0) - totalFunding);
+                              return (
+                                <>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full min-w-0">
+                                    <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm min-w-0 overflow-hidden">
+                                      <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                        <MapPinIcon className="w-4 h-4 text-[#991B1B] shrink-0" />
+                                        Customer Information
+                                      </h4>
+                                      <div className="space-y-2 text-sm">
+                                        <div className="font-medium text-[var(--text-primary)]">
+                                          {report.customerFullName || `${report.customer?.firstName} ${report.customer?.lastName}`}
+                                        </div>
+                                        {report.customer?.phone && (
+                                          <div className="flex items-center gap-2 text-[var(--text-primary)]">
+                                            <PhoneIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                                            <span>{report.customer.phone}</span>
                                           </div>
-                                          {idx < report.workflowSteps!.length - 1 && (
-                                            <div className="flex items-center flex-1 min-w-[12px] max-w-[24px] self-center pt-6 shrink-0" style={{ marginTop: '8px' }}>
-                                              <div className={`h-0.5 flex-1 min-w-0 rounded-full transition-colors duration-300 ${isCompleted ? 'bg-green-400 dark:bg-green-600' : 'bg-[var(--border-color)]'}`} />
-                                              <ArrowRightIcon className={`w-4 h-4 flex-shrink-0 -ml-0.5 ${isCompleted ? 'text-green-500' : 'text-[var(--text-muted)]'}`} aria-hidden />
-                                            </div>
-                                          )}
-                                        </React.Fragment>
-                                      );
-                                    })}
+                                        )}
+                                        {report.customer?.email && (
+                                          <div className="flex items-center gap-2 text-[var(--text-primary)]">
+                                            <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                                            <span>{report.customer.email}</span>
+                                          </div>
+                                        )}
+                                        <div className="text-[var(--text-primary)]">
+                                          {report.propertyAddress?.street}, {report.propertyAddress?.city}, {report.propertyAddress?.state} {report.propertyAddress?.zipCode}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm min-w-0 overflow-hidden">
+                                      <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                        <DocumentTextIcon className="w-4 h-4 text-[#991B1B] shrink-0" />
+                                        Damage Details
+                                      </h4>
+                                      <div className="space-y-2 text-sm text-[var(--text-primary)]">
+                                        <p>{report.description}</p>
+                                        {report.affectedAreas && report.affectedAreas.length > 0 && (
+                                          <div>
+                                            <span className="font-medium">Affected Area: </span>
+                                            <span>{report.affectedAreas.join(', ')}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-[var(--border-color)] shadow-sm min-w-0 overflow-hidden">
+                                      <h4 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                        <CurrencyDollarIcon className="w-4 h-4 text-[#991B1B] shrink-0" />
+                                        Funding Summary
+                                      </h4>
+                                      <div className="space-y-1 text-sm">
+                                        {report.fundingSources?.map((source, idx) => (
+                                          <div key={idx} className="flex justify-between text-[var(--text-primary)]">
+                                            <span>{getFundingSourceLabel(source.source)}:</span>
+                                            <span className="font-medium">${source.amount.toLocaleString()}</span>
+                                          </div>
+                                        ))}
+                                        <div className="flex justify-between text-[var(--text-primary)] pt-2 border-t border-[var(--border-color)]">
+                                          <span className="font-medium">Remaining:</span>
+                                          <span className={`font-bold ${remainingFunding < 0 ? 'text-red-500' : 'text-[var(--text-primary)]'}`}>
+                                            ${remainingFunding.toLocaleString()}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              ) : (
-                                <p className="text-sm text-[var(--text-muted)]">No workflow steps defined</p>
-                              )}
-                            </div>
-                          </>
-                        );
-                      })()}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
+                                  <div className="mt-6 pt-6 border-t border-[var(--border-color)]">
+                                    <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                                      <div className="p-1 bg-[var(--bg-card)] rounded-lg border border-[var(--border-color)]">
+                                        <ClockIcon className="w-4 h-4 text-[#991B1B]" />
+                                      </div>
+                                      Workflow Progress Timeline
+                                    </h4>
+                                    {report.workflowSteps && report.workflowSteps.length > 0 ? (
+                                      <div className="overflow-visible pb-4">
+                                        <div className="flex items-stretch w-full gap-0 min-w-0">
+                                          {[...report.workflowSteps].sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0)).map((step, idx) => {
+                                            const isCompleted = step.status === 'completed';
+                                            const isCurrent = step.stepNumber === report.currentStep;
+                                            const completedAt = step.completedAt ? new Date(step.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+                                            const startedAt = step.startedAt ? new Date(step.startedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+                                            const budgetItems = Array.isArray((step as any)?.stepData?.inspectionBudget) ? (step as any).stepData.inspectionBudget : [];
+                                            const budgetTotal = budgetItems.reduce((sum: number, b: any) => sum + (Number(b?.amount) || 0), 0);
+                                            const vendors = report.assignedVendors || [];
+                                            const vendorsInProgress = vendors.filter((v: any) => v.status === 'in_progress').length;
+                                            const vendorsCompleted = vendors.filter((v: any) => v.status === 'completed').length;
+                                            return (
+                                              <React.Fragment key={step.stepNumber ?? idx}>
+                                                <div
+                                                  className="relative group flex flex-col items-center  min-w-0 px-6"
+                                                  onMouseEnter={(e) => {
+                                                    const el = (e.currentTarget as HTMLElement).querySelector('[data-step-circle]');
+                                                    const rect = (el || e.currentTarget).getBoundingClientRect();
+                                                    setWorkflowStepTooltip({
+                                                      rect,
+                                                      step,
+                                                      report,
+                                                      completedAt,
+                                                      startedAt,
+                                                      budgetItems,
+                                                      budgetTotal,
+                                                      vendorsInProgress,
+                                                      vendorsCompleted,
+                                                    });
+                                                  }}
+                                                  onMouseLeave={() => setWorkflowStepTooltip(null)}
+                                                >
+                                                  <div
+                                                    data-step-circle
+                                                    className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shadow-sm transition-all duration-300 flex-shrink-0 ${isCompleted
+                                                      ? 'bg-green-500 text-white ring-2 ring-green-200 dark:ring-green-900/50'
+                                                      : isCurrent
+                                                        ? 'bg-[#991B1B] text-white ring-2 ring-[var(--glow-color)] animate-pulse'
+                                                        : 'bg-[var(--bg-input)] text-[var(--text-muted)] border-2 border-[var(--border-color)]'
+                                                      }`}
+                                                  >
+                                                    {isCompleted ? <CheckCircleIcon className="w-6 h-6" /> : step.stepNumber}
+                                                  </div>
+                                                  <p className="mt-2 text-xs font-semibold text-[var(--text-primary)] text-center leading-tight">{step.name}</p>
+                                                  <p className="mt-0.5 text-[10px] text-[var(--text-muted)] text-center capitalize">
+                                                    {step.status?.replace(/_/g, ' ')}
+                                                  </p>
+                                                  {completedAt && (
+                                                    <p className="mt-0.5 text-[10px] text-green-600 dark:text-green-400 font-medium">{completedAt}</p>
+                                                  )}
+                                                </div>
+                                                {idx < report.workflowSteps!.length - 1 && (
+                                                  <div className="flex items-center flex-1 min-w-[12px] max-w-[24px] self-center pt-6 shrink-0" style={{ marginTop: '8px' }}>
+                                                    <div className={`h-0.5 flex-1 min-w-0 rounded-full transition-colors duration-300 ${isCompleted ? 'bg-green-400 dark:bg-green-600' : 'bg-[var(--border-color)]'}`} />
+                                                    <ArrowRightIcon className={`w-4 h-4 flex-shrink-0 -ml-0.5 ${isCompleted ? 'text-green-500' : 'text-[var(--text-muted)]'}`} aria-hidden />
+                                                  </div>
+                                                )}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-[var(--text-muted)]">No workflow steps defined</p>
+                                    )}
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -1040,13 +1036,12 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                         <p className="text-xs text-[var(--text-muted)] capitalize">{step.status?.replace(/_/g, ' ')}</p>
                       </div>
                       <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                          isCompleted
-                            ? 'border-green-500/40 text-green-600 dark:text-green-400'
-                            : isCurrent
-                              ? 'border-[#991B1B]/40 text-[#991B1B]'
-                              : 'border-[var(--border-color)] text-[var(--text-muted)]'
-                        }`}
+                        className={`text-[10px] px-2 py-0.5 rounded-full border ${isCompleted
+                          ? 'border-green-500/40 text-green-600 dark:text-green-400'
+                          : isCurrent
+                            ? 'border-[#991B1B]/40 text-[#991B1B]'
+                            : 'border-[var(--border-color)] text-[var(--text-muted)]'
+                          }`}
                       >
                         Step {step.stepNumber}
                       </span>

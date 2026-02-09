@@ -1,4 +1,5 @@
 import { DashboardLayout } from '@/components/layout';
+import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import DamageReportsClient from './DamageReportsClient';
 import { fetchWithTimeout } from '@/lib/server-api';
 import { cookies } from 'next/headers';
@@ -142,7 +143,7 @@ export default async function DamageReportsPage() {
   const initialReports = await fetchDamageReports();
 
   return (
-    <DashboardLayout>
+    <DashboardLayout title="Damage Reports" subtitle="View and manage damage report inspections" icon={<DocumentTextIcon className="w-7 h-7" />}>
       <DamageReportsClient initialReports={initialReports} />
     </DashboardLayout>
   );

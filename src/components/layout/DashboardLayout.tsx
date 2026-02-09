@@ -12,12 +12,14 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   title?: string;
   subtitle?: string;
+  icon?: React.ReactNode;
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
   title,
   subtitle,
+  icon,
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
@@ -55,6 +57,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <Header
           title={title}
           subtitle={subtitle}
+          icon={icon}
           onMenuClick={() => setSidebarOpen(true)}
         />
         

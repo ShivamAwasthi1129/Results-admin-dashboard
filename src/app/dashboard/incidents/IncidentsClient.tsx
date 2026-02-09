@@ -6,6 +6,7 @@ import { Card, Badge, Button, Modal, Input, Select } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-toastify';
 import {
+  ClipboardDocumentListIcon,
   DocumentTextIcon,
   ExclamationCircleIcon,
   ClockIcon,
@@ -398,7 +399,7 @@ export default function IncidentsClient({ initialIncidents }: IncidentsClientPro
 
   if (isLoading) {
     return (
-      <DashboardLayout title="Incident Management" subtitle="Manage and track all incidents">
+      <DashboardLayout title="Incident Management" subtitle="Manage and track all incidents" icon={<ClipboardDocumentListIcon className="w-7 h-7" />}>
         <div className="flex items-center justify-center h-64">
           <p className="text-[var(--text-muted)]">Loading incidents...</p>
         </div>
@@ -407,7 +408,7 @@ export default function IncidentsClient({ initialIncidents }: IncidentsClientPro
   }
 
   return (
-    <DashboardLayout title="Incident Management" subtitle="Manage and track all incidents">
+    <DashboardLayout title="Incident Management" subtitle="Manage and track all incidents" icon={<ClipboardDocumentListIcon className="w-7 h-7" />}>
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <Card className="p-4">

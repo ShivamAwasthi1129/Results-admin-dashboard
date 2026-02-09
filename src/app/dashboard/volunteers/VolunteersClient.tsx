@@ -476,7 +476,7 @@ export default function VolunteersClient({
   ];
 
   return (
-    <DashboardLayout title="Volunteers" subtitle="Manage volunteer activities and registrations">
+    <DashboardLayout title="Volunteers" subtitle="Manage volunteer activities and registrations" icon={<UserGroupIcon className="w-7 h-7" />}>
       {/* Stats */}
       {/* Stats Cards Row - Dashboard style */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
@@ -585,7 +585,6 @@ export default function VolunteersClient({
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">ID</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Contact</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Location</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Team</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Assigned Disasters</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Skills</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Stats</th>
@@ -638,13 +637,6 @@ export default function VolunteersClient({
                       <p className="text-xs text-[var(--text-muted)]">
                         {volunteer.address?.zipCode || ''}
                       </p>
-                    </td>
-                    <td className="px-4 py-4">
-                      {volunteer.team ? (
-                        <Badge variant="primary" size="sm">{volunteer.team.name}</Badge>
-                      ) : (
-                        <span className="text-sm text-[var(--text-muted)]">No Team</span>
-                      )}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">

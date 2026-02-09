@@ -352,7 +352,7 @@ export default function ReportsClient({}: ReportsClientProps) {
   };
 
   return (
-    <DashboardLayout title="Reports & Analytics" subtitle="Comprehensive reports and real-time analytics dashboard">
+    <DashboardLayout title="Reports & Analytics" subtitle="Comprehensive reports and real-time analytics dashboard" icon={<DocumentChartBarIcon className="w-7 h-7" />}>
       {/* Tab Navigation */}
       <div className="mb-6">
         <div className="flex items-center gap-2 bg-[var(--bg-input)] rounded-xl p-1 border border-[var(--border-color)]">

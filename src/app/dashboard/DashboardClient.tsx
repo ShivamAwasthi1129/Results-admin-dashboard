@@ -12,6 +12,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import {
+  HomeIcon,
   UsersIcon,
   UserGroupIcon,
   MapPinIcon,
@@ -24,13 +25,10 @@ import {
   GlobeAltIcon,
   HomeModernIcon,
   ShieldCheckIcon,
-  BellAlertIcon,
   ChevronRightIcon,
   CloudIcon,
   SunIcon,
   ArrowPathIcon,
-  SpeakerWaveIcon,
-  SpeakerXMarkIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 
@@ -176,13 +174,6 @@ export default function DashboardClient() {
   const [products, setProducts] = useState<any[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   
-  // Audio alert state
-  const [isAlertPlaying, setIsAlertPlaying] = useState(false);
-  const [showCriticalAlert, setShowCriticalAlert] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const pendingPlayRef = useRef(false);
-
   // Helper function to process disasters (all worldwide; map shows USA first, user can pan/zoom)
   const processDisasters = (disasters: any[]) => {
     return disasters
@@ -269,7 +260,7 @@ export default function DashboardClient() {
           setSelectedWeather(cachedWeather[0]);
         }
       }
-      if (cachedProducts) {
+      if (cachedProducts && Array.isArray(cachedProducts) && cachedProducts.length > 0) {
         setProducts(cachedProducts);
         setIsLoadingProducts(false);
       }
@@ -406,16 +397,21 @@ export default function DashboardClient() {
         return null;
       };
 
-      // Run all fetches in PARALLEL
+      // Run fetches in PARALLEL - skip products fetch if we already have cache (avoid double load / flash)
+      const fetchers = [
+        fetchStats(),
+        fetchDisasters(),
+        fetchUsers(),
+        fetchDevices(),
+        fetchWeather(),
+      ];
+      if (!cachedProducts || !Array.isArray(cachedProducts) || cachedProducts.length === 0) {
+        fetchers.push(fetchProducts());
+      } else {
+        setIsLoadingProducts(false);
+      }
       try {
-        await Promise.all([
-          fetchStats(),
-          fetchDisasters(),
-          fetchUsers(),
-          fetchDevices(),
-          fetchWeather(),
-          fetchProducts(),
-        ]);
+        await Promise.all(fetchers);
 
         // Set up background refresh for each data source (only once)
         if (!fetchersSetupRef.current) {
@@ -442,40 +438,6 @@ export default function DashboardClient() {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
-
-  // Unlock audio automatically on page load
-  useEffect(() => {
-    const unlockAudio = async () => {
-      if (!audioUnlocked && audioRef.current) {
-        try {
-          audioRef.current.volume = 0.01;
-          await audioRef.current.play();
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          audioRef.current.volume = 0.7;
-          setAudioUnlocked(true);
-        } catch (error) {
-          console.error('Audio unlock failed:', error);
-        }
-      }
-    };
-    unlockAudio();
-  }, [audioUnlocked]);
-
-  // Check for critical disasters and play alert
-  useEffect(() => {
-    const criticalCount = liveDisasters.filter(d => d.severity === 'critical').length;
-    if (criticalCount > 0 && audioUnlocked && audioRef.current && !isAlertPlaying) {
-      setIsAlertPlaying(true);
-      setShowCriticalAlert(true);
-      audioRef.current.play().catch(console.error);
-      
-      setTimeout(() => {
-        setIsAlertPlaying(false);
-        setShowCriticalAlert(false);
-      }, 5000);
-    }
-  }, [liveDisasters, audioUnlocked, isAlertPlaying]);
 
   const handleWeatherSearch = async (query: string) => {
     setWeatherSearchQuery(query);
@@ -593,33 +555,9 @@ export default function DashboardClient() {
     <DashboardLayout
       title={`${formatGreeting()}, ${user?.name?.split(' ')[0] || 'User'}! 👋`}
       subtitle={`${currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`}
+      icon={<HomeIcon className="w-7 h-7" />}
     >
       <div className="space-y-6">
-      {/* Critical Alert Banner */}
-      {showCriticalAlert && (
-        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 rounded-xl flex items-center justify-between animate-pulse">
-          <div className="flex items-center gap-3">
-            <BellAlertIcon className="w-6 h-6" />
-            <div>
-              <p className="font-bold">Critical Disaster Alert!</p>
-              <p className="text-sm opacity-90">{liveDisasterCount} critical disaster(s) detected</p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setShowCriticalAlert(false);
-              if (audioRef.current) audioRef.current.pause();
-            }}
-            className="p-2 hover:bg-red-800 rounded-lg transition-colors"
-          >
-            <SpeakerXMarkIcon className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
-      {/* Audio element for alerts */}
-      <audio ref={audioRef} src="/alert-sound.mp3" preload="auto" />
-
       {/* Stats Cards Row - Compact Style */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         <Card className="p-3 border-l-4 border-l-blue-500">

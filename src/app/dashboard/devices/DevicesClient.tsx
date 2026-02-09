@@ -8,6 +8,7 @@ import { toast } from 'react-toastify';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
+  DevicePhoneMobileIcon,
   MapPinIcon,
   EyeIcon,
   Cog6ToothIcon,
@@ -459,7 +460,7 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
 
 
   return (
-    <DashboardLayout title="Device Management" subtitle="Manage and monitor all devices">
+    <DashboardLayout title="Device Management" subtitle="Manage and monitor all devices" icon={<DevicePhoneMobileIcon className="w-7 h-7" />}>
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <Card className="p-4">

@@ -120,7 +120,7 @@ export default function AnalyticsPage() {
   ];
 
   return (
-    <DashboardLayout title="Analytics & Insights" subtitle="Comprehensive system performance metrics">
+    <DashboardLayout title="Analytics & Insights" subtitle="Comprehensive system performance metrics" icon={<ChartBarIcon className="w-7 h-7" />}>
       {/* Time Range Filter */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">

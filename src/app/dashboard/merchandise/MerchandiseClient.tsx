@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { DashboardLayout } from '@/components/layout';
 import { Card, Badge, Button, Modal, Input, Select, Table, SkeletonLoader } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useDataCache } from '@/context/DataCacheContext';
@@ -720,30 +721,12 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <ShoppingBagIcon className="w-7 h-7 text-purple-500" />
-            Products Management
-          </h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">
-            Manage products, inventory, and stock levels
-          </p>
-        </div>
-        {/* <Button
-          variant="gradient"
-          onClick={() => {
-            resetForm();
-            setShowAddModal(true);
-          }}
-        >
-          <PlusIcon className="w-5 h-5 mr-2" />
-          Add Product
-        </Button> */}
-      </div>
-
+    <DashboardLayout
+      title="Products Management"
+      subtitle="Manage products, inventory, and stock levels"
+      icon={<ShoppingBagIcon className="w-7 h-7" />}
+    >
+      <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-4">
@@ -2222,6 +2205,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
           setSelectedProductForDetail(null);
         }}
       />
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

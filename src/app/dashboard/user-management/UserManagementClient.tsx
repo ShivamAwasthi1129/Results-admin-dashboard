@@ -114,7 +114,6 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const [mapUser, setMapUser] = useState<User | null>(null);
   const [showUserPath, setShowUserPath] = useState(false);
   const [showAllPaths, setShowAllPaths] = useState(false);
-
   const fetchUsers = async () => {
     setIsLoading(true);
     setIsInitialLoading(true);
@@ -292,7 +291,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const uniqueRoles = Array.from(new Set(users.map((u) => u.role))).sort();
 
   return (
-    <DashboardLayout title="User Management" subtitle="Manage all users from external system">
+    <DashboardLayout title="User Management" subtitle="Manage all users from external system" icon={<IdentificationIcon className="w-7 h-7" />}>
       {/* Stats Cards Row - Dashboard style */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
         <Card className="p-3 border-l-4 border-l-blue-500">
@@ -440,8 +439,8 @@ export default function UserManagementClient({ initialData }: UserManagementClie
       {/* Users Display */}
       {viewMode === 'table' ? (
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto overflow-y-visible">
+            <table className="w-full min-w-[1200px]">
               <thead className="bg-[var(--bg-input)] border-b border-[var(--border-color)]">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider whitespace-nowrap">

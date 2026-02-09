@@ -311,15 +311,17 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <Table<Order>
-            columns={columns}
-            data={orders}
-            isLoading={isLoading}
-            emptyMessage="No orders found."
-            rowKey="id"
-            compact
-          />
+        <div className="overflow-x-auto overflow-y-visible">
+          <div className="min-w-[1000px]">
+            <Table<Order>
+              columns={columns}
+              data={orders}
+              isLoading={isLoading}
+              emptyMessage="No orders found."
+              rowKey="id"
+              compact
+            />
+          </div>
         </div>
       </Card>
 

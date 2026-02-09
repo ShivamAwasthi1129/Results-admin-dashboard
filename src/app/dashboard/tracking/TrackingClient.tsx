@@ -209,7 +209,7 @@ export default function TrackingClient({ token }: TrackingClientProps) {
   });
 
   return (
-    <DashboardLayout title="Live Tracking" subtitle="Real-time location tracking and monitoring">
+    <DashboardLayout title="Live Tracking" subtitle="Real-time location tracking and monitoring" icon={<MapPinIcon className="w-7 h-7" />}>
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <Card className="p-4">

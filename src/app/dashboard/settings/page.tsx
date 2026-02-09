@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { toast } from 'react-toastify';
 import {
+  Cog6ToothIcon,
   UserCircleIcon,
   BellIcon,
   ShieldCheckIcon,
@@ -287,7 +288,7 @@ export default function SettingsPage() {
   ];
 
   return (
-    <DashboardLayout title="Settings" subtitle="Manage your OPS account and preferences">
+    <DashboardLayout title="Settings" subtitle="Manage your OPS account and preferences" icon={<Cog6ToothIcon className="w-7 h-7" />}>
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="lg:w-72 shrink-0">
           <Card>

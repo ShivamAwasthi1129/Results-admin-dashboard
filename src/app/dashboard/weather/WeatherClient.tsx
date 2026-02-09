@@ -257,6 +257,7 @@ export default function WeatherClient() {
     <DashboardLayout
       title="Live Weather - USA"
       subtitle="Real-time weather data powered by OpenWeather One Call API 3.0"
+      icon={<CloudIcon className="w-7 h-7" />}
     >
       {/* Search Bar */}
       <div className="mb-6 relative">

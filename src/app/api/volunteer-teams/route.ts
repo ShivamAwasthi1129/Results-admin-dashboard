@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import VolunteerTeam from '@/models/VolunteerTeam';
 import Volunteer from '@/models/Volunteer';
-import User from '@/models/User';
 import { verifyAuth, canPerform } from '@/lib/auth';
 
 // GET - List all teams
@@ -43,30 +42,19 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .lean();
 
-    // Manually populate lead and members (since userId is stored as String, not ObjectId)
+    // Populate lead and members
     for (const team of teams) {
       if (team.leadId) {
-        const lead = await Volunteer.findById(team.leadId).lean();
-        if (lead && (lead as any).userId) {
-          const leadUser = await User.findById((lead as any).userId)
-            .select('firstName lastName name email phone')
-            .lean();
-          (lead as any).userId = leadUser || { firstName: '', lastName: '', name: 'Unknown', email: '', phone: '' };
-        }
+        const lead = await Volunteer.findById(team.leadId)
+          .populate('userId', 'name email phone')
+          .lean();
         (team as any).lead = lead;
       }
       
       if (team.memberIds && team.memberIds.length > 0) {
-        const members = await Volunteer.find({ _id: { $in: team.memberIds } }).lean();
-        // Manually populate userId for each member
-        for (const member of members) {
-          if ((member as any).userId) {
-            const memberUser = await User.findById((member as any).userId)
-              .select('firstName lastName name email phone')
-              .lean();
-            (member as any).userId = memberUser || { firstName: '', lastName: '', name: 'Unknown', email: '', phone: '' };
-          }
-        }
+        const members = await Volunteer.find({ _id: { $in: team.memberIds } })
+          .populate('userId', 'name email phone')
+          .lean();
         (team as any).members = members;
       }
     }
@@ -171,34 +159,16 @@ export async function POST(request: NextRequest) {
       { $set: { teamId: team._id.toString() } }
     );
 
-    const populatedTeam = await VolunteerTeam.findById(team._id).lean();
+    const populatedTeam = await VolunteerTeam.findById(team._id)
+      .lean();
     
-    // Manually populate lead and members (since userId is stored as String)
-    let leadData = null;
-    if (team.leadId) {
-      const lead = await Volunteer.findById(team.leadId).lean();
-      if (lead && (lead as any).userId) {
-        const leadUser = await User.findById((lead as any).userId)
-          .select('firstName lastName name email phone')
-          .lean();
-        (lead as any).userId = leadUser || { firstName: '', lastName: '', name: 'Unknown', email: '', phone: '' };
-      }
-      leadData = lead;
-    }
-    
-    let membersData: any[] = [];
-    if (team.memberIds && team.memberIds.length > 0) {
-      const members = await Volunteer.find({ _id: { $in: team.memberIds } }).lean();
-      for (const member of members) {
-        if ((member as any).userId) {
-          const memberUser = await User.findById((member as any).userId)
-            .select('firstName lastName name email phone')
-            .lean();
-          (member as any).userId = memberUser || { firstName: '', lastName: '', name: 'Unknown', email: '', phone: '' };
-        }
-      }
-      membersData = members;
-    }
+    // Populate lead and members
+    const leadData = await Volunteer.findById(team.leadId)
+      .populate('userId', 'name email phone')
+      .lean();
+    const membersData = await Volunteer.find({ _id: { $in: team.memberIds } })
+      .populate('userId', 'name email phone')
+      .lean();
 
     return NextResponse.json({
       success: true,
@@ -330,32 +300,13 @@ export async function PUT(request: NextRequest) {
       { $set: { teamId: id } }
     );
 
-    // Manually populate lead and members (since userId is stored as String)
-    let leadData = null;
-    if (leadId) {
-      const lead = await Volunteer.findById(leadId).lean();
-      if (lead && (lead as any).userId) {
-        const leadUser = await User.findById((lead as any).userId)
-          .select('firstName lastName name email phone')
-          .lean();
-        (lead as any).userId = leadUser || { firstName: '', lastName: '', name: 'Unknown', email: '', phone: '' };
-      }
-      leadData = lead;
-    }
-    
-    let membersData: any[] = [];
-    if (memberIds && memberIds.length > 0) {
-      const members = await Volunteer.find({ _id: { $in: memberIds } }).lean();
-      for (const member of members) {
-        if ((member as any).userId) {
-          const memberUser = await User.findById((member as any).userId)
-            .select('firstName lastName name email phone')
-            .lean();
-          (member as any).userId = memberUser || { firstName: '', lastName: '', name: 'Unknown', email: '', phone: '' };
-        }
-      }
-      membersData = members;
-    }
+    // Populate lead and members
+    const leadData = await Volunteer.findById(leadId)
+      .populate('userId', 'name email phone')
+      .lean();
+    const membersData = await Volunteer.find({ _id: { $in: memberIds } })
+      .populate('userId', 'name email phone')
+      .lean();
 
     return NextResponse.json({
       success: true,
