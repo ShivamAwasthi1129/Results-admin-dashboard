@@ -35,15 +35,16 @@ export async function POST(request: NextRequest) {
     }
 
     let user: { _id: mongoose.Types.ObjectId; email: string; password: string; firstName: string; lastName: string; name?: string; phone?: string; status: string } | null = null;
-    let volunteer: Awaited<ReturnType<typeof Volunteer.findOne>> = null;
+    let volunteer: Record<string, unknown> | null = null;
 
     if (volunteerId) {
-      volunteer = await Volunteer.findOne({
+      const volDoc = await Volunteer.findOne({
         $or: [
           { volunteerId: String(volunteerId).trim() },
           ...(mongoose.Types.ObjectId.isValid(volunteerId) ? [{ _id: new mongoose.Types.ObjectId(volunteerId) }] : []),
         ],
       }).lean();
+      volunteer = volDoc as Record<string, unknown> | null;
       if (volunteer && (volunteer as any).userId) {
         user = await User.findById((volunteer as any).userId)
           .select('email password firstName lastName name phone status')
@@ -54,7 +55,8 @@ export async function POST(request: NextRequest) {
         .select('email password firstName lastName name phone status')
         .lean();
       if (user) {
-        volunteer = await Volunteer.findOne({ userId: (user as any)._id.toString() }).lean();
+        const volDoc = await Volunteer.findOne({ userId: (user as any)._id.toString() }).lean();
+        volunteer = volDoc as Record<string, unknown> | null;
       }
     }
 
