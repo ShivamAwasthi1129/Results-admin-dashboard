@@ -92,11 +92,12 @@ Save `data.volunteer._id` or `data.volunteer.volunteerId` to call the “get vol
 
 After login, use the volunteer’s ID to load full profile. **No Authorization header or token required.**
 
-### Endpoint
+### Endpoints (both work)
 
-```
-GET /api/volunteers/by-id/{volunteerId}
-```
+You can use **either** of these URLs:
+
+- **`GET /api/volunteers/public/{volunteerId}`**
+- **`GET /api/volunteers/by-id/{volunteerId}`**
 
 - **`volunteerId`** (path) can be:
   - The **6-digit volunteer ID** (e.g. `123456`), or
@@ -104,8 +105,8 @@ GET /api/volunteers/by-id/{volunteerId}
 
 **Example URLs:**
 
-- By 6-digit ID: `GET /api/volunteers/by-id/123456`
-- By MongoDB ID: `GET /api/volunteers/by-id/507f1f77bcf86cd799439011`
+- By MongoDB ID: `GET /api/volunteers/public/695935959c342470275d4584` or `GET /api/volunteers/by-id/695935959c342470275d4584`
+- By 6-digit ID: `GET /api/volunteers/public/123456` or `GET /api/volunteers/by-id/123456`
 
 **Auth:** None
 

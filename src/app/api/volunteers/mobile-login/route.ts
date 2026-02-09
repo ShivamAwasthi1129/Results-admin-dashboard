@@ -67,14 +67,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (user.status !== 'active') {
+    if ((user as Record<string, unknown>).status !== 'active') {
       return NextResponse.json(
         { success: false, error: 'Account is not active. Please contact administrator.' },
         { status: 403 }
       );
     }
 
-    const isPasswordValid = await verifyPassword(password, user.password);
+    const hashedPassword = (user as Record<string, unknown>).password;
+    if (typeof hashedPassword !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid account state' },
+        { status: 500 }
+      );
+    }
+    let isPasswordValid = false;
+    try {
+      isPasswordValid = await verifyPassword(String(password), hashedPassword);
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Invalid password' },
+        { status: 401 }
+      );
+    }
     if (!isPasswordValid) {
       return NextResponse.json(
         { success: false, error: 'Invalid password' },
@@ -82,28 +97,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const displayName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    const userObj = user as Record<string, unknown>;
+    const displayName =
+      (userObj.name as string) ||
+      `${userObj.firstName || ''} ${userObj.lastName || ''}`.trim();
     const token = generateToken({
-      userId: (user as any)._id.toString(),
-      email: user.email,
+      userId: String(userObj._id ?? (user as any)._id?.toString?.() ?? ''),
+      email: String(userObj.email ?? ''),
       role: 'volunteer',
       name: displayName,
     });
 
+    const volObj = volunteer as Record<string, unknown>;
     const volunteerData = {
-      _id: (volunteer as any)._id.toString(),
-      volunteerId: (volunteer as any).volunteerId,
-      userId: (volunteer as any).userId,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      _id: String(volObj._id ?? (volunteer as any)._id?.toString?.() ?? ''),
+      volunteerId: volObj.volunteerId,
+      userId: volObj.userId,
+      firstName: String(userObj.firstName ?? ''),
+      lastName: String(userObj.lastName ?? ''),
       name: displayName,
-      email: user.email,
-      phone: user.phone,
-      availability: (volunteer as any).availability,
-      status: (volunteer as any).status,
-      address: (volunteer as any).address,
-      skills: (volunteer as any).skills,
-      profileImage: (volunteer as any).profileImage,
+      email: String(userObj.email ?? ''),
+      phone: String(userObj.phone ?? ''),
+      availability: volObj.availability,
+      status: volObj.status,
+      address: volObj.address,
+      skills: volObj.skills,
+      profileImage: volObj.profileImage,
     };
 
     return NextResponse.json({
@@ -114,10 +133,14 @@ export async function POST(request: NextRequest) {
       },
       message: 'Login successful',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Volunteer mobile login error:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      {
+        success: false,
+        error: process.env.NODE_ENV === 'development' ? message : 'Internal server error',
+      },
       { status: 500 }
     );
   }

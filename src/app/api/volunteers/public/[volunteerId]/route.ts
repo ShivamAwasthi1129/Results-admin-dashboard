@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVolunteerById } from '../../getVolunteerById';
 
 /**
- * GET /api/volunteers/by-id/[volunteerId]
- * Fetch a single volunteer by ID for mobile app. No authorization required.
- * [volunteerId] can be: 6-digit volunteerId (e.g. "123456") or MongoDB _id.
+ * GET /api/volunteers/public/[volunteerId]
+ * Same as by-id: fetch volunteer by ID for mobile app. No authorization required.
+ * [volunteerId] can be: 6-digit volunteerId or MongoDB _id.
  */
 export async function GET(
   request: NextRequest,
@@ -29,7 +29,7 @@ export async function GET(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Get volunteer by-id error:', error);
+    console.error('Get volunteer public error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
