@@ -1,5 +1,8 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import { IEmergency, EmergencyStatus, EmergencyPriority } from '@/types';
+// Ensure Volunteer model is registered before this schema (ref: 'Volunteer')
+import Volunteer from './Volunteer';
+void Volunteer;
 
 export interface IEmergencyDocument extends Omit<IEmergency, '_id'>, Document {}
 

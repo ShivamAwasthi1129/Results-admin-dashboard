@@ -311,7 +311,7 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
           </div>
         </div>
 
-        <div className="overflow-x-auto overflow-y-visible">
+        <div className="overflow-x-auto overflow-y-visible w-full border border-[var(--border-color)] rounded-lg" style={{ scrollbarGutter: 'stable' }}>
           <div className="min-w-[1000px]">
             <Table<Order>
               columns={columns}

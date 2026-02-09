@@ -1,4 +1,7 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
+// Ensure Volunteer model is registered before this schema (ref: 'Volunteer')
+import Volunteer from './Volunteer';
+void Volunteer;
 
 export interface IVolunteerTeam {
   _id?: string;
