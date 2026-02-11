@@ -2,6 +2,11 @@ Module,Method,Endpoint,Auth Required,Parameters / Body,Description
 Resource Locator,GET,/api/resource-locator/categories,No,-,Get resource categories (Shelter Food Insurance Medical Other)
 Resource Locator,GET,/api/resource-locator/resources,No,"search, category, lat, lng, page, limit",List resources with search and distance (category=shelter supported)
 Resource Locator,GET,/api/resource-locator/resources/[id],No,"id (path), category (query)",Get single resource detail by ID
+Mobile Tasks,GET,/api/mobile/tasks,Yes (Bearer volunteer),-,Tasks summary (active/completed count response rating) and assigned tasks list
+Mobile Tasks,GET,/api/mobile/tasks/[disasterId],Yes (Bearer volunteer),disasterId (path),View single task detail (for assigned volunteer)
+Mobile Tasks,POST,/api/mobile/tasks/accept,Yes (Bearer volunteer),Body: disasterId,Accept assigned task (sets status active)
+Mobile Tasks,POST,/api/mobile/tasks/decline,Yes (Bearer volunteer),Body: disasterId,Decline assigned task (sets status cancelled)
+Mobile Alerts,GET,/api/mobile/alerts,No,"lat, lon, limit, filter (query)",Unified alerts list (weather + emergencies) for mobile
 Auth,POST,/api/auth/login,No,"email, password",Login; returns session/token
 Auth,GET,/api/auth/me,Yes (Bearer),-,"Current user profile"
 Auth,POST,/api/auth/logout,Yes,-,Logout
