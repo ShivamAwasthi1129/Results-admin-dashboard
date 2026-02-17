@@ -527,7 +527,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                             {user.profilePictureUrl ? (
                               <img
                                 src={user.profilePictureUrl}
-                                alt={user.fullName}
+                                alt={user.fullName ?? 'User'}
                                 className="w-10 h-10 rounded-full object-cover"
                               />
                             ) : (
@@ -648,37 +648,37 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm">
-                          {user.adminGroups?.length > 0 && (
+                          {((user.adminGroups ?? []).length > 0) && (
                             <div className="mb-2">
-                              <p className="text-xs text-[var(--text-muted)] mb-1">Admin ({user.adminGroups.length})</p>
+                              <p className="text-xs text-[var(--text-muted)] mb-1">Admin ({(user.adminGroups ?? []).length})</p>
                               <div className="flex flex-wrap gap-1">
-                                {user.adminGroups.slice(0, 2).map((group: any, idx: number) => (
+                                {(user.adminGroups ?? []).slice(0, 2).map((group: any, idx: number) => (
                                   <Badge key={idx} variant="warning" size="sm" className="truncate max-w-[100px] text-[10px] px-1.5 py-0.5">
                                     {group.name || 'Group'}
                                   </Badge>
                                 ))}
-                                {user.adminGroups.length > 2 && (
-                                  <Badge variant="secondary" size="sm" className="text-[10px] px-1.5 py-0.5">+{user.adminGroups.length - 2}</Badge>
+                                {(user.adminGroups ?? []).length > 2 && (
+                                  <Badge variant="secondary" size="sm" className="text-[10px] px-1.5 py-0.5">+{(user.adminGroups ?? []).length - 2}</Badge>
                                 )}
                               </div>
                             </div>
                           )}
-                          {user.memberGroups?.length > 0 && (
+                          {((user.memberGroups ?? []).length > 0) && (
                             <div>
-                              <p className="text-xs text-[var(--text-muted)] mb-1">Member ({user.memberGroups.length})</p>
+                              <p className="text-xs text-[var(--text-muted)] mb-1">Member ({(user.memberGroups ?? []).length})</p>
                               <div className="flex flex-wrap gap-1">
-                                {user.memberGroups.slice(0, 2).map((mg: any, idx: number) => (
+                                {(user.memberGroups ?? []).slice(0, 2).map((mg: any, idx: number) => (
                                   <Badge key={idx} variant="info" size="sm" className="truncate max-w-[100px] text-[10px] px-1.5 py-0.5">
                                     {mg.group?.name || 'Group'}
                                   </Badge>
                                 ))}
-                                {user.memberGroups.length > 2 && (
-                                  <Badge variant="secondary" size="sm" className="text-[10px] px-1.5 py-0.5">+{user.memberGroups.length - 2}</Badge>
+                                {(user.memberGroups ?? []).length > 2 && (
+                                  <Badge variant="secondary" size="sm" className="text-[10px] px-1.5 py-0.5">+{(user.memberGroups ?? []).length - 2}</Badge>
                                 )}
                               </div>
                             </div>
                           )}
-                          {(!user.adminGroups?.length && !user.memberGroups?.length) && (
+                          {((user.adminGroups ?? []).length === 0 && (user.memberGroups ?? []).length === 0) && (
                             <span className="text-xs text-[var(--text-muted)]">No groups</span>
                           )}
                         </div>
@@ -802,7 +802,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                     {user.profilePictureUrl ? (
                       <img
                         src={user.profilePictureUrl}
-                        alt={user.fullName}
+                        alt={user.fullName ?? 'User'}
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
@@ -913,7 +913,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                 {selectedUser.profilePictureUrl ? (
                   <img
                     src={selectedUser.profilePictureUrl}
-                    alt={selectedUser.fullName}
+                    alt={selectedUser.fullName ?? 'User'}
                     className="w-20 h-20 rounded-xl object-cover"
                   />
                 ) : (
@@ -1166,20 +1166,20 @@ export default function UserManagementClient({ initialData }: UserManagementClie
             </div>
 
             {/* Groups */}
-            {(selectedUser.adminGroups?.length > 0 || selectedUser.memberGroups?.length > 0) && (
+            {((selectedUser.adminGroups ?? []).length > 0 || (selectedUser.memberGroups ?? []).length > 0) && (
               <div>
                 <h4 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
                   <UserGroupIcon className="w-5 h-5" />
                   Groups
                 </h4>
                 <div className="bg-[var(--bg-input)] p-4 rounded-lg space-y-4">
-                  {selectedUser.adminGroups?.length > 0 && (
+                  {(selectedUser.adminGroups ?? []).length > 0 && (
                     <div>
                       <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">
-                        Admin Groups ({selectedUser.adminGroups.length})
+                        Admin Groups ({(selectedUser.adminGroups ?? []).length})
                       </p>
                       <div className="space-y-3">
-                        {selectedUser.adminGroups.map((group: any, idx: number) => (
+                        {(selectedUser.adminGroups ?? []).map((group: any, idx: number) => (
                           <div key={idx} className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">
                             <div className="flex items-center justify-between mb-2">
                               <Badge variant="warning" size="sm">{group.name || 'Unnamed Group'}</Badge>
@@ -1267,13 +1267,13 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       </div>
                     </div>
                   )}
-                  {selectedUser.memberGroups?.length > 0 && (
+                  {(selectedUser.memberGroups ?? []).length > 0 && (
                     <div>
                       <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">
-                        Member Groups ({selectedUser.memberGroups.length})
+                        Member Groups ({(selectedUser.memberGroups ?? []).length})
                       </p>
                       <div className="space-y-3">
-                        {selectedUser.memberGroups.map((memberGroup: any, idx: number) => {
+                        {(selectedUser.memberGroups ?? []).map((memberGroup: any, idx: number) => {
                           const group = memberGroup.group || {};
                           return (
                             <div key={idx} className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">
