@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout';
 import { Card, Badge, Button, Input, Select, Modal } from '@/components/ui';
 import { toast } from 'react-toastify';
+import { useAuth } from '@/context/AuthContext';
 import {
   UsersIcon,
   MagnifyingGlassIcon,
@@ -28,6 +29,11 @@ import {
 } from '@heroicons/react/24/outline';
 import dynamic from 'next/dynamic';
 
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('auth-token');
+}
+
 // Dynamic import for maps to avoid SSR issues
 const DynamicUserMap = dynamic(() => import('@/components/user-management/UserMap'), {
   ssr: false,
@@ -45,9 +51,9 @@ export interface User {
   phoneNumber: string;
   email: string | null;
   username: string | null;
-  fullName: string;
-  dateOfBirth: string;
-  gender: string;
+  fullName: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
   profilePictureUrl: string | null;
   address: string | null;
   city: string | null;
@@ -73,8 +79,9 @@ export interface User {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  adminGroups: any[];
-  memberGroups: any[];
+  status?: string;
+  adminGroups?: any[];
+  memberGroups?: any[];
 }
 
 interface Pagination {
@@ -98,6 +105,8 @@ interface UserManagementClientProps {
 }
 
 export default function UserManagementClient({ initialData }: UserManagementClientProps) {
+  const { token: authToken } = useAuth();
+  const token = authToken ?? getAuthToken();
   const [userLocations, setUserLocations] = useState<Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }>>({});
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [users, setUsers] = useState<User[]>(initialData.data?.users || []);
@@ -115,13 +124,20 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const [showUserPath, setShowUserPath] = useState(false);
   const [showAllPaths, setShowAllPaths] = useState(false);
   const fetchUsers = async () => {
+    const t = token ?? getAuthToken();
+    if (!t) {
+      toast.error('Please log in to fetch users');
+      return;
+    }
     setIsLoading(true);
     setIsInitialLoading(true);
     try {
-      const response = await fetch('/api/users?limit=1000', {
+      const response = await fetch('/api/external/admin/users?limit=1000', {
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${t}`,
         },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -150,14 +166,18 @@ export default function UserManagementClient({ initialData }: UserManagementClie
     }
   };
   
-  // Fetch user locations from tracking API
+  // Fetch user locations from tracking API (send auth token in header)
   const fetchUserLocations = async () => {
+    const t = token ?? getAuthToken();
+    if (!t) return;
     setIsLoadingLocations(true);
     try {
       const response = await fetch('/api/tracking/location/all', {
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${t}`,
         },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -166,17 +186,15 @@ export default function UserManagementClient({ initialData }: UserManagementClie
       }
 
       const data = await response.json();
-      if (data.success && data.data && data.data.users) {
-        // Create a map of userId -> location
+      if (data.success && data.data && Array.isArray(data.data.locations)) {
         const locationMap: Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }> = {};
-        data.data.users.forEach((user: any) => {
-          if (user.location && user.location.latitude && user.location.longitude) {
-            locationMap[user.id] = {
-              latitude: user.location.latitude,
-              longitude: user.location.longitude,
-              accuracy: user.location.accuracy,
-              lastUpdatedAt: user.location.lastUpdatedAt,
-              isActive: user.location.isActive,
+        data.data.locations.forEach((loc: { userId: string; latitude: number; longitude: number; accuracy?: number; user?: { isActive?: boolean } }) => {
+          if (loc.latitude != null && loc.longitude != null) {
+            locationMap[loc.userId] = {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              accuracy: loc.accuracy,
+              isActive: loc.user?.isActive,
             };
           }
         });
@@ -189,16 +207,15 @@ export default function UserManagementClient({ initialData }: UserManagementClie
     }
   };
 
-  // Fetch users on mount if initial data failed
+  // Fetch users on mount if initial data failed; fetch locations (both use token from context or localStorage)
   useEffect(() => {
     if (!initialData.success || initialData.data?.users?.length === 0) {
       fetchUsers();
     } else {
       setIsInitialLoading(false);
     }
-    // Fetch real location data
     fetchUserLocations();
-  }, []);
+  }, [token]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
@@ -906,7 +923,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                 )}
               </div>
               <div className="flex-1">
-                <h3 className="text-xl font-bold text-[var(--text-primary)]">{selectedUser.fullName}</h3>
+                <h3 className="text-xl font-bold text-[var(--text-primary)]">{selectedUser.fullName || 'N/A'}</h3>
                 {selectedUser.username ? (
                   <p className="text-sm text-[var(--text-muted)]">@{selectedUser.username}</p>
                 ) : selectedUser.email ? (

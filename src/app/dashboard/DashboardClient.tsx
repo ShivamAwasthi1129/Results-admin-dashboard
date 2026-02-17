@@ -173,6 +173,7 @@ export default function DashboardClient() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [products, setProducts] = useState<any[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [userLocations, setUserLocations] = useState<Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }>>({});
   
   // Helper function to process disasters (all worldwide; map shows USA first, user can pan/zoom)
   const processDisasters = (disasters: any[]) => {
@@ -209,7 +210,7 @@ export default function DashboardClient() {
       });
   };
 
-  // Helper function to process users
+  // Helper function to process users (from external admin API; location comes from tracking API)
   const processUsers = (users: any[]) => {
     return users.slice(0, 50).map((u: any) => ({
       id: u.id,
@@ -226,7 +227,7 @@ export default function DashboardClient() {
       isSubscriber: u.isSubscriber,
       emailVerified: u.emailVerified,
       phoneVerified: u.phoneVerified,
-      location: u.location,
+      location: null as any,
     }));
   };
 
@@ -234,13 +235,18 @@ export default function DashboardClient() {
   const fetchersSetupRef = useRef(false);
   const productsFetchingRef = useRef(false);
 
+  // Auth token: context or localStorage (so requests always send header)
+  const authToken = token ?? (typeof window !== 'undefined' ? localStorage.getItem('auth-token') : null);
+
   // Fetch all data on mount - PARALLEL EXECUTION
   useEffect(() => {
-    if (!token) return;
+    const t = authToken ?? (typeof window !== 'undefined' ? localStorage.getItem('auth-token') : null);
+    if (!t) return;
     if (fetchersSetupRef.current) return; // Prevent multiple setups
 
     const fetchAllData = async () => {
       setIsLoading(true);
+      const tokenForFetch = t;
 
       // Check cache first and set initial data
       const cachedStats = getCachedData('stats');
@@ -269,7 +275,7 @@ export default function DashboardClient() {
       const fetchStats = async () => {
         try {
           const response = await fetch('/api/dashboard/stats', {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${tokenForFetch}` }
           });
           if (response.ok) {
             const data = await response.json();
@@ -306,11 +312,9 @@ export default function DashboardClient() {
 
       const fetchUsers = async () => {
         try {
-          const response = await fetch('/api/tracking/location/all', {
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            }
+          const response = await fetch('/api/external/admin/users?limit=1000', {
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenForFetch}` },
+            credentials: 'include',
           });
           if (response.ok) {
             const data = await response.json();
@@ -327,11 +331,41 @@ export default function DashboardClient() {
         return null;
       };
 
+      const fetchUserLocations = async () => {
+        try {
+          const response = await fetch('/api/tracking/location/all', {
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenForFetch}` },
+            credentials: 'include',
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && Array.isArray(data.data?.locations)) {
+              const map: Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }> = {};
+              data.data.locations.forEach((loc: { userId: string; latitude: number; longitude: number; accuracy?: number; user?: { isActive?: boolean } }) => {
+                if (loc.latitude != null && loc.longitude != null) {
+                  map[loc.userId] = {
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    accuracy: loc.accuracy,
+                    isActive: loc.user?.isActive,
+                  };
+                }
+              });
+              setUserLocations(map);
+              return map;
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching user locations:', error);
+        }
+        return null;
+      };
+
       const fetchDevices = async () => {
         try {
           const response = await fetch('/api/devices?limit=1000', {
             headers: { 
-              'Authorization': `Bearer ${token}`,
+              'Authorization': `Bearer ${tokenForFetch}`,
               'Content-Type': 'application/json' 
             }
           });
@@ -378,7 +412,7 @@ export default function DashboardClient() {
         try {
           setIsLoadingProducts(true);
           const response = await fetch('/api/products?status=active&limit=20', {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${tokenForFetch}` }
           });
           if (response.ok) {
             const data = await response.json();
@@ -402,6 +436,7 @@ export default function DashboardClient() {
         fetchStats(),
         fetchDisasters(),
         fetchUsers(),
+        fetchUserLocations(),
         fetchDevices(),
         fetchWeather(),
       ];
@@ -431,7 +466,7 @@ export default function DashboardClient() {
     };
 
     fetchAllData();
-  }, [token]); // Removed dependencies that cause infinite loops
+  }, [authToken]); // Run when token from context or localStorage is available
 
   useEffect(() => {
     // Update time every minute
@@ -917,18 +952,7 @@ export default function DashboardClient() {
 
                 return (
                   <AllUsersMap
-                    userLocations={filteredUsers.reduce((acc: any, u: any) => {
-                      if (u.location && u.location.latitude && u.location.longitude) {
-                        acc[u.id] = {
-                          latitude: u.location.latitude,
-                          longitude: u.location.longitude,
-                          accuracy: u.location.accuracy,
-                          lastUpdatedAt: u.location.lastUpdatedAt,
-                          isActive: u.location.isActive || u.isActive,
-                        };
-                      }
-                      return acc;
-                    }, {})}
+                    userLocations={userLocations}
                     users={filteredUsers.map(u => ({
                     id: u.id,
                     phoneNumber: u.phoneNumber,

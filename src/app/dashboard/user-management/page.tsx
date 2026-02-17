@@ -1,26 +1,32 @@
 import { getServerAuth } from '@/lib/server-auth';
-import { getApiUrl } from '@/lib/server-api';
 import UserManagementClient from './UserManagementClient';
+import { fetchWithTimeout } from '@/lib/server-api';
 
-async function fetchUsers(token: string | null) {
+async function fetchUsers(_token: string | null) {
   try {
-    // Fetch from external API
-    const externalApiUrl = 'https://dms-rust-omega.vercel.app/api/admin/users';
+    const baseUrl = process.env.DOMAIN_NAME?.replace(/\/$/, '');
+    if (!baseUrl) {
+      console.error('[fetchUsers] DOMAIN_NAME is not set');
+      return {
+        success: false,
+        data: { users: [], pagination: { page: 1, limit: 20, total: 0, pages: 1 } },
+        error: 'External API not configured',
+      };
+    }
+    const externalApiUrl = `${baseUrl}/api/admin/users`;
+    const externalToken = process.env.R3SULTS_ACCESS_TOKEN;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (externalToken) headers['Authorization'] = `Bearer ${externalToken}`;
     console.log(`[fetchUsers] Fetching from external API: ${externalApiUrl}`);
     
-    // Create abort controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for external API
-    
-    const response = await fetch(externalApiUrl, {
-      headers: { 
-        'Content-Type': 'application/json',
+    const response = await fetchWithTimeout(
+      externalApiUrl,
+      {
+        headers,
+        cache: 'no-store',
       },
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
+      15000
+    );
     
     if (!response.ok) {
       console.error(`[fetchUsers] Failed to fetch users: ${response.status} ${response.statusText}`);
