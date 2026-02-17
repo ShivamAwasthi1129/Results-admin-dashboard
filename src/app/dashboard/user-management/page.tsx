@@ -4,16 +4,16 @@ import { fetchWithTimeout } from '@/lib/server-api';
 
 async function fetchUsers(_token: string | null) {
   try {
-    const baseUrl = process.env.DOMAIN_NAME?.replace(/\/$/, '');
-    if (!baseUrl) {
-      console.error('[fetchUsers] DOMAIN_NAME is not set');
+    const { getExternalAdminUsersUrl } = await import('@/lib/external-api');
+    const externalApiUrl = getExternalAdminUsersUrl();
+    if (!externalApiUrl) {
+      console.error('[fetchUsers] DOMAIN_NAME is not set. Set DOMAIN_NAME=https://r3sults-backend.vercel.app in env.');
       return {
         success: false,
         data: { users: [], pagination: { page: 1, limit: 20, total: 0, pages: 1 } },
-        error: 'External API not configured',
+        error: 'External API not configured. Set DOMAIN_NAME in env.',
       };
     }
-    const externalApiUrl = `${baseUrl}/api/admin/users`;
     const externalToken = process.env.R3SULTS_ACCESS_TOKEN;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (externalToken) headers['Authorization'] = `Bearer ${externalToken}`;

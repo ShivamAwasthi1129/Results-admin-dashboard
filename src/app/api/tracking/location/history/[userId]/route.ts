@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/auth';
+import { verifyAuth, getTokenFromRequest } from '@/lib/auth';
 import { fetchWithTimeout } from '@/lib/server-api';
+import { getExternalTrackingUrl } from '@/lib/external-api';
 
-// GET - Get location history of specific user
+/**
+ * GET /api/tracking/location/history/[userId]
+ * Proxies to R3sults backend: GET /api/tracking/location/history/{userId}
+ * Forwards the client's auth token. Query: page, limit (optional).
+ * Response: { success, data: { history: [...], pagination: { page, limit, total, pages } } }
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const tokenPayload = await verifyAuth(request);
-
     if (!tokenPayload) {
       return NextResponse.json(
         { success: false, message: 'Not authorized. No token provided.' },
@@ -18,54 +23,52 @@ export async function GET(
     }
 
     const { userId } = await params;
-    const token = request.headers.get('authorization')?.replace('Bearer ', '') || 
-                  request.cookies.get('auth-token')?.value;
-
-    if (!token) {
+    if (!userId) {
       return NextResponse.json(
-        { success: false, message: 'Not authorized. No token provided.' },
-        { status: 401 }
+        { success: false, data: { history: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } }, error: 'userId required' },
+        { status: 400 }
+      );
+    }
+
+    const apiUrl = getExternalTrackingUrl(`/api/tracking/location/history/${userId}`);
+    if (!apiUrl) {
+      console.error('[tracking/history] DOMAIN_NAME is not set in env.');
+      return NextResponse.json(
+        { success: false, data: { history: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } }, error: 'Tracking API not configured.' },
+        { status: 503 }
       );
     }
 
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
+    const page = searchParams.get('page') || '1';
     const limit = searchParams.get('limit') || '100';
+    const urlWithQuery = `${apiUrl}?page=${page}&limit=${limit}`;
 
-    const trackingApiUrl = 'https://dms-rust-omega.vercel.app';
-    const adminUserId = '132fa22d26a99a3f27f60993476394e4b3e97ddca82c76e824c4dfe91f36a2ab717cd7d4b890d9b6c61e621767e6e66960f8f688e0d55ec2325a87d736c8b537';
-    let apiUrl = `${trackingApiUrl}/api/tracking/location/history/${userId}?userId=${adminUserId}&limit=${limit}`;
-    
-    if (startDate) apiUrl += `&startDate=${startDate}`;
-    if (endDate) apiUrl += `&endDate=${endDate}`;
+    const clientToken = getTokenFromRequest(request) || process.env.R3SULTS_ACCESS_TOKEN;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (clientToken) headers['Authorization'] = `Bearer ${clientToken}`;
 
-    console.log(`[tracking/history/${userId}] Fetching from: ${apiUrl}`);
-
-    const response = await fetchWithTimeout(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-    }, 15000);
+    const response = await fetchWithTimeout(
+      urlWithQuery,
+      { method: 'GET', headers, cache: 'no-store' },
+      15000
+    );
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
       console.error(`[tracking/history/${userId}] API error: ${response.status} - ${errorText}`);
       return NextResponse.json(
-        { success: false, data: [], error: `Failed to fetch history: ${response.status}` },
+        { success: false, data: { history: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } }, error: `Failed to fetch history: ${response.status}` },
         { status: response.status }
       );
     }
 
     const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
-  } catch (error: any) {
+    return NextResponse.json(data, { status: 200 });
+  } catch (error: unknown) {
     console.error('Get user location history error:', error);
     return NextResponse.json(
-      { success: false, data: [], error: 'Tracking service unavailable' },
+      { success: false, data: { history: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } }, error: 'Tracking service unavailable' },
       { status: 503 }
     );
   }

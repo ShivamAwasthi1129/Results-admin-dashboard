@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth, canPerform } from '@/lib/auth';
+import { verifyAuth, canPerform, getTokenFromRequest } from '@/lib/auth';
 import { fetchWithTimeout } from '@/lib/server-api';
+import { getExternalAdminUsersUrl } from '@/lib/external-api';
 
 const EXTERNAL_API_TIMEOUT = 15000;
 
 /**
  * GET /api/external/admin/users
  * Proxies to the R3sults backend admin users API.
- * Base URL is read from env DOMAIN_NAME (e.g. https://r3sults-backend.vercel.app).
- * Query params (page, limit, etc.) are forwarded to the external API.
+ * Forwards the client's auth token (same as in localStorage) to the external API.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -20,21 +20,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Permission denied' }, { status: 403 });
     }
 
-    const baseUrl = process.env.DOMAIN_NAME?.replace(/\/$/, '');
-    if (!baseUrl) {
-      console.error('[external/admin/users] DOMAIN_NAME is not set');
+    const { searchParams } = new URL(request.url);
+    const queryString = searchParams.toString();
+    const apiUrl = getExternalAdminUsersUrl(queryString || undefined);
+    if (!apiUrl) {
+      console.error('[external/admin/users] DOMAIN_NAME is not set in env. Set DOMAIN_NAME=https://r3sults-backend.vercel.app');
       return NextResponse.json(
-        { success: false, error: 'External API not configured' },
+        { success: false, error: 'External API not configured. Set DOMAIN_NAME in env.' },
         { status: 503 }
       );
     }
-
-    const { searchParams } = new URL(request.url);
-    const queryString = searchParams.toString();
-    const apiUrl = `${baseUrl}/api/admin/users${queryString ? `?${queryString}` : ''}`;
-    const externalToken = process.env.R3SULTS_ACCESS_TOKEN;
+    // Use the same token the client sent (from Authorization header or cookie) - R3sults backend accepts it
+    const clientToken = getTokenFromRequest(request) || process.env.R3SULTS_ACCESS_TOKEN;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (externalToken) headers['Authorization'] = `Bearer ${externalToken}`;
+    if (clientToken) headers['Authorization'] = `Bearer ${clientToken}`;
 
     const response = await fetchWithTimeout(
       apiUrl,

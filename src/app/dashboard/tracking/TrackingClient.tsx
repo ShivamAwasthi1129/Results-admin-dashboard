@@ -21,6 +21,16 @@ const DynamicTrackingMap = dynamic(() => import('@/components/tracking/TrackingM
   loading: () => <div className="h-[600px] flex items-center justify-center bg-[var(--bg-input)] rounded-lg"><div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div>
 });
 
+/** Single point from tracking history API */
+interface HistoryPoint {
+  id: string;
+  userId: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  timestamp: string;
+}
+
 interface Location {
   id: string;
   userId: string;
@@ -58,6 +68,10 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [locationHistory, setLocationHistory] = useState<HistoryPoint[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyPagination, setHistoryPagination] = useState<{ page: number; limit: number; total: number; pages: number } | null>(null);
 
   // Fetch all locations (always send auth token from localStorage/context in header)
   const fetchLocations = async () => {
@@ -178,8 +192,55 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
 
   const handleViewLocation = (location: Location) => {
     setSelectedLocation(location);
+    setLocationHistory([]);
+    setHistoryError(null);
+    setHistoryPagination(null);
     setIsLocationModalOpen(true);
   };
+
+  // Fetch location history when modal opens for the selected user
+  const fetchLocationHistory = async (userId: string) => {
+    const t = token ?? getAuthToken();
+    if (!t) return;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const response = await fetch(`/api/tracking/location/history/${userId}?limit=500`, {
+        headers: {
+          Authorization: `Bearer ${t}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setLocationHistory([]);
+        setHistoryPagination(null);
+        setHistoryError(data.error || data.message || `Failed to load history: ${response.status}`);
+        return;
+      }
+      if (data.success && data.data?.history && Array.isArray(data.data.history)) {
+        setLocationHistory(data.data.history);
+        setHistoryPagination(data.data.pagination ?? null);
+      } else {
+        setLocationHistory([]);
+        setHistoryPagination(null);
+      }
+    } catch (err) {
+      console.error('Fetch location history error:', err);
+      setLocationHistory([]);
+      setHistoryPagination(null);
+      setHistoryError('Failed to load tracking history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isLocationModalOpen && selectedLocation?.userId) {
+      fetchLocationHistory(selectedLocation.userId);
+    }
+  }, [isLocationModalOpen, selectedLocation?.userId]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -368,6 +429,9 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
         onClose={() => {
           setIsLocationModalOpen(false);
           setSelectedLocation(null);
+          setLocationHistory([]);
+          setHistoryError(null);
+          setHistoryPagination(null);
         }}
         title="User Location Details"
         size="xl"
@@ -392,13 +456,43 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
               </div>
             </div>
 
-            {/* Map View */}
-            <div className="h-[300px] rounded-lg overflow-hidden border border-[var(--border-color)]">
-              <DynamicTrackingMap
-                locations={[selectedLocation]}
-                geofences={[]}
-                height="300px"
-              />
+            {/* Tracking history map */}
+            <div>
+              <p className="text-sm font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wide">
+                Tracking history
+                {historyPagination && (
+                  <span className="ml-2 font-normal normal-case text-[var(--text-primary)]">
+                    ({historyPagination.total} points)
+                  </span>
+                )}
+              </p>
+              <div className="h-[320px] rounded-lg overflow-hidden border border-[var(--border-color)]">
+                {historyLoading ? (
+                  <div className="h-full flex items-center justify-center bg-[var(--bg-input)]">
+                    <div className="w-10 h-10 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                  </div>
+                ) : historyError ? (
+                  <div className="h-full flex flex-col items-center justify-center bg-[var(--bg-input)] p-4 text-center">
+                    <p className="text-[var(--text-muted)] mb-2">{historyError}</p>
+                    <Button variant="secondary" size="sm" onClick={() => selectedLocation && fetchLocationHistory(selectedLocation.userId)}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : locationHistory.length > 0 ? (
+                  <DynamicTrackingMap
+                    locations={[]}
+                    geofences={[]}
+                    pathPoints={locationHistory.map((p) => ({ latitude: p.latitude, longitude: p.longitude }))}
+                    height="320px"
+                  />
+                ) : (
+                  <DynamicTrackingMap
+                    locations={[selectedLocation]}
+                    geofences={[]}
+                    height="320px"
+                  />
+                )}
+              </div>
             </div>
 
             {/* Location Information */}

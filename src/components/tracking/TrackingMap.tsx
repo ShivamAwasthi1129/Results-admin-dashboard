@@ -71,9 +71,17 @@ interface Geofence {
   isActive: boolean;
 }
 
+/** Points for drawing a path (e.g. location history). Oldest first for chronological trail. */
+export interface PathPoint {
+  latitude: number;
+  longitude: number;
+}
+
 interface TrackingMapProps {
   locations: Location[];
   geofences?: Geofence[];
+  /** Optional path to draw (e.g. user's tracking history). Points in chronological order (oldest first). */
+  pathPoints?: PathPoint[];
   onLocationClick?: (location: Location) => void;
   height?: string;
   selectedLocationId?: string;
@@ -82,6 +90,7 @@ interface TrackingMapProps {
 export default function TrackingMap({ 
   locations, 
   geofences = [], 
+  pathPoints,
   onLocationClick,
   height = '600px',
   selectedLocationId
@@ -91,6 +100,9 @@ export default function TrackingMap({
   const markersRef = useRef<L.Marker[]>([]);
   const circlesRef = useRef<L.Circle[]>([]);
   const polygonsRef = useRef<L.Polygon[]>([]);
+  const polylineRef = useRef<L.Polyline | null>(null);
+  const pathStartMarkerRef = useRef<L.Marker | null>(null);
+  const pathEndMarkerRef = useRef<L.Marker | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -124,6 +136,20 @@ export default function TrackingMap({
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
+    // Clear existing path (polyline + start/end markers)
+    if (polylineRef.current) {
+      polylineRef.current.remove();
+      polylineRef.current = null;
+    }
+    if (pathStartMarkerRef.current) {
+      pathStartMarkerRef.current.remove();
+      pathStartMarkerRef.current = null;
+    }
+    if (pathEndMarkerRef.current) {
+      pathEndMarkerRef.current.remove();
+      pathEndMarkerRef.current = null;
+    }
+
     // Clear existing geofences
     circlesRef.current.forEach(circle => circle.remove());
     circlesRef.current = [];
@@ -131,6 +157,45 @@ export default function TrackingMap({
     polygonsRef.current = [];
 
     const bounds: L.LatLngExpression[] = [];
+
+    // Draw path (e.g. tracking history) – API returns newest first, so reverse for chronological trail
+    if (pathPoints && pathPoints.length > 0) {
+      const validPath = pathPoints.filter(
+        (p) => typeof p.latitude === 'number' && !isNaN(p.latitude) && typeof p.longitude === 'number' && !isNaN(p.longitude)
+      );
+      const chronological = [...validPath].reverse();
+      const latLngs: L.LatLngExpression[] = chronological.map((p) => [p.latitude, p.longitude]);
+      chronological.forEach((p) => bounds.push([p.latitude, p.longitude]));
+
+      const polyline = L.polyline(latLngs, {
+        color: '#8b5cf6',
+        weight: 4,
+        opacity: 0.9,
+      }).addTo(mapRef.current);
+      polylineRef.current = polyline;
+
+      // Start marker (green) – first point in chronological order
+      const start = chronological[0];
+      const startIcon = L.divIcon({
+        className: 'path-start-marker',
+        html: `<div style="width:16px;height:16px;background:#10b981;border:2px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      pathStartMarkerRef.current = L.marker([start.latitude, start.longitude], { icon: startIcon }).addTo(mapRef.current!);
+
+      // End marker (red) – last point
+      if (chronological.length > 1) {
+        const end = chronological[chronological.length - 1];
+        const endIcon = L.divIcon({
+          className: 'path-end-marker',
+          html: `<div style="width:16px;height:16px;background:#ef4444;border:2px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+        pathEndMarkerRef.current = L.marker([end.latitude, end.longitude], { icon: endIcon }).addTo(mapRef.current!);
+      }
+    }
     let validMarkers = 0;
     let invalidMarkers = 0;
 
@@ -419,7 +484,7 @@ export default function TrackingMap({
     } else {
       console.warn('[TrackingMap] No valid bounds to fit - no markers added');
     }
-  }, [locations, geofences, onLocationClick]);
+  }, [locations, geofences, pathPoints, onLocationClick]);
 
   // Pan to selected location
   useEffect(() => {
