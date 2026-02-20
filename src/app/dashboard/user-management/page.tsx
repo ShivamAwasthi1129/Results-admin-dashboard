@@ -5,16 +5,18 @@ import UserManagementClient from './UserManagementClient';
 async function fetchUsers(token: string | null) {
   try {
     // Fetch from external API
-    const externalApiUrl = 'https://dms-rust-omega.vercel.app/api/admin/users';
+    const externalApiUrl = 'https://r3sults-backend.vercel.app/api/admin/users';
     console.log(`[fetchUsers] Fetching from external API: ${externalApiUrl}`);
     
     // Create abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for external API
     
-    const response = await fetch(externalApiUrl, {
+    const url = `${externalApiUrl}?page=1&limit=20`;
+    const response = await fetch(url, {
       headers: { 
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
       },
       cache: 'no-store',
       signal: controller.signal,

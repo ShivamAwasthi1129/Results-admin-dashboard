@@ -150,6 +150,7 @@ interface DamageReport {
   notes?: string;
   tags?: string[];
   priority?: string;
+  insuranceCoverage?: 'uninsured' | 'partially_insured' | 'fully_insured' | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -785,6 +786,17 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
                       ]}
                     />
                     <Select
+                      label="Insurance Coverage"
+                      value={formData.insuranceCoverage || ''}
+                      onChange={(value) => setFormData({ ...formData, insuranceCoverage: value === '' ? undefined : value as 'uninsured' | 'partially_insured' | 'fully_insured' })}
+                      options={[
+                        { value: '', label: 'Not specified' },
+                        { value: 'uninsured', label: 'Uninsured' },
+                        { value: 'partially_insured', label: 'Partially insured' },
+                        { value: 'fully_insured', label: 'Fully insured' },
+                      ]}
+                    />
+                    <Select
                       label="Status"
                       value={formData.status || ''}
                       onChange={(value) => setFormData({ ...formData, status: value })}
@@ -866,6 +878,14 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
                         {formData.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </Badge>
                     </div>
+                    {formData.insuranceCoverage && (
+                      <div>
+                        <p className="text-sm text-[var(--text-muted)]">Insurance</p>
+                        <p className="font-medium text-[var(--text-primary)] capitalize">
+                          {formData.insuranceCoverage.replace(/_/g, ' ')}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm text-[var(--text-muted)] mb-2">Description</p>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout';
+import { useCustomersCache } from '@/context/CustomersCacheContext';
 import { Card, Badge, Button, Input, Select, Modal } from '@/components/ui';
 import { toast } from 'react-toastify';
 import {
@@ -25,6 +26,8 @@ import {
   TableCellsIcon,
   GlobeAltIcon,
   MapIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 import dynamic from 'next/dynamic';
 
@@ -97,7 +100,29 @@ interface UserManagementClientProps {
   initialData: ApiResponse;
 }
 
+function mapUserToCachedCustomer(user: User): import('@/context/CustomersCacheContext').CachedCustomer {
+  const parts = (user.fullName || user.email || 'Unknown').trim().split(/\s+/);
+  const firstName = parts[0] || 'Unknown';
+  const lastName = parts.slice(1).join(' ') || '';
+  return {
+    _id: user.id || (user as any)._id || '',
+    firstName,
+    lastName,
+    email: user.email || '',
+    phone: user.phoneNumber || undefined,
+    address: user.address || user.city || user.state || user.pincode ? {
+      street: user.address || undefined,
+      city: user.city || undefined,
+      state: user.state || undefined,
+      pincode: user.pincode || undefined,
+      zipCode: user.pincode || undefined,
+    } : undefined,
+  };
+}
+
 export default function UserManagementClient({ initialData }: UserManagementClientProps) {
+  const cache = useCustomersCache();
+  const setCustomersCache = cache?.setCustomers ?? (() => {});
   const [userLocations, setUserLocations] = useState<Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }>>({});
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [users, setUsers] = useState<User[]>(initialData.data?.users || []);
@@ -114,41 +139,48 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const [mapUser, setMapUser] = useState<User | null>(null);
   const [showUserPath, setShowUserPath] = useState(false);
   const [showAllPaths, setShowAllPaths] = useState(false);
-  const fetchUsers = async () => {
+
+  const fetchUsersPage = async (pageNum: number) => {
     setIsLoading(true);
-    setIsInitialLoading(true);
+    if (users.length === 0) setIsInitialLoading(true);
     try {
-      const response = await fetch('/api/users?limit=1000', {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await fetch(`/api/admin/users?page=${pageNum}&limit=20`, {
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch users');
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to fetch users');
       }
 
       const data = await response.json();
       if (data.success) {
-        setUsers(data.data?.users || []);
-        const total = data.data?.pagination?.total || (data.data?.users?.length || 0);
+        const list = data.data?.users || [];
+        const pag = data.data?.pagination || {};
+        const total = pag.total ?? list.length;
+        const limit = pag.limit || 20;
+        setUsers(list);
         setPagination({
-          page: data.data?.pagination?.page || 1,
-          limit: data.data?.pagination?.limit || 20,
-          total: total,
-          pages: Math.ceil(total / (data.data?.pagination?.limit || 20)),
+          page: pag.page || pageNum,
+          limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / limit)),
         });
+        setCustomersCache(list.map(mapUserToCachedCustomer));
       } else {
         toast.error(data.error || 'Failed to fetch users');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching users:', error);
-      toast.error('Failed to fetch users');
+      toast.error(error.message || 'Failed to fetch users');
     } finally {
       setIsLoading(false);
       setIsInitialLoading(false);
     }
   };
+
+  const fetchUsers = () => fetchUsersPage(1);
   
   // Fetch user locations from tracking API
   const fetchUserLocations = async () => {
@@ -189,12 +221,13 @@ export default function UserManagementClient({ initialData }: UserManagementClie
     }
   };
 
-  // Fetch users on mount if initial data failed
+  // Fetch users on mount if initial data failed; cache initial page for damage reports
   useEffect(() => {
     if (!initialData.success || initialData.data?.users?.length === 0) {
       fetchUsers();
     } else {
       setIsInitialLoading(false);
+      setCustomersCache((initialData.data?.users || []).map(mapUserToCachedCustomer));
     }
     // Fetch real location data
     fetchUserLocations();
@@ -227,7 +260,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
 
   const stats = useMemo(() => {
     return {
-      total: users.length,
+      total: pagination.total,
       active: users.filter((u) => u.isActive).length,
       inactive: users.filter((u) => !u.isActive).length,
       verified: users.filter((u) => u.isVerified).length,
@@ -237,7 +270,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
       members: users.filter((u) => u.role === 'MEMBER').length,
       guests: users.filter((u) => u.role === 'GUEST').length,
     };
-  }, [users]);
+  }, [users, pagination.total]);
 
   const handleViewUser = (user: User) => {
     setSelectedUser(user);
@@ -701,10 +734,30 @@ export default function UserManagementClient({ initialData }: UserManagementClie
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <p className="text-sm text-[var(--text-muted)]">
                   Showing <span className="font-semibold text-[var(--text-primary)]">{filteredUsers.length}</span> of <span className="font-semibold text-[var(--text-primary)]">{pagination.total}</span> users
+                  {pagination.pages > 1 && (
+                    <span className="ml-2"> (Page {pagination.page} of {pagination.pages})</span>
+                  )}
                 </p>
-                <p className="text-sm text-[var(--text-muted)]">
-                  Page <span className="font-semibold text-[var(--text-primary)]">{pagination.page}</span> of <span className="font-semibold text-[var(--text-primary)]">{pagination.pages}</span>
-                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => fetchUsersPage(pagination.page - 1)}
+                    disabled={pagination.page <= 1 || isLoading}
+                    leftIcon={<ChevronLeftIcon className="w-4 h-4" />}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => fetchUsersPage(pagination.page + 1)}
+                    disabled={pagination.page >= pagination.pages || isLoading}
+                    rightIcon={<ChevronRightIcon className="w-4 h-4" />}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
             </div>
           )}

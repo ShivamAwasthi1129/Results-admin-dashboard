@@ -14,6 +14,8 @@ export type DamageType =
 
 export type Severity = 'minor' | 'moderate' | 'severe' | 'catastrophic';
 
+export type InsuranceCoverage = 'uninsured' | 'partially_insured' | 'fully_insured';
+
 // New workflow statuses
 export type ReportStatus = 
   | 'report_created'      // Step 1: Initial report created
@@ -209,6 +211,8 @@ export interface IDamageReport extends Document {
   estimatedCost: number;
   actualCost?: number;
   fundingSources: IFundingSource[];
+  /** Insurance coverage level (optional) */
+  insuranceCoverage?: InsuranceCoverage | null;
   
   // Workflow tracking (new 7-step process)
   workflowSteps: IWorkflowStep[];
@@ -477,6 +481,11 @@ const DamageReportSchema = new Schema<IDamageReport>(
     fundingSources: {
       type: [FundingSourceSchema],
       default: [],
+    },
+    insuranceCoverage: {
+      type: String,
+      enum: ['uninsured', 'partially_insured', 'fully_insured'],
+      default: null,
     },
     workflowSteps: {
       type: [WorkflowStepSchema],

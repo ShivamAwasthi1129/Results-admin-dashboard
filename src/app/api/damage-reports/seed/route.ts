@@ -7,7 +7,7 @@ import ServiceProvider from '@/models/ServiceProvider';
 
 const EXTERNAL_CUSTOMERS_API_URL =
   process.env.EXTERNAL_CUSTOMERS_API_URL ||
-  'https://dms-rust-omega.vercel.app/api/admin/users';
+  'https://r3sults-backend.vercel.app/api/admin/users';
 
 // Helper function to add CORS headers
 function addCorsHeaders(response: NextResponse, request?: NextRequest) {

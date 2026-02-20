@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth, canPerform } from '@/lib/auth';
+import { verifyAuth, canPerform, getTokenFromRequest } from '@/lib/auth';
 
-const EXTERNAL_CUSTOMERS_API_URL =
-  process.env.EXTERNAL_CUSTOMERS_API_URL ||
-  'https://dms-rust-omega.vercel.app/api/admin/users';
+const EXTERNAL_CUSTOMERS_API_BASE =
+  (process.env.NEXT_PUBLIC_DOMAIN_NAME || 'https://r3sults-backend.vercel.app').replace(/\/$/, '');
+const EXTERNAL_CUSTOMERS_API_URL = `${EXTERNAL_CUSTOMERS_API_BASE}/api/admin/users`;
 
 // Map external API user to our Customer shape (for damage report "Select customer")
 function mapExternalUserToCustomer(externalUser: {
@@ -51,8 +51,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Permission denied' }, { status: 403 });
     }
 
-    const res = await fetch(EXTERNAL_CUSTOMERS_API_URL, {
-      headers: { 'Content-Type': 'application/json' },
+    const token = getTokenFromRequest(request);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const { searchParams } = new URL(request.url);
+    const page = searchParams.get('page') || '1';
+    const limit = searchParams.get('limit') || '1000';
+    const url = `${EXTERNAL_CUSTOMERS_API_URL}?page=${page}&limit=${limit}`;
+
+    const res = await fetch(url, {
+      headers,
       cache: 'no-store',
     });
 

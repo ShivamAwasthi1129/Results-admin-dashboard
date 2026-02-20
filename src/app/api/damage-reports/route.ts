@@ -173,6 +173,7 @@ export async function GET(request: NextRequest) {
         notes: report.notes,
         tags: report.tags || [],
         priority: report.priority,
+        insuranceCoverage: report.insuranceCoverage ?? null,
         createdAt: report.createdAt,
         updatedAt: report.updatedAt,
       };
@@ -246,6 +247,18 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
       return addCorsHeaders(response, request);
+    }
+
+    // Validate insuranceCoverage if provided
+    const validInsuranceCoverage = ['uninsured', 'partially_insured', 'fully_insured'];
+    if (body.insuranceCoverage != null && body.insuranceCoverage !== '') {
+      if (!validInsuranceCoverage.includes(body.insuranceCoverage)) {
+        const response = NextResponse.json(
+          { success: false, error: 'insuranceCoverage must be one of: uninsured, partially_insured, fully_insured' },
+          { status: 400 }
+        );
+        return addCorsHeaders(response, request);
+      }
     }
 
     const estimatedCost = Number(body.estimatedCost) || 0;
@@ -324,6 +337,7 @@ export async function POST(request: NextRequest) {
       affectedAreas: Array.isArray(body.affectedAreas) ? body.affectedAreas : [],
       estimatedCost: body.estimatedCost || 0,
       fundingSources: body.fundingSources || [],
+      insuranceCoverage: body.insuranceCoverage && validInsuranceCoverage.includes(body.insuranceCoverage) ? body.insuranceCoverage : null,
       workflowSteps: DEFAULT_WORKFLOW_STEPS,
       currentStep: 1,
       assignedVendors: [],

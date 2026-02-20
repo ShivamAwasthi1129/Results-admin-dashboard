@@ -898,8 +898,18 @@ export default function DashboardClient() {
               {users.length === 0 ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-input)]">
                   <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-sm text-[var(--text-muted)]">Loading user data...</p>
+                    {isLoading ? (
+                      <>
+                        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-sm text-[var(--text-muted)]">Loading user data...</p>
+                      </>
+                    ) : (
+                      <>
+                        <UsersIcon className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
+                        <p className="text-sm font-medium text-[var(--text-primary)] mb-1">No user location data</p>
+                        <p className="text-sm text-[var(--text-muted)]">User locations are loaded from the tracking API. Visit User Management to see all users.</p>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (() => {

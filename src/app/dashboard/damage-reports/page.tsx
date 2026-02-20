@@ -91,6 +91,7 @@ interface DamageReport {
   notes?: string;
   tags?: string[];
   priority?: string;
+  insuranceCoverage?: 'uninsured' | 'partially_insured' | 'fully_insured' | null;
   createdAt?: string;
   updatedAt?: string;
 }

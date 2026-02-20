@@ -11,7 +11,7 @@ dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 
 const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGODB_URL || '';
-const EXTERNAL_CUSTOMERS_API_URL = 'https://dms-rust-omega.vercel.app/api/admin/users';
+const EXTERNAL_CUSTOMERS_API_URL = 'https://r3sults-backend.vercel.app/api/admin/users';
 
 async function clearAndReseed() {
   if (!MONGODB_URI) {

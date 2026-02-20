@@ -545,7 +545,7 @@ export default function DashboardPage() {
 
     const fetchUsers = async () => {
       try {
-        const response = await fetch('https://dms-rust-omega.vercel.app/api/admin/users', {
+        const response = await fetch('https://r3sults-backend.vercel.app/api/admin/users', {
           headers: {
             'Content-Type': 'application/json',
           },

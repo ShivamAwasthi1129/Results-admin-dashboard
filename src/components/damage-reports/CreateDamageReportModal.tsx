@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Button, Input, Select } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
+import { useCustomersCache } from '@/context/CustomersCacheContext';
 import { toast } from 'react-toastify';
 import {
   CurrencyDollarIcon,
@@ -36,10 +37,12 @@ interface Customer {
 
 export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: CreateDamageReportModalProps) {
   const { token, user } = useAuth();
+  const cache = useCustomersCache();
+  const cachedCustomers = cache?.customers ?? [];
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<Array<{ url: string; file?: File }>>([]);
   
-  // Customer selection
+  // Customer selection: show cached first, then replace with API response
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
@@ -57,6 +60,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
     // Damage Details
     damageType: '',
     severity: '',
+    insuranceCoverage: '' as '' | 'uninsured' | 'partially_insured' | 'fully_insured',
     description: '',
     affectedAreas: [] as string[],
     
@@ -73,9 +77,13 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
     },
   });
 
-  // Fetch customers when modal opens
+  // When modal opens: show cached customers immediately, then fetch full list from API
   useEffect(() => {
-    if (isOpen && token) {
+    if (!isOpen) return;
+    if (cachedCustomers?.length) {
+      setCustomers(cachedCustomers as Customer[]);
+    }
+    if (token) {
       fetchCustomers();
     }
   }, [isOpen, token]);
@@ -92,13 +100,15 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   }, []);
 
   const fetchCustomers = async () => {
+    if (!token) return;
     setIsLoadingCustomers(true);
     try {
-      const response = await fetch('/api/customers', {
+      const response = await fetch('/api/customers?limit=1000', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -211,6 +221,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         },
         damageType: formData.damageType,
         severity: formData.severity,
+        insuranceCoverage: formData.insuranceCoverage || undefined,
         description: formData.description,
         affectedAreas: formData.affectedAreas,
         estimatedCost: parseFloat(formData.estimatedCost) || 0,
@@ -253,6 +264,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       propertyZipCode: '',
       damageType: '',
       severity: '',
+      insuranceCoverage: '' as '' | 'uninsured' | 'partially_insured' | 'fully_insured',
       description: '',
       affectedAreas: [],
       estimatedCost: '',
@@ -457,7 +469,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         {/* Damage Details */}
         <div className="space-y-4">
           <h3 className="font-semibold text-[var(--text-primary)]">Damage Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Select
               label="Damage Type"
               value={formData.damageType}
@@ -488,6 +500,17 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                 { value: 'catastrophic', label: 'Catastrophic' },
               ]}
               required
+            />
+            <Select
+              label="Insurance Coverage"
+              value={formData.insuranceCoverage}
+              onChange={(value) => setFormData({ ...formData, insuranceCoverage: value as typeof formData.insuranceCoverage })}
+              options={[
+                { value: '', label: 'Select coverage (optional)' },
+                { value: 'uninsured', label: 'Uninsured' },
+                { value: 'partially_insured', label: 'Partially insured' },
+                { value: 'fully_insured', label: 'Fully insured' },
+              ]}
             />
           </div>
           <div>

@@ -8,6 +8,7 @@ import { NotificationProvider } from '@/context/NotificationContext';
 import { SearchProvider } from '@/context/SearchContext';
 import { LoadingProvider } from '@/context/LoadingContext';
 import { DataCacheProvider } from '@/context/DataCacheContext';
+import { CustomersCacheProvider } from '@/context/CustomersCacheContext';
 import SearchModal from '@/components/ui/SearchModal';
 import './globals.css';
 
@@ -35,6 +36,7 @@ export default function RootLayout({
           <LoadingProvider>
             <AuthProvider>
               <DataCacheProvider>
+                <CustomersCacheProvider>
                 <NotificationProvider>
                   <SearchProvider>
                     {children}
@@ -53,6 +55,7 @@ export default function RootLayout({
                     />
                   </SearchProvider>
                 </NotificationProvider>
+                </CustomersCacheProvider>
               </DataCacheProvider>
             </AuthProvider>
           </LoadingProvider>

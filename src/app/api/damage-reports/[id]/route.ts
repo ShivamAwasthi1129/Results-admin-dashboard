@@ -160,6 +160,20 @@ export async function PUT(
 
     const body = await request.json();
 
+    // Validate insuranceCoverage if provided
+    const validInsuranceCoverage = ['uninsured', 'partially_insured', 'fully_insured'];
+    if (body.insuranceCoverage != null && body.insuranceCoverage !== '') {
+      if (!validInsuranceCoverage.includes(body.insuranceCoverage)) {
+        const response = NextResponse.json(
+          { success: false, error: 'insuranceCoverage must be one of: uninsured, partially_insured, fully_insured' },
+          { status: 400 }
+        );
+        return addCorsHeaders(response, request);
+      }
+    } else if (body.insuranceCoverage === '') {
+      body.insuranceCoverage = null;
+    }
+
     // If report number is being updated, check for duplicates
     if (body.reportNumber) {
       const duplicateReport = await DamageReport.findOne({ 

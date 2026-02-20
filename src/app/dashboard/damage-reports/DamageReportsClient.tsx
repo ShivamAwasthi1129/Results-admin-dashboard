@@ -44,6 +44,7 @@ const ORDERABLE_COLUMNS: { id: string; label: string }[] = [
   { id: 'currentStep', label: 'Step' },
   { id: 'damageType', label: 'Damage Type' },
   { id: 'severity', label: 'Severity' },
+  { id: 'insuranceCoverage', label: 'Insurance' },
   { id: 'propertyAddress', label: 'Property Address' },
   { id: 'estCost', label: 'Est. Cost' },
   { id: 'adjuster', label: 'Adjuster' },
@@ -128,6 +129,7 @@ interface DamageReport {
     alt?: string;
     isPrimary?: boolean;
   }>;
+  insuranceCoverage?: 'uninsured' | 'partially_insured' | 'fully_insured' | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -430,6 +432,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
       }
       case 'damageType': return report.damageType ? String(report.damageType) : '—';
       case 'severity': return report.severity ? String(report.severity) : '—';
+      case 'insuranceCoverage': return report.insuranceCoverage ? report.insuranceCoverage.replace(/_/g, ' ') : '—';
       case 'propertyAddress': return report.propertyAddress ? `${report.propertyAddress.city}, ${report.propertyAddress.state}` : '—';
       case 'estCost': return report.estimatedCost != null ? `$${Number(report.estimatedCost).toLocaleString()}` : '—';
       case 'adjuster': return report.assignedAdjuster?.fullName ?? '—';
