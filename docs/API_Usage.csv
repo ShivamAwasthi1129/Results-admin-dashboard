@@ -1,0 +1,125 @@
+Module,Method,Endpoint,Auth Required,Parameters / Body,Description
+Resource Locator,GET,/api/resource-locator/categories,No,-,Get resource categories (Shelter Food Insurance Medical Other)
+Resource Locator,GET,/api/resource-locator/resources,No,"search, category, lat, lng, page, limit",List resources with search and distance (category=shelter supported)
+Resource Locator,GET,/api/resource-locator/resources/[id],No,"id (path), category (query)",Get single resource detail by ID
+Mobile Tasks,GET,/api/mobile/tasks,Yes (Bearer volunteer),-,Tasks summary (active/completed count response rating) and assigned tasks list
+Mobile Tasks,GET,/api/mobile/tasks/[disasterId],Yes (Bearer volunteer),disasterId (path),View single task detail (for assigned volunteer)
+Mobile Tasks,POST,/api/mobile/tasks/accept,Yes (Bearer volunteer),Body: disasterId,Accept assigned task (sets status active)
+Mobile Tasks,POST,/api/mobile/tasks/decline,Yes (Bearer volunteer),Body: disasterId,Decline assigned task (sets status cancelled)
+Mobile Alerts,GET,/api/mobile/alerts,No,"lat, lon, limit, filter (query)",Unified alerts list (weather + emergencies) for mobile
+Auth,POST,/api/auth/login,No,"email, password",Login; returns session/token
+Auth,GET,/api/auth/me,Yes (Bearer),-,"Current user profile"
+Auth,POST,/api/auth/logout,Yes,-,Logout
+Auth,GET,/api/auth/logout,Yes,-,Logout (GET)
+Shelters,GET,/api/shelters,Yes,"page, limit, search, status, type, city",List shelters (admin)
+Shelters,POST,/api/shelters,Yes (manageShelters),Body: name addressLine1 city state capacity contactPerson contactPhone type coordinates,Create shelter
+Shelters,PUT,/api/shelters,Yes (manageShelters),Body: id + fields to update,Update shelter
+Shelters,DELETE,/api/shelters,Yes (manageShelters),id (query),Delete shelter
+Shelters,POST,/api/shelters/seed,Yes,-,Seed sample shelters
+Shelters,DELETE,/api/shelters/seed,Yes,-,Clear seeded shelters
+Shelters,GET,/api/shelters/init,-,-,Init check
+Shelters,GET,/api/shelters/auto-seed,-,-,Auto-seed
+Volunteers,GET,/api/volunteers,Yes,"page, limit, search, status",List volunteers
+Volunteers,POST,/api/volunteers,Yes,Body: volunteer details,Create volunteer
+Volunteers,PUT,/api/volunteers,Yes,Body: id + fields,Update volunteer
+Volunteers,DELETE,/api/volunteers,Yes,id (query),Delete volunteer
+Volunteers,POST,/api/volunteers/mobile-login,No,"volunteerId or email, password",Mobile app login (returns token)
+Volunteers,GET,/api/volunteers/public/[volunteerId],No,volunteerId (path),Get volunteer by ID (public)
+Volunteers,GET,/api/volunteers/by-id/[volunteerId],No,volunteerId (path),Get volunteer by ID (public)
+Volunteers,POST,/api/volunteers/[id]/assign-disaster,Yes,Body: disasterId,Assign volunteer to disaster
+Volunteers,POST,/api/volunteers/seed,Yes,-,Seed volunteers
+Weather,GET,/api/weather,Yes,"lat, lon, type (current|forecast|alerts|multi)",Weather current/forecast/alerts (OpenWeatherMap)
+Disasters,GET,/api/disasters,Yes,-,List disasters
+Disasters,POST,/api/disasters,Yes,Body: disaster details,Create disaster
+Disasters,GET,/api/disasters/[id],Yes,id (path),Get disaster
+Disasters,PUT,/api/disasters/[id],Yes,Body: fields,Update disaster
+Disasters,DELETE,/api/disasters/[id],Yes,id (path),Delete disaster
+Disasters,POST,/api/disasters/[id]/assign-volunteer,Yes,Body: volunteerId,Assign volunteer to disaster
+Disasters,DELETE,/api/disasters/[id]/assign-volunteer,Yes,Body: volunteerId,Unassign volunteer
+Damage Reports,GET,/api/damage-reports,Yes,"page, limit, search, status",List damage reports
+Damage Reports,POST,/api/damage-reports,Yes,Body: report details,Create damage report
+Damage Reports,GET,/api/damage-reports/[id],Yes,id (path),Get damage report
+Damage Reports,PUT,/api/damage-reports/[id],Yes,Body: fields,Update damage report
+Damage Reports,DELETE,/api/damage-reports/[id],Yes,id (path),Delete damage report
+Damage Reports,POST,/api/damage-reports/seed,Yes,-,Seed damage reports
+Emergencies,GET,/api/emergencies,Yes,-,List emergencies
+Emergencies,POST,/api/emergencies,Yes,Body: emergency details,Create emergency
+Services,GET,/api/services,Yes,"page, limit, search, category, verified",List service providers
+Services,POST,/api/services,Yes,Body: service provider details,Create service provider
+Services,PUT,/api/services,Yes,"id (query), Body: fields",Update service provider
+Services,DELETE,/api/services,Yes,id (query),Delete service provider
+Users,GET,/api/users,Yes,-,List users
+Users,POST,/api/users,Yes,Body: user details,Create user
+Users,PUT,/api/users,Yes,Body: fields,Update user
+Users,DELETE,/api/users,Yes,id (query),Delete user
+Users,GET,/api/users/[id],Yes,id (path),Get user
+Ops Users,GET,/api/ops-users,Yes,-,List ops users
+Ops Users,POST,/api/ops-users,Yes,Body: ops user details,Create ops user
+Ops Users,PUT,/api/ops-users,Yes,Body: fields,Update ops user
+Ops Users,DELETE,/api/ops-users,Yes,id (query),Delete ops user
+Ops Users,GET,/api/ops-users/me,Yes,-,Current ops user
+Ops Users,POST,/api/ops-users/change-password,Yes,Body: oldPassword newPassword,Change password
+Volunteer Teams,GET,/api/volunteer-teams,Yes,-,List volunteer teams
+Volunteer Teams,POST,/api/volunteer-teams,Yes,Body: team details,Create team
+Volunteer Teams,PUT,/api/volunteer-teams,Yes,Body: fields,Update team
+Volunteer Teams,DELETE,/api/volunteer-teams,Yes,id (query),Delete team
+Tracking,GET,/api/tracking/location/current,Yes,-,Current location
+Tracking,GET,/api/tracking/location/current/[userId],Yes,userId (path),Current location by user
+Tracking,GET,/api/tracking/location/all,Yes,-,All locations
+Tracking,GET,/api/tracking/location/history,Yes,-,Location history
+Tracking,GET,/api/tracking/location/history/[userId],Yes,userId (path),Location history by user
+Tracking,GET,/api/tracking/location/multiple,Yes,-,Multiple locations
+Tracking,GET,/api/tracking/location/nearby,Yes,-,Nearby locations
+Tracking,GET,/api/tracking/location/shared,Yes,-,Shared locations
+Tracking,GET,/api/tracking/location/visible,Yes,-,Visible locations
+Products,GET,/api/products,Yes,"page, limit, search",List products
+Products,POST,/api/products,Yes,Body: product details,Create product
+Products,GET,/api/products/[id],Yes,id (path),Get product
+Products,PUT,/api/products/[id],Yes,Body: fields,Update product
+Products,DELETE,/api/products/[id],Yes,id (path),Delete product
+Orders,GET,/api/orders,Yes,-,List orders
+Orders,GET,/api/orders/[id],Yes,id (path),Get order
+Inventory,GET,/api/inventory/items,Yes,-,List inventory items
+Inventory,POST,/api/inventory/items,Yes,Body: item details,Create item
+Inventory,GET,/api/inventory/items/[id],Yes,id (path),Get item
+Inventory,PUT,/api/inventory/items/[id],Yes,Body: fields,Update item
+Inventory,DELETE,/api/inventory/items/[id],Yes,id (path),Delete item
+Inventory,GET,/api/inventory/locations,Yes,-,List locations
+Inventory,POST,/api/inventory/locations,Yes,Body: location details,Create location
+Inventory,GET,/api/inventory/locations/[id],Yes,id (path),Get/Update/Delete location
+Inventory,GET,/api/inventory/stock,Yes,-,List stock
+Inventory,POST,/api/inventory/stock,Yes,Body: stock details,Create stock
+Inventory,GET,/api/inventory/stock/[id],Yes,id (path),Get/Update/Delete stock
+Inventory,POST,/api/inventory/stock/[id]/dispatch,Yes,Body: dispatch details,Dispatch stock
+Inventory,POST,/api/inventory/stock/[id]/reserve,Yes,Body: reserve details,Reserve stock
+Inventory,POST,/api/inventory/stock/[id]/restock,Yes,Body: restock details,Restock
+Geofence,GET,/api/geofence,Yes,-,List geofences
+Geofence,GET,/api/geofence/[id],Yes,id (path),Get geofence
+Geofence,GET,/api/geofence/[id]/events,Yes,id (path),Geofence events
+Geofence,GET,/api/geofence/events,Yes,-,All geofence events
+Incidents,GET,/api/incidents,Yes,-,List incidents
+Incidents,POST,/api/incidents,Yes,Body: incident details,Create incident
+Incidents,PUT,/api/incidents,Yes,Body: fields,Update incident
+Incidents,DELETE,/api/incidents,Yes,id (query),Delete incident
+Devices,GET,/api/devices,Yes,-,List devices
+Devices,POST,/api/devices,Yes,Body: device details,Create device
+Devices,PUT,/api/devices,Yes,Body: fields,Update device
+Devices,DELETE,/api/devices,Yes,id (query),Delete device
+Adjusters,GET,/api/adjusters,Yes,-,List adjusters
+Adjusters,POST,/api/adjusters,Yes,Body: adjuster details,Create adjuster
+Adjusters,GET,/api/adjusters/[id],Yes,id (path),Get adjuster
+Adjusters,PUT,/api/adjusters/[id],Yes,Body: fields,Update adjuster
+Adjusters,DELETE,/api/adjusters/[id],Yes,id (path),Delete adjuster
+Dashboard,GET,/api/dashboard/stats,Yes,-,Dashboard statistics
+Reports,GET,/api/reports,Yes,-,List reports
+Reports,POST,/api/reports,Yes,Body: report config,Generate report
+Search,GET,/api/search,Yes,q (query),Global search
+Live Disasters,GET,/api/live-disasters,Yes,-,Live disasters list
+Currency,GET,/api/currency,Yes,-,Currency rates
+Customers,GET,/api/customers,Yes,-,List customers
+Category Documents,GET,/api/category-documents,Yes,-,List category documents
+Category Documents,POST,/api/category-documents,Yes,Body: document details,Create category document
+Category Documents,PUT,/api/category-documents,Yes,Body: fields,Update category document
+Category Documents,DELETE,/api/category-documents,Yes,id (query),Delete category document
+User Property,POST,/api/user/property/photos,Yes,Body: photos,Upload property photos
+Seed,GET,/api/seed,Yes,-,Master seed endpoint

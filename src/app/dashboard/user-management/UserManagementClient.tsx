@@ -5,6 +5,7 @@ import { DashboardLayout } from '@/components/layout';
 import { useCustomersCache } from '@/context/CustomersCacheContext';
 import { Card, Badge, Button, Input, Select, Modal } from '@/components/ui';
 import { toast } from 'react-toastify';
+import { useAuth } from '@/context/AuthContext';
 import {
   UsersIcon,
   MagnifyingGlassIcon,
@@ -31,6 +32,11 @@ import {
 } from '@heroicons/react/24/outline';
 import dynamic from 'next/dynamic';
 
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('auth-token');
+}
+
 // Dynamic import for maps to avoid SSR issues
 const DynamicUserMap = dynamic(() => import('@/components/user-management/UserMap'), {
   ssr: false,
@@ -48,9 +54,9 @@ export interface User {
   phoneNumber: string;
   email: string | null;
   username: string | null;
-  fullName: string;
-  dateOfBirth: string;
-  gender: string;
+  fullName: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
   profilePictureUrl: string | null;
   address: string | null;
   city: string | null;
@@ -76,8 +82,9 @@ export interface User {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  adminGroups: any[];
-  memberGroups: any[];
+  status?: string;
+  adminGroups?: any[];
+  memberGroups?: any[];
 }
 
 interface Pagination {
@@ -123,6 +130,9 @@ function mapUserToCachedCustomer(user: User): import('@/context/CustomersCacheCo
 export default function UserManagementClient({ initialData }: UserManagementClientProps) {
   const cache = useCustomersCache();
   const setCustomersCache = cache?.setCustomers ?? (() => {});
+  const { token: authToken } = useAuth();
+  const token = authToken ?? getAuthToken();
+
   const [userLocations, setUserLocations] = useState<Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }>>({});
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [users, setUsers] = useState<User[]>(initialData.data?.users || []);
@@ -141,11 +151,19 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const [showAllPaths, setShowAllPaths] = useState(false);
 
   const fetchUsersPage = async (pageNum: number) => {
+    const t = token ?? getAuthToken();
+    if (!t) {
+      toast.error('Please log in to fetch users');
+      return;
+    }
     setIsLoading(true);
     if (users.length === 0) setIsInitialLoading(true);
     try {
       const response = await fetch(`/api/admin/users?page=${pageNum}&limit=20`, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${t}`,
+        },
         credentials: 'include',
       });
 
@@ -182,14 +200,18 @@ export default function UserManagementClient({ initialData }: UserManagementClie
 
   const fetchUsers = () => fetchUsersPage(1);
   
-  // Fetch user locations from tracking API
+  // Fetch user locations from tracking API (send auth token in header)
   const fetchUserLocations = async () => {
+    const t = token ?? getAuthToken();
+    if (!t) return;
     setIsLoadingLocations(true);
     try {
       const response = await fetch('/api/tracking/location/all', {
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${t}`,
         },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -198,17 +220,15 @@ export default function UserManagementClient({ initialData }: UserManagementClie
       }
 
       const data = await response.json();
-      if (data.success && data.data && data.data.users) {
-        // Create a map of userId -> location
+      if (data.success && data.data && Array.isArray(data.data.locations)) {
         const locationMap: Record<string, { latitude: number; longitude: number; accuracy?: number; lastUpdatedAt?: string; isActive?: boolean }> = {};
-        data.data.users.forEach((user: any) => {
-          if (user.location && user.location.latitude && user.location.longitude) {
-            locationMap[user.id] = {
-              latitude: user.location.latitude,
-              longitude: user.location.longitude,
-              accuracy: user.location.accuracy,
-              lastUpdatedAt: user.location.lastUpdatedAt,
-              isActive: user.location.isActive,
+        data.data.locations.forEach((loc: { userId: string; latitude: number; longitude: number; accuracy?: number; user?: { isActive?: boolean } }) => {
+          if (loc.latitude != null && loc.longitude != null) {
+            locationMap[loc.userId] = {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              accuracy: loc.accuracy,
+              isActive: loc.user?.isActive,
             };
           }
         });
@@ -221,7 +241,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
     }
   };
 
-  // Fetch users on mount if initial data failed; cache initial page for damage reports
+  // Fetch users on mount if initial data failed; cache initial page for damage reports; fetch locations (token from context or localStorage)
   useEffect(() => {
     if (!initialData.success || initialData.data?.users?.length === 0) {
       fetchUsers();
@@ -229,9 +249,8 @@ export default function UserManagementClient({ initialData }: UserManagementClie
       setIsInitialLoading(false);
       setCustomersCache((initialData.data?.users || []).map(mapUserToCachedCustomer));
     }
-    // Fetch real location data
     fetchUserLocations();
-  }, []);
+  }, [token]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
@@ -543,7 +562,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                             {user.profilePictureUrl ? (
                               <img
                                 src={user.profilePictureUrl}
-                                alt={user.fullName}
+                                alt={user.fullName ?? 'User'}
                                 className="w-10 h-10 rounded-full object-cover"
                               />
                             ) : (
@@ -664,37 +683,37 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm">
-                          {user.adminGroups?.length > 0 && (
+                          {((user.adminGroups ?? []).length > 0) && (
                             <div className="mb-2">
-                              <p className="text-xs text-[var(--text-muted)] mb-1">Admin ({user.adminGroups.length})</p>
+                              <p className="text-xs text-[var(--text-muted)] mb-1">Admin ({(user.adminGroups ?? []).length})</p>
                               <div className="flex flex-wrap gap-1">
-                                {user.adminGroups.slice(0, 2).map((group: any, idx: number) => (
+                                {(user.adminGroups ?? []).slice(0, 2).map((group: any, idx: number) => (
                                   <Badge key={idx} variant="warning" size="sm" className="truncate max-w-[100px] text-[10px] px-1.5 py-0.5">
                                     {group.name || 'Group'}
                                   </Badge>
                                 ))}
-                                {user.adminGroups.length > 2 && (
-                                  <Badge variant="secondary" size="sm" className="text-[10px] px-1.5 py-0.5">+{user.adminGroups.length - 2}</Badge>
+                                {(user.adminGroups ?? []).length > 2 && (
+                                  <Badge variant="secondary" size="sm" className="text-[10px] px-1.5 py-0.5">+{(user.adminGroups ?? []).length - 2}</Badge>
                                 )}
                               </div>
                             </div>
                           )}
-                          {user.memberGroups?.length > 0 && (
+                          {((user.memberGroups ?? []).length > 0) && (
                             <div>
-                              <p className="text-xs text-[var(--text-muted)] mb-1">Member ({user.memberGroups.length})</p>
+                              <p className="text-xs text-[var(--text-muted)] mb-1">Member ({(user.memberGroups ?? []).length})</p>
                               <div className="flex flex-wrap gap-1">
-                                {user.memberGroups.slice(0, 2).map((mg: any, idx: number) => (
+                                {(user.memberGroups ?? []).slice(0, 2).map((mg: any, idx: number) => (
                                   <Badge key={idx} variant="info" size="sm" className="truncate max-w-[100px] text-[10px] px-1.5 py-0.5">
                                     {mg.group?.name || 'Group'}
                                   </Badge>
                                 ))}
-                                {user.memberGroups.length > 2 && (
-                                  <Badge variant="secondary" size="sm" className="text-[10px] px-1.5 py-0.5">+{user.memberGroups.length - 2}</Badge>
+                                {(user.memberGroups ?? []).length > 2 && (
+                                  <Badge variant="secondary" size="sm" className="text-[10px] px-1.5 py-0.5">+{(user.memberGroups ?? []).length - 2}</Badge>
                                 )}
                               </div>
                             </div>
                           )}
-                          {(!user.adminGroups?.length && !user.memberGroups?.length) && (
+                          {((user.adminGroups ?? []).length === 0 && (user.memberGroups ?? []).length === 0) && (
                             <span className="text-xs text-[var(--text-muted)]">No groups</span>
                           )}
                         </div>
@@ -838,7 +857,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                     {user.profilePictureUrl ? (
                       <img
                         src={user.profilePictureUrl}
-                        alt={user.fullName}
+                        alt={user.fullName ?? 'User'}
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
@@ -949,7 +968,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                 {selectedUser.profilePictureUrl ? (
                   <img
                     src={selectedUser.profilePictureUrl}
-                    alt={selectedUser.fullName}
+                    alt={selectedUser.fullName ?? 'User'}
                     className="w-20 h-20 rounded-xl object-cover"
                   />
                 ) : (
@@ -959,7 +978,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                 )}
               </div>
               <div className="flex-1">
-                <h3 className="text-xl font-bold text-[var(--text-primary)]">{selectedUser.fullName}</h3>
+                <h3 className="text-xl font-bold text-[var(--text-primary)]">{selectedUser.fullName || 'N/A'}</h3>
                 {selectedUser.username ? (
                   <p className="text-sm text-[var(--text-muted)]">@{selectedUser.username}</p>
                 ) : selectedUser.email ? (
@@ -1202,20 +1221,20 @@ export default function UserManagementClient({ initialData }: UserManagementClie
             </div>
 
             {/* Groups */}
-            {(selectedUser.adminGroups?.length > 0 || selectedUser.memberGroups?.length > 0) && (
+            {((selectedUser.adminGroups ?? []).length > 0 || (selectedUser.memberGroups ?? []).length > 0) && (
               <div>
                 <h4 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
                   <UserGroupIcon className="w-5 h-5" />
                   Groups
                 </h4>
                 <div className="bg-[var(--bg-input)] p-4 rounded-lg space-y-4">
-                  {selectedUser.adminGroups?.length > 0 && (
+                  {(selectedUser.adminGroups ?? []).length > 0 && (
                     <div>
                       <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">
-                        Admin Groups ({selectedUser.adminGroups.length})
+                        Admin Groups ({(selectedUser.adminGroups ?? []).length})
                       </p>
                       <div className="space-y-3">
-                        {selectedUser.adminGroups.map((group: any, idx: number) => (
+                        {(selectedUser.adminGroups ?? []).map((group: any, idx: number) => (
                           <div key={idx} className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">
                             <div className="flex items-center justify-between mb-2">
                               <Badge variant="warning" size="sm">{group.name || 'Unnamed Group'}</Badge>
@@ -1303,13 +1322,13 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       </div>
                     </div>
                   )}
-                  {selectedUser.memberGroups?.length > 0 && (
+                  {(selectedUser.memberGroups ?? []).length > 0 && (
                     <div>
                       <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">
-                        Member Groups ({selectedUser.memberGroups.length})
+                        Member Groups ({(selectedUser.memberGroups ?? []).length})
                       </p>
                       <div className="space-y-3">
-                        {selectedUser.memberGroups.map((memberGroup: any, idx: number) => {
+                        {(selectedUser.memberGroups ?? []).map((memberGroup: any, idx: number) => {
                           const group = memberGroup.group || {};
                           return (
                             <div key={idx} className="p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">

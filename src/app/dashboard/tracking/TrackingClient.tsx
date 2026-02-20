@@ -21,6 +21,16 @@ const DynamicTrackingMap = dynamic(() => import('@/components/tracking/TrackingM
   loading: () => <div className="h-[600px] flex items-center justify-center bg-[var(--bg-input)] rounded-lg"><div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div>
 });
 
+/** Single point from tracking history API */
+interface HistoryPoint {
+  id: string;
+  userId: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  timestamp: string;
+}
+
 interface Location {
   id: string;
   userId: string;
@@ -44,26 +54,41 @@ interface TrackingClientProps {
   token: string | null;
 }
 
-export default function TrackingClient({ token }: TrackingClientProps) {
-  const { user } = useAuth();
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('auth-token');
+}
+
+export default function TrackingClient({ token: tokenProp }: TrackingClientProps) {
+  const { user, token: authToken } = useAuth();
+  const token = authToken ?? (typeof window !== 'undefined' ? getAuthToken() : null) ?? tokenProp;
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [locationHistory, setLocationHistory] = useState<HistoryPoint[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyPagination, setHistoryPagination] = useState<{ page: number; limit: number; total: number; pages: number } | null>(null);
 
-  // Fetch all locations
+  // Fetch all locations (always send auth token from localStorage/context in header)
   const fetchLocations = async () => {
-    if (!token) return;
-    
+    const t = token ?? getAuthToken();
+    if (!t) {
+      toast.error('Please log in to view tracking data');
+      setIsInitialLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await fetch('/api/tracking/location/all', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${t}`,
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -77,41 +102,27 @@ export default function TrackingClient({ token }: TrackingClientProps) {
       }
 
       const data = await response.json();
-      if (data.success && data.data && data.data.users) {
-        const allUsers = data.data.users;
-        console.log('[TrackingClient] Total users from API:', allUsers.length);
-        
-        // Transform API response to match our Location interface
-        // Don't filter - include all users, even if location data is missing
-        const transformedLocations: Location[] = allUsers
-          .map((user: any) => {
-            // If user has location data, use it; otherwise skip this user
-            if (!user.location || !user.location.latitude || !user.location.longitude) {
-              console.warn('[TrackingClient] User missing location data:', user.id, user.fullName);
-              return null;
-            }
-            
-            return {
-              id: user.id,
-              userId: user.id,
-              userName: user.fullName || user.email || 'Unknown User',
-              latitude: user.location.latitude,
-              longitude: user.location.longitude,
-              accuracy: user.location.accuracy,
-              altitude: user.location.altitude,
-              speed: user.location.speed,
-              heading: user.location.heading,
-              address: user.city ? `${user.city}${user.state ? `, ${user.state}` : ''}${user.country ? `, ${user.country}` : ''}` : undefined,
-              city: user.city || undefined,
-              state: user.state || undefined,
-              country: user.country || undefined,
-              lastUpdatedAt: user.location.lastUpdatedAt,
-              isActive: user.location.isActive || false,
-            };
-          })
-          .filter((loc: Location | null): loc is Location => loc !== null);
-        
-        console.log('[TrackingClient] Transformed locations count:', transformedLocations.length);
+      // R3sults backend returns data.locations[] with { userId, latitude, longitude, accuracy, user: { id, fullName, phoneNumber, email, status, profilePictureUrl, isActive } }
+      if (data.success && data.data && Array.isArray(data.data.locations)) {
+        const locationsList = data.data.locations;
+        const transformedLocations: Location[] = locationsList
+          .filter((loc: { latitude?: number; longitude?: number }) => loc.latitude != null && loc.longitude != null)
+          .map((loc: {
+            userId: string;
+            latitude: number;
+            longitude: number;
+            accuracy?: number;
+            user?: { id?: string; fullName?: string | null; phoneNumber?: string | null; email?: string | null; isActive?: boolean };
+          }) => ({
+            id: loc.user?.id ?? loc.userId,
+            userId: loc.userId,
+            userName: loc.user?.fullName ?? loc.user?.phoneNumber ?? loc.user?.email ?? 'Unknown User',
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            accuracy: loc.accuracy,
+            lastUpdatedAt: new Date().toISOString(),
+            isActive: loc.user?.isActive ?? true,
+          }));
         setLocations(transformedLocations);
       } else {
         setLocations([]);
@@ -132,10 +143,13 @@ export default function TrackingClient({ token }: TrackingClientProps) {
     }
   };
 
-  // Initial data fetch
+  // Initial data fetch (use token from context or localStorage)
   useEffect(() => {
-    if (token) {
+    const t = token ?? getAuthToken();
+    if (t) {
       fetchLocations();
+    } else {
+      setIsInitialLoading(false);
     }
   }, [token]);
 
@@ -178,8 +192,55 @@ export default function TrackingClient({ token }: TrackingClientProps) {
 
   const handleViewLocation = (location: Location) => {
     setSelectedLocation(location);
+    setLocationHistory([]);
+    setHistoryError(null);
+    setHistoryPagination(null);
     setIsLocationModalOpen(true);
   };
+
+  // Fetch location history when modal opens for the selected user
+  const fetchLocationHistory = async (userId: string) => {
+    const t = token ?? getAuthToken();
+    if (!t) return;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const response = await fetch(`/api/tracking/location/history/${userId}?limit=500`, {
+        headers: {
+          Authorization: `Bearer ${t}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setLocationHistory([]);
+        setHistoryPagination(null);
+        setHistoryError(data.error || data.message || `Failed to load history: ${response.status}`);
+        return;
+      }
+      if (data.success && data.data?.history && Array.isArray(data.data.history)) {
+        setLocationHistory(data.data.history);
+        setHistoryPagination(data.data.pagination ?? null);
+      } else {
+        setLocationHistory([]);
+        setHistoryPagination(null);
+      }
+    } catch (err) {
+      console.error('Fetch location history error:', err);
+      setLocationHistory([]);
+      setHistoryPagination(null);
+      setHistoryError('Failed to load tracking history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isLocationModalOpen && selectedLocation?.userId) {
+      fetchLocationHistory(selectedLocation.userId);
+    }
+  }, [isLocationModalOpen, selectedLocation?.userId]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -210,45 +271,23 @@ export default function TrackingClient({ token }: TrackingClientProps) {
 
   return (
     <DashboardLayout title="Live Tracking" subtitle="Real-time location tracking and monitoring" icon={<MapPinIcon className="w-7 h-7" />}>
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <MapPinIcon className="w-5 h-5 text-blue-400" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-muted)]">Active Locations</p>
-              <p className="text-2xl font-bold text-[var(--text-primary)]">{safeLocations.filter(l => l.isActive).length}</p>
-            </div>
+      {/* One row: Dashboard-style cards + Search + Refresh + Status */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <Card className="p-3 border-l-4 border-l-blue-500 flex-shrink-0">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Active Locations</p>
+            <MapPinIcon className="w-5 h-5 text-blue-400" />
           </div>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{safeLocations.filter(l => l.isActive).length}</p>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-              <UsersIcon className="w-5 h-5 text-green-400" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-muted)]">Tracked Users</p>
-              <p className="text-2xl font-bold text-[var(--text-primary)]">{uniqueUsers.length}</p>
-            </div>
+        <Card className="p-3 border-l-4 border-l-green-500 flex-shrink-0">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Tracked Users</p>
+            <UsersIcon className="w-5 h-5 text-green-400" />
           </div>
+          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{uniqueUsers.length}</p>
         </Card>
-      </div>
-
-      {/* WebSocket Status */}
-      <div className="mb-4 flex items-center justify-end">
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-          <span className="text-sm text-[var(--text-muted)]">
-            {isConnected ? 'Real-time updates active' : 'Real-time updates disconnected'}
-          </span>
-        </div>
-      </div>
-
-      {/* Filters & Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 items-center">
-        <div className="w-full">
+        <div className="flex-1 min-w-[180px] max-w-[280px]">
           <Input
             icon={<MagnifyingGlassIcon className="w-5 h-5" />}
             placeholder="Search by user, address, city..."
@@ -256,20 +295,20 @@ export default function TrackingClient({ token }: TrackingClientProps) {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="w-full">
-          <Button
-            variant="secondary"
-            onClick={handleRefresh}
-            leftIcon={
-              <ArrowPathIcon
-                className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
-              />
-            }
-            disabled={isLoading}
-            className="w-full"
-          >
-            Refresh
-          </Button>
+        <Button
+          variant="secondary"
+          onClick={handleRefresh}
+          leftIcon={<ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />}
+          disabled={isLoading}
+          className="flex-shrink-0"
+        >
+          Refresh
+        </Button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-amber-500'}`} />
+          <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">
+            {isConnected ? 'Live' : 'Polling'}
+          </span>
         </div>
       </div>
 
@@ -390,6 +429,9 @@ export default function TrackingClient({ token }: TrackingClientProps) {
         onClose={() => {
           setIsLocationModalOpen(false);
           setSelectedLocation(null);
+          setLocationHistory([]);
+          setHistoryError(null);
+          setHistoryPagination(null);
         }}
         title="User Location Details"
         size="xl"
@@ -414,13 +456,43 @@ export default function TrackingClient({ token }: TrackingClientProps) {
               </div>
             </div>
 
-            {/* Map View */}
-            <div className="h-[300px] rounded-lg overflow-hidden border border-[var(--border-color)]">
-              <DynamicTrackingMap
-                locations={[selectedLocation]}
-                geofences={[]}
-                height="300px"
-              />
+            {/* Tracking history map */}
+            <div>
+              <p className="text-sm font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wide">
+                Tracking history
+                {historyPagination && (
+                  <span className="ml-2 font-normal normal-case text-[var(--text-primary)]">
+                    ({historyPagination.total} points)
+                  </span>
+                )}
+              </p>
+              <div className="h-[320px] rounded-lg overflow-hidden border border-[var(--border-color)]">
+                {historyLoading ? (
+                  <div className="h-full flex items-center justify-center bg-[var(--bg-input)]">
+                    <div className="w-10 h-10 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                  </div>
+                ) : historyError ? (
+                  <div className="h-full flex flex-col items-center justify-center bg-[var(--bg-input)] p-4 text-center">
+                    <p className="text-[var(--text-muted)] mb-2">{historyError}</p>
+                    <Button variant="secondary" size="sm" onClick={() => selectedLocation && fetchLocationHistory(selectedLocation.userId)}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : locationHistory.length > 0 ? (
+                  <DynamicTrackingMap
+                    locations={[]}
+                    geofences={[]}
+                    pathPoints={locationHistory.map((p) => ({ latitude: p.latitude, longitude: p.longitude }))}
+                    height="320px"
+                  />
+                ) : (
+                  <DynamicTrackingMap
+                    locations={[selectedLocation]}
+                    geofences={[]}
+                    height="320px"
+                  />
+                )}
+              </div>
             </div>
 
             {/* Location Information */}

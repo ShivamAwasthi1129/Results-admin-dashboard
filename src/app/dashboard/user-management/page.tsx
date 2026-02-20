@@ -1,29 +1,26 @@
 import { getServerAuth } from '@/lib/server-auth';
-import { getApiUrl } from '@/lib/server-api';
 import UserManagementClient from './UserManagementClient';
 
 async function fetchUsers(token: string | null) {
   try {
-    // Fetch from external API
     const externalApiUrl = 'https://r3sults-backend.vercel.app/api/admin/users';
     console.log(`[fetchUsers] Fetching from external API: ${externalApiUrl}`);
-    
-    // Create abort controller for timeout
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for external API
-    
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     const url = `${externalApiUrl}?page=1&limit=20`;
     const response = await fetch(url, {
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       cache: 'no-store',
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
       console.error(`[fetchUsers] Failed to fetch users: ${response.status} ${response.statusText}`);
       const errorText = await response.text().catch(() => 'Unknown error');

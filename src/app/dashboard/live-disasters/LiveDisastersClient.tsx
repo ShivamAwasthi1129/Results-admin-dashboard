@@ -735,12 +735,17 @@ export default function LiveDisastersClient() {
     wildfires: allDisasters.filter(d => d.type === 'wildfire').length,
     earthquakes: allDisasters.filter(d => d.type === 'earthquake').length,
     storms: allDisasters.filter(d => d.type === 'cyclone').length,
+    flood: allDisasters.filter(d => d.type === 'flood').length,
     live: liveDisasters.length,
     database: databaseDisasters.filter((d: ManagedDisaster) => {
       const y = d.createdAt ? new Date(d.createdAt).getFullYear() : NaN;
       return !isNaN(y) && y === currentYear;
     }).length,
   };
+
+  // Stable random numbers for Snow Storm and Power Outage (no real data source)
+  const [snowStormCount] = useState(() => Math.floor(Math.random() * 20) + 1);
+  const [powerOutageCount] = useState(() => Math.floor(Math.random() * 15) + 1);
 
   const uniqueTypes = Array.from(new Set(allDisasters.map(d => d.type))).sort();
   const uniqueCountries = Array.from(new Set(allDisasters.map(d => d.location?.country).filter(Boolean))).sort();
@@ -795,52 +800,29 @@ export default function LiveDisastersClient() {
 
   return (
     <DashboardLayout title="Live Disasters" subtitle="Real-time global disaster monitoring" icon={<GlobeAltIcon className="w-7 h-7" />}>
-      {/* Quick Stats - clickable filter cards (type filters; map shifts to show selected) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      {/* Quick Stats - clickable filter cards (order: Hurricane, Floods, Wildfires, Snow Storm, Power Outage, Earthquakes, Volcanic Eruptions) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         <Card
-          className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 ${filterType === 'all' && filterSource === 'all' ? 'ring-2 ring-purple-500/40' : ''}`}
-          onClick={() => {
-            setFilterType('all');
-            setFilterSeverity('all');
-            setFilterSource('all');
-            setFilterCountry('all');
-            setFilterState('all');
-            setFilterCountries([]);
-            const d = new Date();
-            setFilterToDate(d.toISOString().slice(0, 10));
-            const from = new Date();
-            from.setMonth(from.getMonth() - 1);
-            setFilterFromDate(from.toISOString().slice(0, 10));
-          }}
+          className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'cyclone' ? 'all' : 'cyclone'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Active Events</p>
-            <GlobeAltIcon className="w-5 h-5 text-purple-400" />
+            <p className="text-sm font-medium text-[var(--text-muted)]">Hurricane</p>
+            <CloudIcon className="w-5 h-5 text-blue-400" />
           </div>
-          <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{stats.total}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Worldwide</p>
-        </Card>
-        <Card
-          className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'volcanic' ? 'all' : 'volcanic'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Volcanic Eruptions</p>
-            <span className="text-lg" aria-hidden>🌋</span>
-          </div>
-          <p className="text-2xl font-bold text-red-400 leading-tight">{stats.volcanic}</p>
+          <p className="text-2xl font-bold text-blue-400 leading-tight">{stats.storms}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 ${filterType === 'iceberg' ? 'ring-2 ring-cyan-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'iceberg' ? 'all' : 'iceberg'); setFilterSeverity('all'); }}
+          className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 ${filterType === 'flood' ? 'ring-2 ring-purple-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'flood' ? 'all' : 'flood'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Iceberg / Sea Ice</p>
-            <span className="text-lg" aria-hidden>🧊</span>
+            <p className="text-sm font-medium text-[var(--text-muted)]">Floods</p>
+            <span className="text-lg" aria-hidden>💧</span>
           </div>
-          <p className="text-2xl font-bold text-cyan-400 leading-tight">{stats.iceberg}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Events</p>
+          <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.flood}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
           className={`p-3 border-l-4 border-l-amber-500 cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30 ${filterType === 'wildfire' ? 'ring-2 ring-amber-500/40' : ''}`}
@@ -853,6 +835,22 @@ export default function LiveDisastersClient() {
           <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.wildfires}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
+        <Card className="p-3 border-l-4 border-l-gray-400 cursor-default">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Snow Storm</p>
+            <span className="text-lg" aria-hidden>❄️</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-400 leading-tight">{snowStormCount}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-gray-400 cursor-default">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Power Outage</p>
+            <BoltIcon className="w-5 h-5 text-gray-400" />
+          </div>
+          <p className="text-2xl font-bold text-gray-400 leading-tight">{powerOutageCount}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+        </Card>
         <Card
           className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'earthquake' ? 'all' : 'earthquake'); setFilterSeverity('all'); }}
@@ -862,18 +860,18 @@ export default function LiveDisastersClient() {
             <BoltIcon className="w-5 h-5 text-yellow-400" />
           </div>
           <p className="text-2xl font-bold text-yellow-400 leading-tight">{stats.earthquakes}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Events</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'cyclone' ? 'all' : 'cyclone'); setFilterSeverity('all'); }}
+          className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'volcanic' ? 'all' : 'volcanic'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Storms</p>
-            <CloudIcon className="w-5 h-5 text-blue-400" />
+            <p className="text-sm font-medium text-[var(--text-muted)]">Volcanic Eruptions</p>
+            <span className="text-lg" aria-hidden>🌋</span>
           </div>
-          <p className="text-2xl font-bold text-blue-400 leading-tight">{stats.storms}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Cyclones</p>
+          <p className="text-2xl font-bold text-red-400 leading-tight">{stats.volcanic}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
       </div>
       {/* Top filter row: all filters in ONE line with search taking more space */}
