@@ -49,9 +49,9 @@ import {
 } from '@/lib/constants/usa';
 
 interface ServiceProvider {
-  _id: string;
+  id: string;
   providerId: string;
-  userId: { _id: string; firstName?: string; lastName?: string; name?: string; email: string; phone?: string };
+  userId: { id: string; firstName?: string; lastName?: string; name?: string; email: string; phone?: string };
   businessName: string;
   businessType?: string;
   einNumber?: string;
@@ -379,8 +379,8 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
           // Group damage reports by vendor ID (from assignedVendors array)
           const assignments: Record<string, any[]> = {};
           providersList.forEach(provider => {
-            assignments[provider._id] = data.data.damageReports.filter((report: any) =>
-              report.assignedVendors?.some((v: any) => v.vendorId === provider._id)
+            assignments[provider.id] = data.data.damageReports.filter((report: any) =>
+              report.assignedVendors?.some((v: any) => v.vendorId === provider.id)
             );
           });
           setProviderAssignments(assignments);
@@ -410,7 +410,7 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const url = selectedProvider ? `/api/services?id=${selectedProvider._id}` : '/api/services';
+      const url = selectedProvider ? `/api/services?id=${selectedProvider.id}` : '/api/services';
       const method = selectedProvider ? 'PUT' : 'POST';
       
       const body = {
@@ -556,7 +556,7 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
     setSelectedProvider(provider);
     setShowDetailModal(true);
     // Fetch assigned damage reports for this vendor
-    await fetchAssignedDamageReports(provider._id);
+    await fetchAssignedDamageReports(provider.id);
   };
 
   const fetchAssignedDamageReports = async (vendorId: string) => {
@@ -776,7 +776,7 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
                 </tr>
               ) : (
                 providers.map((provider) => (
-                  <tr key={provider._id} className="border-b border-[var(--border-color)] transition-all duration-200 hover:bg-[var(--bg-card-hover)] group">
+                  <tr key={provider.id} className="border-b border-[var(--border-color)] transition-all duration-200 hover:bg-[var(--bg-card-hover)] group">
                     <td className="px-4 md:px-6 py-4 md:py-5">
                       <div className="flex items-center gap-3 md:gap-4">
                         {provider.logo ? (
@@ -814,7 +814,7 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
                     </td>
                     <td className="px-4 md:px-6 py-4 md:py-5">
                       {(() => {
-                        const assigned = providerAssignments[provider._id] || [];
+                        const assigned = providerAssignments[provider.id] || [];
                         if (assigned.length === 0) {
                           return (
                             <span className="text-xs md:text-sm text-[var(--text-muted)] italic">Not assigned</span>
@@ -823,7 +823,7 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
                         return (
                           <div className="space-y-1.5 min-w-[140px]">
                             {assigned.slice(0, 2).map((report: any) => (
-                              <div key={report._id} className="flex items-center gap-1.5 md:gap-2 flex-wrap">
+                              <div key={report.id} className="flex items-center gap-1.5 md:gap-2 flex-wrap">
                                 <DocumentTextIcon className="w-3 h-3 text-blue-500 flex-shrink-0" />
                                 <span className="font-mono font-semibold text-xs text-[var(--text-primary)]">{report.reportNumber}</span>
                                 <Badge 
@@ -1782,10 +1782,10 @@ export default function ServicesClient({ initialProviders }: ServicesClientProps
               ) : (
                 <div className="space-y-3">
                   {assignedDamageReports.map((report) => {
-                    const vendorEntry = report.assignedVendors?.find((v: any) => v.vendorId === selectedProvider._id);
+                    const vendorEntry = report.assignedVendors?.find((v: any) => v.vendorId === selectedProvider.id);
                     const customerName = report.customerFullName || (report.customer ? `${report.customer.firstName || ''} ${report.customer.lastName || ''}`.trim() : '—');
                     return (
-                      <div key={report._id} className="p-4 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)] hover:border-[var(--primary-500)]/50 transition-colors">
+                      <div key={report.id} className="p-4 bg-[var(--bg-input)] rounded-xl border border-[var(--border-color)] hover:border-[var(--primary-500)]/50 transition-colors">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">

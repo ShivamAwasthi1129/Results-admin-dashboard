@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Shelter from '@/models/Shelter';
-import mongoose from 'mongoose';
-
+import prisma from '@/lib/prisma';
 function getValue(val: unknown, defaultValue: unknown = ''): unknown {
   return val !== null && val !== undefined ? val : defaultValue;
 }
@@ -35,12 +32,9 @@ export async function GET(
         { status: 404 }
       );
     }
-
-    await connectDB();
-
-    let shelterId: mongoose.Types.ObjectId;
+    let shelterId: string;
     try {
-      shelterId = new mongoose.Types.ObjectId(id);
+      shelterId = id;
     } catch {
       return NextResponse.json(
         { success: false, error: 'Invalid resource ID' },
@@ -48,7 +42,7 @@ export async function GET(
       );
     }
 
-    const shelter = await Shelter.findById(shelterId).lean();
+    const shelter = await prisma.adminShelter.findUnique({ where: { id: shelterId } });
     if (!shelter) {
       return NextResponse.json(
         { success: false, error: 'Resource not found' },
@@ -64,7 +58,7 @@ export async function GET(
     const facilities = Array.isArray(s.facilities) ? s.facilities : [];
 
     const data = {
-      id: s._id.toString(),
+      id: s.id.toString(),
       category: 'shelter',
       name: getValue(s.name, ''),
       serviceDescription: getValue(s.description, '') || 'Emergency shelter & food support.',

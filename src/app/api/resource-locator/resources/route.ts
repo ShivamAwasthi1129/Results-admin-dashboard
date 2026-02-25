@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import Shelter from '@/models/Shelter';
-
+import prisma from '@/lib/prisma';
 /** Earth radius in miles for haversine */
 const EARTH_RADIUS_MI = 3959;
 
@@ -68,9 +66,6 @@ export async function GET(request: NextRequest) {
         pagination: { page: 1, limit, total: 0, pages: 0 },
       });
     }
-
-    await connectDB();
-
     const query: Record<string, unknown> = { status: 'active' };
     if (search) {
       query.$or = [
@@ -84,8 +79,8 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
     const [shelters, total] = await Promise.all([
-      Shelter.find(query).sort({ updatedAt: -1 }).skip(skip).limit(limit).lean(),
-      Shelter.countDocuments(query),
+      prisma.adminShelter.findMany({ where: query, orderBy: { createdAt: 'desc' }, skip: skip, take: limit }),
+      prisma.adminShelter.count({ where: query }),
     ]);
 
     const items = (shelters as any[]).map((s) => {
@@ -103,7 +98,7 @@ export async function GET(request: NextRequest) {
         : (s.description ? ['Emergency shelter & support'] : ['Support services']);
 
       return {
-        id: s._id.toString(),
+        id: s.id.toString(),
         category: 'shelter',
         name: getValue(s.name, ''),
         serviceDescription: getValue(s.description, '') || 'Emergency shelter & food support.',

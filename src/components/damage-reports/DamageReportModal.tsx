@@ -27,7 +27,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 interface ServiceProvider {
-  _id: string;
+  id: string;
   providerId: string;
   businessName: string;
   category: string;
@@ -43,7 +43,7 @@ interface ServiceProvider {
 }
 
 interface DamageReport {
-  _id: string;
+  id: string;
   reportNumber: string;
   reportDate: string;
   customer: {
@@ -226,7 +226,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
   const [vendors, setVendors] = useState<ServiceProvider[]>([]);
   const [isLoadingVendors, setIsLoadingVendors] = useState(false);
   const [assignedVendorIds, setAssignedVendorIds] = useState<string[]>([]);
-  const [adjusters, setAdjusters] = useState<Array<{ _id: string; adjusterId: string; firstName: string; lastName: string; email: string; phone?: string; companyName?: string }>>([]);
+  const [adjusters, setAdjusters] = useState<Array<{ id: string; adjusterId: string; firstName: string; lastName: string; email: string; phone?: string; companyName?: string }>>([]);
   const [isLoadingAdjusters, setIsLoadingAdjusters] = useState(false);
   const [showAssignAdjuster, setShowAssignAdjuster] = useState(false);
 
@@ -267,7 +267,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
       fetchAssignedVendors();
       fetchAdjusters();
     }
-  }, [isOpen, token, isEditing, report._id]);
+  }, [isOpen, token, isEditing, report.id]);
 
   // Also fetch when switching to workflow tab while editing
   useEffect(() => {
@@ -336,7 +336,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
         if (data.success && data.data?.damageReports) {
           // Get all vendor IDs that are already assigned to OTHER reports (not the current one)
           const assignedIds = data.data.damageReports
-            .filter((r: any) => r.vendor?.vendorId && r._id !== report._id)
+            .filter((r: any) => r.vendor?.vendorId && r.id !== report.id)
             .map((r: any) => r.vendor.vendorId);
           setAssignedVendorIds(assignedIds);
         }
@@ -366,7 +366,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
         });
       }
 
-      const response = await fetch(`/api/damage-reports/${report._id}`, {
+      const response = await fetch(`/api/damage-reports/${report.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -413,7 +413,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
           return step;
         });
       }
-      const response = await fetch(`/api/damage-reports/${report._id}`, {
+      const response = await fetch(`/api/damage-reports/${report.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -451,7 +451,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
     setFormData({ ...formData, workflowSteps: updatedSteps, currentStep: newCurrentStep });
   };
 
-  const handleAssignAdjuster = (adjuster: { _id: string; adjusterId: string; firstName: string; lastName: string; email: string; phone?: string; companyName?: string }) => {
+  const handleAssignAdjuster = (adjuster: { id: string; adjusterId: string; firstName: string; lastName: string; email: string; phone?: string; companyName?: string }) => {
     const fullName = `${adjuster.firstName} ${adjuster.lastName}`;
     const updatedSteps = [...(formData.workflowSteps || [])];
     const step3Index = updatedSteps.findIndex(s => s.stepNumber === 3);
@@ -467,7 +467,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
           ...step3.stepData,
           assignedAdjusterSnapshot: {
             adjusterId: adjuster.adjusterId,
-            adjusterDbId: adjuster._id,
+            adjusterDbId: adjuster.id,
             fullName,
             email: adjuster.email,
             phone: adjuster.phone,
@@ -482,7 +482,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
       ...formData,
       assignedAdjuster: {
         adjusterId: adjuster.adjusterId,
-        adjusterDbId: adjuster._id,
+        adjusterDbId: adjuster.id,
         fullName,
         email: adjuster.email,
         phone: adjuster.phone,
@@ -532,7 +532,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
       return;
     }
     const newVendor = {
-      vendorId: vendor._id,
+      vendorId: vendor.id,
       providerId: (vendor as any).providerId,
       businessName: vendor.businessName,
       taskName,
@@ -1370,7 +1370,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
                                     <div className="grid gap-2 max-h-60 overflow-y-auto">
                                       {adjusters.map((adj) => (
                                         <button
-                                          key={adj._id}
+                                          key={adj.id}
                                           type="button"
                                           onClick={() => handleAssignAdjuster(adj)}
                                           className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border-color)] hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left"
@@ -1491,12 +1491,12 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
                                         <Select
                                           value={assigned?.vendorId || ''}
                                           onChange={(value) => {
-                                            const v = vendors.find(vnd => vnd._id === value);
+                                            const v = vendors.find(vnd => vnd.id === value);
                                             handleAssignVendorToTask(row.taskName, v || null);
                                           }}
                                           options={[
                                             { value: '', label: '-- Select Vendor --' },
-                                            ...vendors.map(v => ({ value: v._id, label: `${v.businessName} (${v.category || 'General'})` })),
+                                            ...vendors.map(v => ({ value: v.id, label: `${v.businessName} (${v.category || 'General'})` })),
                                           ]}
                                         />
                                         {assigned && (

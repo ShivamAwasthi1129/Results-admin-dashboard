@@ -55,7 +55,6 @@ const ORDERABLE_COLUMNS: { id: string; label: string }[] = [
 const DEFAULT_VISIBLE_ORDERABLE = ['reportNumber', 'date', 'propertyAddress', 'currentStep', 'estCost', 'status'];
 
 interface DamageReport {
-  _id: string;
   id: string;
   reportNumber: string;
   reportDate: string;
@@ -311,7 +310,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
   const reportsByCustomer = useMemo(() => {
     const map = new Map<string, { customerId: string; customerName: string; reports: DamageReport[] }>();
     for (const report of filteredReports) {
-      const cid = report.customer?.customerId ?? report._id;
+      const cid = report.customer?.customerId ?? report.id;
       const name = report.customerFullName || `${report.customer?.firstName ?? ''} ${report.customer?.lastName ?? ''}`.trim() || 'Unknown';
       if (!map.has(cid)) {
         map.set(cid, { customerId: cid, customerName: name, reports: [] });
@@ -330,7 +329,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
 
   const reportForDetailPanel = useMemo(() => {
     if (!selectedReportId) return null;
-    return reports.find((r) => r._id === selectedReportId) ?? null;
+    return reports.find((r) => r.id === selectedReportId) ?? null;
   }, [selectedReportId, reports]);
 
   const getFundingSourceLabel = (source: string) => {
@@ -713,7 +712,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
             <tbody className="divide-y divide-[var(--border-color)]">
               {reportsByCustomer.map((group) => {
                 const isExpanded = expandedCustomers.has(group.customerId);
-                const hasSelectedReport = selectedReportId && group.reports.some((r) => r._id === selectedReportId);
+                const hasSelectedReport = selectedReportId && group.reports.some((r) => r.id === selectedReportId);
                 const detailReport = hasSelectedReport ? reportForDetailPanel : null;
                 const firstReport = group.reports[0];
 
@@ -763,12 +762,12 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                         <td colSpan={displayColumnIds.length} className="px-4 py-0 align-top bg-[var(--bg-primary)]">
                           <div className="ml-4 border-l-2 border-[var(--border-color)] pl-2 py-2 space-y-1 bg-[var(--bg-input)]/20">
                             {group.reports.map((report) => {
-                              const isSelected = selectedReportId === report._id;
+                              const isSelected = selectedReportId === report.id;
                               return (
                                 <button
-                                  key={report._id}
+                                  key={report.id}
                                   type="button"
-                                  onClick={() => setSelectedReportId(isSelected ? null : report._id)}
+                                  onClick={() => setSelectedReportId(isSelected ? null : report.id)}
                                   className={`
                                   w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left font-medium text-sm transition-all
                                   ${isSelected
@@ -781,7 +780,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                                   <div className="flex-1 min-w-0">
                                     <div className="truncate">{report.reportNumber}</div>
                                     <div className={`text-[11px] ${isSelected ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>
-                                      Report ID: {String(report._id).slice(-8)}
+                                      Report ID: {String(report.id).slice(-8)}
                                     </div>
                                   </div>
                                   <span className={`text-xs ${isSelected ? 'text-white/90' : 'text-[var(--text-muted)]'}`}>
@@ -826,7 +825,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => handleDelete(detailReport._id)}
+                                  onClick={() => handleDelete(detailReport.id)}
                                   className="text-red-500 hover:text-red-600"
                                   leftIcon={<TrashIcon className="w-4 h-4" />}
                                 >
