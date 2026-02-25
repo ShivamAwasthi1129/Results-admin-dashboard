@@ -312,7 +312,7 @@ export default function DashboardClient() {
 
       const fetchUsers = async () => {
         try {
-          const response = await fetch('/api/external/admin/users?limit=1000', {
+          const response = await fetch('/api/admin/users?limit=1000', {
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenForFetch}` },
             credentials: 'include',
           });
