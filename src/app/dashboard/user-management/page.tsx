@@ -3,7 +3,8 @@ import UserManagementClient from './UserManagementClient';
 
 async function fetchUsers(token: string | null) {
   try {
-    const externalApiUrl = 'https://r3sults-backend.vercel.app/api/admin/users';
+    const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const externalApiUrl = `${base.replace(/\/$/, '')}/api/admin/users`;
     console.log(`[fetchUsers] Fetching from external API: ${externalApiUrl}`);
 
     const controller = new AbortController();

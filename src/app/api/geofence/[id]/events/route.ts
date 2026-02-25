@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { fetchWithTimeout } from '@/lib/server-api';
+import { getExternalApiBaseUrl } from '@/lib/external-api';
 
 // GET - Get geofence events (entry/exit logs)
 export async function GET(
@@ -32,7 +33,7 @@ export async function GET(
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const trackingApiUrl = 'https://r3sults-backend.vercel.app';
+    const trackingApiUrl = getExternalApiBaseUrl() || 'https://r3sults-backend.vercel.app';
     const userId = '132fa22d26a99a3f27f60993476394e4b3e97ddca82c76e824c4dfe91f36a2ab717cd7d4b890d9b6c61e621767e6e66960f8f688e0d55ec2325a87d736c8b537';
     let apiUrl = `${trackingApiUrl}/api/geofence/${id}/events?userId=${userId}`;
     
