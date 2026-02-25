@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { getExternalApiBaseUrl } from '@/lib/external-api';
+
 /** Earth radius in miles for haversine */
 const EARTH_RADIUS_MI = 3959;
 
@@ -38,12 +39,17 @@ function formatLastUpdated(updatedAt: string | Date): string {
   return `Updated ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 }
 
+function matchesSearch(s: Record<string, unknown>, search: string): boolean {
+  if (!search) return true;
+  const lower = search.toLowerCase();
+  const fields = [s.name, s.description, s.city, s.state, s.addressLine1].filter(Boolean);
+  return fields.some((f) => String(f).toLowerCase().includes(lower));
+}
+
 /**
  * GET /api/resource-locator/resources
  * Public API for Resource Locator mobile screen.
- * Query: search, category, lat, lng, page, limit
- * No authentication required.
- * Currently supports category "shelter" (from Shelter model); other categories return empty (extensible).
+ * Fetches shelters from backend (DOMAIN_NAME) and returns in resource-locator format.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -58,7 +64,6 @@ export async function GET(request: NextRequest) {
     const userLat = latParam ? parseFloat(latParam) : null;
     const userLng = lngParam ? parseFloat(lngParam) : null;
 
-    // Only "shelter" is backed by DB for now; others can be added later
     if (category !== 'shelter' && category !== '') {
       return NextResponse.json({
         success: true,
@@ -66,27 +71,46 @@ export async function GET(request: NextRequest) {
         pagination: { page: 1, limit, total: 0, pages: 0 },
       });
     }
-    const query: Record<string, unknown> = { status: 'active' };
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { city: { $regex: search, $options: 'i' } },
-        { state: { $regex: search, $options: 'i' } },
-        { addressLine1: { $regex: search, $options: 'i' } },
-      ];
+
+    const base = getExternalApiBaseUrl();
+    if (!base) {
+      return NextResponse.json(
+        { success: false, error: 'Resource locator not configured (DOMAIN_NAME).' },
+        { status: 503 }
+      );
     }
 
-    const skip = (page - 1) * limit;
-    const [shelters, total] = await Promise.all([
-      prisma.adminShelter.findMany({ where: query, orderBy: { createdAt: 'desc' }, skip: skip, take: limit }),
-      prisma.adminShelter.count({ where: query }),
-    ]);
+    const token = process.env.R3SULTS_ACCESS_TOKEN;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const items = (shelters as any[]).map((s) => {
-      const addressLine1 = getValue(s.addressLine1) || getValue((s as any).address) || '';
-      const lat = Number(s.coordinates?.lat) || 0;
-      const lng = Number(s.coordinates?.lng) || 0;
+    const res = await fetch(`${base}/api/admin/shelters`, { method: 'GET', headers });
+    if (!res.ok) {
+      console.error('[resource-locator] Backend shelters API error:', res.status);
+      return NextResponse.json(
+        { success: false, error: 'Failed to fetch shelters.' },
+        { status: 502 }
+      );
+    }
+    const json = await res.json();
+    const rawList = Array.isArray(json?.data) ? json.data : [];
+    const shelters = rawList
+      .filter((s: Record<string, unknown>) => (s.status === 'active' || !s.status) && matchesSearch(s, search))
+      .sort((a: { updatedAt?: string; createdAt?: string }, b: { updatedAt?: string; createdAt?: string }) => {
+        const tA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const tB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return tB - tA;
+      });
+
+    const total = shelters.length;
+    const skip = (page - 1) * limit;
+    const pageShelters = shelters.slice(skip, skip + limit);
+
+    const items = pageShelters.map((s: Record<string, unknown>) => {
+      const coords = s.coordinates as { lat?: number; lng?: number } | null | undefined;
+      const addressLine1 = getValue(s.addressLine1) || getValue(s.address) || '';
+      const lat = coords && typeof coords.lat === 'number' ? coords.lat : Number(coords?.lat) || 0;
+      const lng = coords && typeof coords.lng === 'number' ? coords.lng : Number(coords?.lng) || 0;
       let distanceMiles: number | null = null;
       if (userLat != null && userLng != null && (lat !== 0 || lng !== 0)) {
         distanceMiles = Math.round(haversineMiles(userLat, userLng, lat, lng) * 10) / 10;
@@ -98,12 +122,12 @@ export async function GET(request: NextRequest) {
         : (s.description ? ['Emergency shelter & support'] : ['Support services']);
 
       return {
-        id: s.id.toString(),
+        id: String(s.id ?? ''),
         category: 'shelter',
         name: getValue(s.name, ''),
         serviceDescription: getValue(s.description, '') || 'Emergency shelter & food support.',
-        lastUpdated: formatLastUpdated(s.updatedAt || s.createdAt || new Date()),
-        updatedAt: (s.updatedAt || s.createdAt)?.toISOString?.() || new Date().toISOString(),
+        lastUpdated: formatLastUpdated((() => { const d = s.updatedAt ?? s.createdAt; return d ? new Date(d as string | number | Date) : new Date(); })()),
+        updatedAt: (() => { const d = s.updatedAt ?? s.createdAt; return d ? new Date(d as string | number | Date).toISOString() : new Date().toISOString(); })(),
         distanceMiles,
         servicesOffered,
         hasLiveChat: false,

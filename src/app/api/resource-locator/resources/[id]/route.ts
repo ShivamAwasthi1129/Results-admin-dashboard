@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { getExternalApiBaseUrl } from '@/lib/external-api';
+
 function getValue(val: unknown, defaultValue: unknown = ''): unknown {
   return val !== null && val !== undefined ? val : defaultValue;
 }
@@ -7,8 +8,7 @@ function getValue(val: unknown, defaultValue: unknown = ''): unknown {
 /**
  * GET /api/resource-locator/resources/[id]
  * Public API for Resource Locator - single resource detail.
- * Query: category (optional, default shelter)
- * No authentication required.
+ * Fetches from backend (DOMAIN_NAME) by id.
  */
 export async function GET(
   request: NextRequest,
@@ -32,25 +32,36 @@ export async function GET(
         { status: 404 }
       );
     }
-    let shelterId: string;
-    try {
-      shelterId = id;
-    } catch {
+
+    const base = getExternalApiBaseUrl();
+    if (!base) {
       return NextResponse.json(
-        { success: false, error: 'Invalid resource ID' },
-        { status: 400 }
+        { success: false, error: 'Resource locator not configured (DOMAIN_NAME).' },
+        { status: 503 }
       );
     }
 
-    const shelter = await prisma.adminShelter.findUnique({ where: { id: shelterId } });
-    if (!shelter) {
+    const token = process.env.R3SULTS_ACCESS_TOKEN;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${base}/api/admin/shelters?id=${encodeURIComponent(id)}`, { method: 'GET', headers });
+    if (!res.ok) {
+      return NextResponse.json(
+        { success: false, error: 'Resource not found' },
+        { status: 404 }
+      );
+    }
+    const json = await res.json();
+    const shelter = json?.data;
+    if (!shelter || (Array.isArray(shelter) && shelter.length === 0)) {
       return NextResponse.json(
         { success: false, error: 'Resource not found' },
         { status: 404 }
       );
     }
 
-    const s = shelter as any;
+    const s = Array.isArray(shelter) ? shelter[0] : shelter;
     const addressLine1 = getValue(s.addressLine1) || getValue(s.address) || '';
     const coordinates = s.coordinates && typeof s.coordinates === 'object'
       ? { lat: Number(s.coordinates.lat) || 0, lng: Number(s.coordinates.lng) || 0 }
