@@ -1150,29 +1150,30 @@ export default function LiveDisastersClient() {
                 </div>
               ) : (
                 <div className="divide-y divide-[var(--border-color)]">
-                  {listFilteredDisasters.map((disaster) => {
+                  {listFilteredDisasters.map((disaster, index) => {
                     const Icon = typeIcons[disaster.type] || typeIcons.default;
                     const colors = severityColors[disaster.severity] || severityColors.medium;
-                    const isSelected = selectedDisaster?.id === disaster.id;
+                    const disasterKey = disaster.id ?? disaster._id ?? `disaster-${index}`;
+                    const isSelected = selectedDisaster && (selectedDisaster.id === disaster.id || selectedDisaster._id === disaster._id);
 
                     return (
                       <button
-                        key={disaster.id}
-                        id={`disaster-${disaster.id}`}
+                        key={disasterKey}
+                        id={`disaster-${disasterKey}`}
                         onClick={() => {
                           setSelectedDisaster(isSelected ? null : disaster);
-                          setHighlightedDisasterId(disaster.id);
+                          setHighlightedDisasterId(disaster.id ?? disaster._id ?? null);
                           setTimeout(() => setHighlightedDisasterId(null), 2000);
                         }}
                         className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-all duration-200 ${isSelected
                             ? 'bg-[var(--bg-input)] border-l-4 border-purple-500 shadow-lg'
-                            : highlightedDisasterId === disaster.id
+                            : highlightedDisasterId === (disaster.id ?? disaster._id)
                               ? 'bg-purple-500/10 border-l-4 border-purple-400 animate-pulse'
                               : 'border-l-4 border-transparent'
                           }`}
-                        onMouseEnter={() => setHighlightedDisasterId(disaster.id)}
+                        onMouseEnter={() => setHighlightedDisasterId(disaster.id ?? disaster._id ?? null)}
                         onMouseLeave={() => {
-                          if (highlightedDisasterId === disaster.id && !isSelected) {
+                          if (highlightedDisasterId === (disaster.id ?? disaster._id) && !isSelected) {
                             setHighlightedDisasterId(null);
                           }
                         }}
@@ -1318,6 +1319,7 @@ export default function LiveDisastersClient() {
           </Card>
         ) : (
           <Table
+            rowKey={(d, i) => d.id ?? d._id ?? `db-disaster-${i}`}
             data={databaseDisasters.filter(d => {
               // Apply search filter
               if (searchQuery) {

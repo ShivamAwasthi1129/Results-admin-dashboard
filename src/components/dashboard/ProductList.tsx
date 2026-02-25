@@ -105,13 +105,16 @@ export default function ProductList({ products, isLoading = false }: ProductList
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter only active products
-  const activeProducts = products.filter(p => p.status === 'active');
+  // Filter to active products; include items with no status so API responses are not over-filtered
+  const activeProducts = products.filter(p => {
+    const s = (p.status || '').toString().toLowerCase();
+    return s === 'active' || s === '';
+  });
 
-  // Filter products based on search query - remove duplicates by _id
+  // Filter products based on search query - remove duplicates by _id / id
   const filteredProducts = activeProducts.filter((product, index, self) => {
-    // Remove duplicates by _id
-    const firstIndex = self.findIndex(p => p._id === product._id);
+    const productId = product._id ?? product.id;
+    const firstIndex = self.findIndex(p => (p._id ?? p.id) === productId);
     if (firstIndex !== index) return false;
 
     // Apply search filter
