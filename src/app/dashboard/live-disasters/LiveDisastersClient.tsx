@@ -10,8 +10,6 @@ import dynamic from 'next/dynamic';
 import {
   GlobeAltIcon,
   MapPinIcon,
-  ArrowPathIcon,
-  ExclamationTriangleIcon,
   FireIcon,
   CloudIcon,
   SunIcon,
@@ -38,7 +36,18 @@ import {
   BoltIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
-import { USA_STATES } from '@/lib/geocoding';
+const USA_STATES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
+  'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
+  'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana',
+  'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
+  'New Hampshire', 'New Jersey', 'New Mexico', 'New York',
+  'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
+  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
+  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
+  'West Virginia', 'Wisconsin', 'Wyoming', 'District of Columbia',
+];
 import { MultiSelect } from '@/components/ui/MultiSelect';
 
 // Dynamic import for map to avoid SSR issues

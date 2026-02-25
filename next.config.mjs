@@ -45,6 +45,8 @@ const nextConfig = {
       { source: '/api/search/:path*', destination: `${backend}/api/admin/search/:path*` },
       { source: '/api/seed/:path*', destination: `${backend}/api/admin/seed/:path*` },
       { source: '/api/mobile/:path*', destination: `${backend}/api/admin/mobile/:path*` },
+      { source: '/api/live-disasters', destination: `${backend}/api/live-disasters` },
+      { source: '/api/currency', destination: `${backend}/api/currency` },
       { source: '/api/:path*', destination: `${backend}/api/:path*` }
     ];
   },
