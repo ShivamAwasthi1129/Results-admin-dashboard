@@ -51,6 +51,7 @@ interface OrderLineItem {
   color?: string | null;
   productDescription?: string | null;
   product?: {
+    id?: string;
     _id: string;
     name?: string;
     description?: string;
@@ -63,6 +64,7 @@ interface OrderLineItem {
 }
 
 interface Order {
+  id?: string;
   _id: string;
   id: string;
   stripe_session_id?: string;

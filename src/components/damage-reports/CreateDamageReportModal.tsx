@@ -21,6 +21,7 @@ interface CreateDamageReportModalProps {
 }
 
 interface Customer {
+  id?: string;
   _id: string;
   firstName: string;
   lastName: string;
@@ -200,7 +201,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
 
       const payload = {
         customer: {
-          customerId: selectedCustomer._id,
+          customerId: selectedCustomer.id || selectedCustomer._id || '',
           firstName: selectedCustomer.firstName,
           lastName: selectedCustomer.lastName,
           email: selectedCustomer.email,
@@ -385,7 +386,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                 ) : (
                   filteredCustomers.slice(0, 20).map((customer) => (
                     <button
-                      key={customer._id}
+                      key={customer.id || customer._id}
                       type="button"
                       onClick={() => handleCustomerSelect(customer)}
                       className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)] last:border-b-0"
@@ -420,7 +421,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                     <p className="text-sm text-[var(--text-muted)]">{selectedCustomer.phone}</p>
                   )}
                   <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                    Customer ID: {selectedCustomer._id.slice(-8)}
+                    Customer ID: {(selectedCustomer.id || selectedCustomer._id || '').slice(-8)}
                   </p>
                 </div>
               </div>

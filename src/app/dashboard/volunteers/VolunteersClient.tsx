@@ -37,7 +37,8 @@ interface DisasterAssignment {
   toDate: string;
   status: string;
   disaster?: {
-    _id: string;
+    id?: string;
+    _id?: string;
     title: string;
     type: string;
     severity: string;
@@ -46,9 +47,10 @@ interface DisasterAssignment {
 }
 
 interface Volunteer {
-  _id: string;
+  id?: string;
+  _id?: string;
   volunteerId: string;
-  userId: { _id: string; firstName?: string; lastName?: string; name?: string; email: string; phone?: string };
+  userId: { id?: string; _id?: string; firstName?: string; lastName?: string; name?: string; email: string; phone?: string };
   dateOfBirth?: string;
   gender?: string;
   bloodGroup?: string;
@@ -74,14 +76,15 @@ interface Volunteer {
   status: string;
   verificationStatus?: string;
   teamId?: string;
-  team?: { _id: string; name: string; teamId: string };
+  team?: { id?: string; _id?: string; name: string; teamId: string };
   assignedDisasters?: DisasterAssignment[];
   joinedAt: string;
   createdAt: string;
 }
 
 interface Disaster {
-  _id: string;
+  id?: string;
+  _id?: string;
   title: string;
   type: string;
   severity: string;
@@ -256,7 +259,7 @@ export default function VolunteersClient({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const url = selectedVolunteer ? `/api/volunteers?id=${selectedVolunteer._id}` : '/api/volunteers';
+      const url = selectedVolunteer ? `/api/volunteers?id=${selectedVolunteer.id || selectedVolunteer._id}` : '/api/volunteers';
       const method = selectedVolunteer ? 'PUT' : 'POST';
       
       const body = {
@@ -354,8 +357,8 @@ export default function VolunteersClient({
         await fetchVolunteers();
         // Update the detail modal if it's open - need to wait for state update
         setTimeout(() => {
-          if (selectedVolunteer && selectedVolunteer._id === volunteerId) {
-            const updatedVolunteer = volunteers.find(v => v._id === volunteerId);
+          if (selectedVolunteer && (selectedVolunteer.id || selectedVolunteer._id) === volunteerId) {
+            const updatedVolunteer = volunteers.find(v => (v.id || v._id) === volunteerId);
             if (updatedVolunteer) {
               setSelectedVolunteer(updatedVolunteer);
             } else {
@@ -595,7 +598,7 @@ export default function VolunteersClient({
               <tbody className="divide-y divide-[var(--border-color)]">
                 {volunteers.map((volunteer) => (
                   <tr 
-                    key={volunteer._id} 
+                    key={volunteer.id || volunteer._id} 
                     className="hover:bg-[var(--bg-card-hover)] cursor-pointer transition-colors"
                     onClick={() => openDetailModal(volunteer)}
                   >
@@ -1170,7 +1173,7 @@ export default function VolunteersClient({
                           <p className="text-xs text-[var(--text-muted)] mt-1">
                             From: {new Date(ad.fromDate).toLocaleDateString()} • To: {new Date(ad.toDate).toLocaleDateString()}
                           </p>
-                          {ad.disaster?._id && (
+                          {(ad.disaster?.id || ad.disaster?._id) && (
                             <p className="text-xs text-[var(--text-muted)] mt-1">
                               Disaster ID: <span className="font-mono">{ad.disaster._id}</span>
                             </p>
@@ -1189,9 +1192,9 @@ export default function VolunteersClient({
                                 e.stopPropagation();
                                 const disasterId = typeof ad.disasterId === 'string' 
                                   ? ad.disasterId 
-                                  : (ad.disasterId as any)?._id || (ad.disaster as any)?._id || '';
+                                  : (ad.disasterId as any)?.id || (ad.disasterId as any)?._id || (ad.disaster as any)?.id || (ad.disaster as any)?._id || '';
                                 if (disasterId) {
-                                  handleRemoveDisasterFromVolunteer(selectedVolunteer._id, disasterId);
+                                  handleRemoveDisasterFromVolunteer(selectedVolunteer.id || selectedVolunteer._id || '', disasterId);
                                 }
                               }}
                               className="p-1.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
@@ -1268,9 +1271,9 @@ export default function VolunteersClient({
                     <option value="" disabled>No disasters available</option>
                   ) : (
                     disasters
-                      .filter(d => !selectedVolunteerForDisaster.assignedDisasters?.some(ad => ad.disasterId === d._id))
+                      .filter(d => !selectedVolunteerForDisaster.assignedDisasters?.some(ad => ad.disasterId === (d.id || d._id)))
                       .map(disaster => (
-                        <option key={disaster._id} value={disaster._id}>
+                        <option key={disaster.id || disaster._id} value={disaster.id || disaster._id}>
                           {disaster.title} ({disaster.type} - {disaster.severity})
                         </option>
                       ))
@@ -1280,7 +1283,7 @@ export default function VolunteersClient({
               {!isLoadingDisasters && disasters.length === 0 && (
                 <p className="text-xs text-[var(--text-muted)] mt-2">No disasters found in database. Please add disasters first.</p>
               )}
-              {!isLoadingDisasters && disasters.length > 0 && disasters.filter(d => !selectedVolunteerForDisaster.assignedDisasters?.some(ad => ad.disasterId === d._id)).length === 0 && (
+              {!isLoadingDisasters && disasters.length > 0 && disasters.filter(d => !selectedVolunteerForDisaster.assignedDisasters?.some(ad => ad.disasterId === (d.id || d._id))).length === 0 && (
                 <p className="text-xs text-[var(--text-muted)] mt-2">All available disasters are already assigned to this volunteer.</p>
               )}
             </div>
@@ -1335,7 +1338,7 @@ export default function VolunteersClient({
                     return;
                   }
                   try {
-                    const response = await fetch(`/api/volunteers/${selectedVolunteerForDisaster._id}/assign-disaster`, {
+                    const response = await fetch(`/api/volunteers/${selectedVolunteerForDisaster.id || selectedVolunteerForDisaster._id}/assign-disaster`, {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',

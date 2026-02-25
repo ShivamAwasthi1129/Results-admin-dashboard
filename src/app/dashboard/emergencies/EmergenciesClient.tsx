@@ -19,6 +19,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 interface Emergency {
+  id?: string;
   _id: string;
   title: string;
   type: string;
@@ -83,7 +84,7 @@ export default function EmergenciesClient({ initialEmergencies }: EmergenciesCli
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const url = selectedEmergency ? `/api/emergencies?id=${selectedEmergency._id}` : '/api/emergencies';
+      const url = selectedEmergency ? `/api/emergencies?id=${selectedEmergency.id || selectedEmergency._id}` : '/api/emergencies';
       const method = selectedEmergency ? 'PUT' : 'POST';
       const body = {
         ...formData,
@@ -252,7 +253,7 @@ export default function EmergenciesClient({ initialEmergencies }: EmergenciesCli
           </div>
         ) : (
           emergencies.map((emergency) => (
-            <Card key={emergency._id} hover className="relative">
+            <Card key={emergency.id || emergency._id} hover className="relative">
               {emergency.priority === 'critical' && (
                 <span className="absolute top-5 right-5 w-3 h-3 bg-red-500 rounded-full animate-ping" />
               )}

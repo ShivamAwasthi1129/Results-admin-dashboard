@@ -111,7 +111,7 @@ export default function ProductList({ products, isLoading = false }: ProductList
   // Filter products based on search query - remove duplicates by _id
   const filteredProducts = activeProducts.filter((product, index, self) => {
     // Remove duplicates by _id
-    const firstIndex = self.findIndex(p => p._id === product._id);
+    const firstIndex = self.findIndex(p => (p.id || p._id) === (product.id || product._id));
     if (firstIndex !== index) return false;
 
     // Apply search filter

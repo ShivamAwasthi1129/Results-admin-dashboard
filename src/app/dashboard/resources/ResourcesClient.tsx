@@ -28,7 +28,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 
 // Types matching the new schema
 interface StockEntry {
-  _id: string;
+  id: string;
+  _id?: string;
   item: {
     name: string;
     category: string;
@@ -316,7 +317,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
     if (!selectedStock) return;
     
     try {
-      const response = await fetch(`/api/inventory/stock/${selectedStock._id}/dispatch`, {
+      const response = await fetch(`/api/inventory/stock/${selectedStock.id || selectedStock._id}/dispatch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -345,7 +346,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
     if (!selectedStock) return;
     
     try {
-      const response = await fetch(`/api/inventory/stock/${selectedStock._id}/restock`, {
+      const response = await fetch(`/api/inventory/stock/${selectedStock.id || selectedStock._id}/restock`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -374,7 +375,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
     if (!selectedStock) return;
     
     try {
-      const response = await fetch(`/api/inventory/stock/${selectedStock._id}/reserve`, {
+      const response = await fetch(`/api/inventory/stock/${selectedStock.id || selectedStock._id}/reserve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -477,7 +478,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
       });
 
       const url = isEditingStock && selectedStock
-        ? `/api/inventory/stock/${selectedStock._id}`
+        ? `/api/inventory/stock/${selectedStock.id || selectedStock._id}`
         : '/api/inventory/stock';
       
       const method = isEditingStock ? 'PUT' : 'POST';
@@ -851,7 +852,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
                 </tr>
               ) : (
                 filteredEntries.map((entry) => (
-                  <tr key={entry._id} className="border-b border-[var(--border-color)] hover:bg-[var(--bg-input)] transition-colors">
+                  <tr key={entry.id || entry._id} className="border-b border-[var(--border-color)] hover:bg-[var(--bg-input)] transition-colors">
                     <td className="px-6 py-4">
                       <div>
                         <p className="font-medium text-[var(--text-primary)]">{entry.item.name}</p>
@@ -992,7 +993,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(entry._id)}
+                          onClick={() => handleDelete(entry.id || entry._id || '')}
                           title="Delete"
                         >
                           <TrashIcon className="w-4 h-4 text-red-400" />

@@ -163,7 +163,7 @@ const SearchModal: React.FC = () => {
             <div className="space-y-2">
               {searchResults.map((result) => (
                 <button
-                  key={result._id}
+                  key={result.id || result._id}
                   onClick={() => handleResultClick(result.link)}
                   className="w-full text-left p-4 rounded-xl hover:bg-[var(--bg-card-hover)] transition-all duration-200 group flex items-center gap-4"
                 >
