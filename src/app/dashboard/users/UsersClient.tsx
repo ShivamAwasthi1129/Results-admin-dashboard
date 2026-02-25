@@ -28,6 +28,7 @@ import {
 import { US_STATES, BLOOD_GROUPS, GENDER_OPTIONS, RELATION_OPTIONS, USER_ROLES, USER_STATUS } from '@/lib/constants/usa';
 
 interface User {
+  id?: string;
   _id: string;
   firstName: string;
   lastName: string;
@@ -204,7 +205,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
     }
     
     try {
-      const url = selectedUser ? `/api/ops-users?id=${selectedUser._id}` : '/api/ops-users';
+      const url = selectedUser ? `/api/ops-users?id=${selectedUser.id || selectedUser._id}` : '/api/ops-users';
       const method = selectedUser ? 'PUT' : 'POST';
       
       const requestBody = {
@@ -264,7 +265,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
   const handleDelete = async () => {
     if (!selectedUser) return;
     try {
-      const response = await fetch(`/api/ops-users?id=${selectedUser._id}`, {
+      const response = await fetch(`/api/ops-users?id=${selectedUser.id || selectedUser._id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -467,7 +468,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user._id} className="border-b border-[var(--border-color)] table-row transition-colors">
+                  <tr key={user.id || user._id} className="border-b border-[var(--border-color)] table-row transition-colors">
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-4">
                         <Avatar name={getDisplayName(user)} size="md" src={user.profilePhoto} />

@@ -28,8 +28,8 @@ import {
 const ProductDetailModal = dynamic(() => import('@/components/products/ProductDetailModal'), { ssr: false });
 
 interface Product {
-  _id: string;
   id: string;
+  _id?: string;
   name: string;
   description?: string;
   sku: string;
@@ -121,7 +121,8 @@ interface ProductsClientProps {
 }
 
 interface Vendor {
-  _id: string;
+  id: string;
+  _id?: string;
   businessName: string;
   contactPerson?: {
     name?: string;
@@ -353,7 +354,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
 
   // Handle vendor selection
   const handleVendorSelect = (vendor: Vendor) => {
-    setSelectedVendorId(vendor._id);
+    setSelectedVendorId(vendor.id || vendor._id || '');
     setShowAddVendorManual(false);
     setVendorSearchQuery(vendor.businessName || '');
     setShowVendorDropdown(false);
@@ -565,7 +566,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
           : undefined,
       };
 
-      const url = selectedProduct ? `/api/products/${selectedProduct._id}` : '/api/products';
+      const url = selectedProduct ? `/api/products/${selectedProduct.id || selectedProduct._id}` : '/api/products';
       const method = selectedProduct ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -629,7 +630,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
       v.businessName === product.vendor?.name
     );
     if (matchingVendor) {
-      setSelectedVendorId(matchingVendor._id);
+      setSelectedVendorId(matchingVendor.id || matchingVendor._id || '');
       setVendorSearchQuery(matchingVendor.businessName || '');
     } else {
       setSelectedVendorId('');
@@ -986,7 +987,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                 },
               },
               {
-                key: '_id',
+                key: 'id',
                 label: 'Actions',
                 render: (product: Product) => (
                   <div className="flex items-center gap-2">
@@ -1008,7 +1009,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                       <PencilIcon className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDeleteProduct(product._id)}
+                      onClick={() => handleDeleteProduct(product.id || product._id || '')}
                       className="p-2 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
                       title="Delete"
                     >
@@ -1018,7 +1019,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                 ),
               },
             ]}
-            rowKey="_id"
+            rowKey={(r) => r.id || r._id || ''}
           />
         </Card>
       )}
@@ -1841,7 +1842,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                   <div className="absolute z-50 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
                     {filteredVendors.map((vendor) => (
                       <button
-                        key={vendor._id}
+                        key={vendor.id || vendor._id}
                         type="button"
                         onClick={() => handleVendorSelect(vendor)}
                         className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0"
@@ -1857,7 +1858,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                             </p>
                           )}
                         </div>
-                        {selectedVendorId === vendor._id && (
+                        {selectedVendorId === (vendor.id || vendor._id) && (
                           <CheckCircleIcon className="w-5 h-5 text-green-500" />
                         )}
                       </button>

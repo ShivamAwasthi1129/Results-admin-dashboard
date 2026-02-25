@@ -1161,7 +1161,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               (stats?.recentDisasters || disasterLocations).slice(0, 4).map((disaster: any, idx: number) => (
-                <div key={disaster._id || idx} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] transition-colors cursor-pointer">
+                <div key={disaster.id || disaster._id || idx} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] transition-colors cursor-pointer">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                     disaster.severity === 'critical' ? 'bg-red-500/20' :
                     disaster.severity === 'high' ? 'bg-orange-500/20' : 'bg-amber-500/20'

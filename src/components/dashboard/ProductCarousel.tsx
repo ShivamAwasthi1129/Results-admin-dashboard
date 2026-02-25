@@ -153,7 +153,7 @@ export default function ProductCarousel({ products, isLoading = false }: Product
               
               return (
                 <div
-                  key={product._id}
+                  key={product.id || product._id}
                   className="min-w-full h-full relative flex-shrink-0"
                 >
                   {/* Background Image with Better Overlay */}

@@ -55,7 +55,8 @@ interface AssignedReport {
 }
 
 interface Adjuster {
-  _id: string;
+  id: string;
+  _id?: string;
   adjusterId: string;
   photo?: string;
   firstName: string;
@@ -306,7 +307,7 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
         states: formData.states,
       };
 
-      const response = await fetch(`/api/adjusters/${selectedAdjuster._id}`, {
+      const response = await fetch(`/api/adjusters/${selectedAdjuster.id || selectedAdjuster._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -696,7 +697,7 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
         </thead>
         <tbody className="divide-y divide-[var(--border-color)]">
           {filteredAdjusters.map((a) => (
-            <tr key={a._id} className="bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)]/50 transition-colors">
+            <tr key={a.id || a._id} className="bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)]/50 transition-colors">
               <td className="px-3 py-2.5 text-sm text-[var(--text-primary)] whitespace-nowrap font-mono">{a.adjusterId}</td>
               <td className="px-3 py-2.5 text-sm font-medium text-[var(--text-primary)] whitespace-nowrap">{a.fullName}</td>
               <td className="px-3 py-2.5 text-sm text-[var(--text-primary)]">
@@ -742,7 +743,7 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
                   <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEditModal(a); }} title="Edit">
                     <PencilIcon className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(a._id); }} className="text-red-500 hover:text-red-600" title="Delete">
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(a.id || a._id || ''); }} className="text-red-500 hover:text-red-600" title="Delete">
                     <TrashIcon className="w-4 h-4" />
                   </Button>
                 </div>

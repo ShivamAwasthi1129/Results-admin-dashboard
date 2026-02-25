@@ -19,6 +19,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 interface Volunteer {
+  id?: string;
   _id: string;
   volunteerId: string;
   userId: { _id: string; firstName?: string; lastName?: string; name?: string; email: string; phone?: string };
@@ -39,6 +40,7 @@ const getVolunteerName = (volunteer: Volunteer): string => {
 };
 
 interface Team {
+  id?: string;
   _id: string;
   teamId: string;
   name: string;
@@ -121,7 +123,7 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const url = selectedTeam ? `/api/volunteer-teams?id=${selectedTeam._id}` : '/api/volunteer-teams';
+      const url = selectedTeam ? `/api/volunteer-teams?id=${selectedTeam.id || selectedTeam._id}` : '/api/volunteer-teams';
       const method = selectedTeam ? 'PUT' : 'POST';
       
       const response = await fetch(url, {
@@ -180,7 +182,7 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
     }
 
     try {
-      const response = await fetch(`/api/volunteer-teams?id=${team._id}`, {
+      const response = await fetch(`/api/volunteer-teams?id=${team.id || team._id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -220,7 +222,7 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
   };
 
   const availableVolunteers = volunteers.filter(v => 
-    !formData.memberIds.includes(v._id) || v._id === formData.leadId
+    !formData.memberIds.includes(v.id || v._id || '') || (v.id || v._id) === formData.leadId
   );
 
   return (
@@ -315,7 +317,7 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
               <tbody className="divide-y divide-[var(--border-color)]">
                 {teams.map((team) => (
                   <tr 
-                    key={team._id} 
+                    key={team.id || team._id} 
                     className="hover:bg-[var(--bg-card-hover)] cursor-pointer transition-colors"
                     onClick={() => openDetailModal(team)}
                   >
@@ -438,7 +440,7 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
               options={[
                 { value: '', label: 'Select Team Lead' },
                 ...volunteers.map(v => ({
-                  value: v._id,
+                  value: v.id || v._id,
                   label: `${v.userId?.name || 'Unknown'} (${v.volunteerId})`
                 }))
               ]}
@@ -449,19 +451,19 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Team Members</label>
               <div className="max-h-60 overflow-y-auto border border-[var(--border-color)] rounded-xl p-4 space-y-2">
                 {volunteers.map(volunteer => (
-                  <label key={volunteer._id} className="flex items-center gap-3 p-2 hover:bg-[var(--bg-input)] rounded-lg cursor-pointer">
+                  <label key={volunteer.id || volunteer._id} className="flex items-center gap-3 p-2 hover:bg-[var(--bg-input)] rounded-lg cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={formData.memberIds.includes(volunteer._id)}
-                      onChange={() => toggleMember(volunteer._id)}
-                      disabled={volunteer._id === formData.leadId}
+                      checked={formData.memberIds.includes(volunteer.id || volunteer._id || '')}
+                      onChange={() => toggleMember(volunteer.id || volunteer._id || '')}
+                      disabled={(volunteer.id || volunteer._id) === formData.leadId}
                       className="w-5 h-5 rounded-lg border-2 border-[var(--border-color)] text-[var(--primary-500)] focus:ring-[var(--primary-500)] disabled:opacity-50"
                     />
                     <Avatar name={volunteer.userId?.name || 'Unknown'} size="sm" src={volunteer.profileImage} />
                     <div className="flex-1">
                       <div className="text-sm font-medium text-[var(--text-primary)]">
                         {volunteer.userId?.name || 'Unknown'}
-                        {volunteer._id === formData.leadId && (
+                        {(volunteer.id || volunteer._id) === formData.leadId && (
                           <Badge variant="primary" size="sm" className="ml-2">Lead</Badge>
                         )}
                       </div>
@@ -543,7 +545,7 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
                 </h4>
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {selectedTeam.members.map((member) => (
-                    <div key={member._id} className="p-4 bg-[var(--bg-input)] rounded-xl flex items-center gap-4">
+                    <div key={member.id || member._id} className="p-4 bg-[var(--bg-input)] rounded-xl flex items-center gap-4">
                       <Avatar name={getVolunteerName(member)} size="sm" src={member.profileImage} />
                       <div className="flex-1">
                         <div className="font-medium text-[var(--text-primary)]">{getVolunteerName(member)}</div>
@@ -556,7 +558,7 @@ export default function VolunteerTeamsClient({ initialTeams, initialVolunteers }
                           </div>
                         )}
                       </div>
-                      {member._id === selectedTeam.leadId && (
+                      {(member.id || member._id) === selectedTeam.leadId && (
                         <Badge variant="primary" size="sm">Lead</Badge>
                       )}
                     </div>
