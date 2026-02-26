@@ -622,24 +622,34 @@ export default function LiveDisastersClient() {
     }
   };
 
-  const getVolunteerName = (volunteer: AssignedVolunteer['volunteerId']): string => {
+  const getVolunteerName = (volunteer: any): string => {
     // First try to get from the volunteer object passed in
-    if (typeof volunteer === 'object' && volunteer?.userId) {
-      if (volunteer.userId.firstName && volunteer.userId.lastName) {
-        return `${volunteer.userId.firstName} ${volunteer.userId.lastName}`;
-      }
-      if (volunteer.userId.name) {
-        return volunteer.userId.name;
+    if (typeof volunteer === 'object' && volunteer !== null) {
+      if (volunteer.fullName) return volunteer.fullName;
+
+      if (volunteer.userId) {
+        if (volunteer.userId.firstName && volunteer.userId.lastName) {
+          return `${volunteer.userId.firstName} ${volunteer.userId.lastName}`;
+        }
+        if (volunteer.userId.name) {
+          return volunteer.userId.name;
+        }
       }
     }
 
     // If not found, try to find in the fetched volunteers list
-    if (typeof volunteer === 'object' && volunteer?._id) {
-      const volId = typeof volunteer._id === 'string'
-        ? volunteer._id
-        : (typeof volunteer._id === 'object' && volunteer._id !== null ? String(volunteer._id) : '');
-      if (volId) {
-        const fullVolunteer = volunteers.find(v => v._id === volId);
+    let volId = '';
+    if (typeof volunteer === 'string') {
+      volId = volunteer;
+    } else if (typeof volunteer === 'object' && volunteer !== null) {
+      volId = volunteer.id || volunteer._id || String(volunteer.id || volunteer._id || '');
+    }
+
+    if (volId) {
+      const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
+      if (fullVolunteer) {
+        if (fullVolunteer.fullName) return fullVolunteer.fullName;
+
         if (fullVolunteer?.userId) {
           if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
             return `${fullVolunteer.userId.firstName} ${fullVolunteer.userId.lastName}`;
@@ -648,6 +658,8 @@ export default function LiveDisastersClient() {
             return fullVolunteer.userId.name;
           }
         }
+        
+        return fullVolunteer.volunteerId || fullVolunteer.id || fullVolunteer._id || 'Unknown Volunteer';
       }
     }
 
@@ -1423,12 +1435,16 @@ export default function LiveDisastersClient() {
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {disaster.assignedVolunteers?.slice(0, 2).map((av, idx) => {
                                 let volId = '';
-                                if (typeof av.volunteerId === 'object' && av.volunteerId?._id) {
-                                  volId = typeof av.volunteerId._id === 'string' ? av.volunteerId._id : String(av.volunteerId._id);
-                                } else if (typeof av.volunteerId === 'string') {
-                                  volId = av.volunteerId;
+                                if (typeof av === 'string') {
+                                  volId = av;
+                                } else if (typeof av === 'object' && av !== null) {
+                                  const vId = av.volunteerId || av;
+                                  if (typeof vId === 'string') volId = vId;
+                                  else if (typeof vId === 'object') {
+                                    volId = vId.id || vId._id || String(vId.id || vId._id || '');
+                                  }
                                 }
-                                const fullVolunteer = volunteers.find(v => v._id === volId);
+                                const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
                                 let volunteerName = 'Unknown';
                                 if (fullVolunteer?.userId) {
                                   if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
@@ -1496,30 +1512,36 @@ export default function LiveDisastersClient() {
                   };
                   return (
                     <div className="flex items-center justify-center gap-1">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setSelectedDisasterForAssign(disaster); setShowAssignVolunteerModal(true); }}
-                        className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/20 transition-colors"
-                        title="Assign Volunteer"
-                      >
-                        <UserPlusIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); openEdit(); }}
-                        className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-colors"
-                        title="Edit"
-                      >
-                        <PencilIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteDisaster(disaster._id); }}
-                        className="p-2 rounded-lg text-red-400 hover:bg-red-500/20 transition-colors"
-                        title="Delete"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
+                      {disaster.source !== 'live' ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedDisasterForAssign(disaster); setShowAssignVolunteerModal(true); }}
+                            className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/20 transition-colors"
+                            title="Assign Volunteer"
+                          >
+                            <UserPlusIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openEdit(); }}
+                            className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-colors"
+                            title="Edit"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteDisaster(disaster.id || disaster._id); }}
+                            className="p-2 rounded-lg text-red-400 hover:bg-red-500/20 transition-colors"
+                            title="Delete"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)] italic px-2">Managed Externally</span>
+                      )}
                     </div>
                   );
                 },
@@ -1962,18 +1984,18 @@ export default function LiveDisastersClient() {
             {selectedDisasterForVolunteers.assignedVolunteers && selectedDisasterForVolunteers.assignedVolunteers.length > 0 ? (
               <div className="space-y-3">
                 {selectedDisasterForVolunteers.assignedVolunteers.map((av, idx) => {
-                  const volunteer = av.volunteerId;
+                  const volunteer = av.volunteerId || av;
                   let volId = '';
-                  if (typeof volunteer === 'object' && volunteer?._id) {
-                    volId = typeof volunteer._id === 'string'
-                      ? volunteer._id
-                      : String(volunteer._id);
+                  if (typeof volunteer === 'object' && (volunteer?.id || volunteer?._id)) {
+                    volId = typeof (volunteer.id || volunteer._id) === 'string'
+                      ? (volunteer.id || volunteer._id)
+                      : String(volunteer.id || volunteer._id);
                   } else if (typeof volunteer === 'string') {
                     volId = volunteer;
                   }
 
                   // Find full volunteer data from fetched volunteers list
-                  const fullVolunteer = volunteers.find(v => v._id === volId);
+                  const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
 
                   // Get name from full volunteer data or fallback to getVolunteerName
                   let volunteerName = 'Unknown Volunteer';
@@ -2032,7 +2054,7 @@ export default function LiveDisastersClient() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (volId) {
-                                    handleRemoveVolunteerFromDisaster(selectedDisasterForVolunteers._id, volId);
+                                    handleRemoveVolunteerFromDisaster(selectedDisasterForVolunteers.id || selectedDisasterForVolunteers._id, volId);
                                   }
                                 }}
                                 className="ml-auto p-1.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
@@ -2104,11 +2126,11 @@ export default function LiveDisastersClient() {
 
                           {/* Expandable Additional Details */}
                           {(() => {
-                            const volId = typeof volunteer?._id === 'string'
-                              ? volunteer._id
-                              : (volunteer as any)?._id?.toString() || '';
+                            const volId = typeof (volunteer?.id || volunteer?._id) === 'string'
+                              ? (volunteer.id || volunteer._id)
+                              : (volunteer as any)?.id?.toString() || (volunteer as any)?._id?.toString() || '';
                             const isExpanded = expandedVolunteers.has(volId);
-                            const fullVolunteer = volunteers.find(v => v._id === volId);
+                            const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
 
                             if (!fullVolunteer) return null;
 
@@ -2271,7 +2293,7 @@ export default function LiveDisastersClient() {
               try {
                 // Assign all selected volunteers
                 const assignPromises = selectedVolunteerIds.map(volunteerId =>
-                  fetch(`/api/disasters/${selectedDisasterForAssign._id}/assign-volunteer`, {
+                  fetch(`/api/disasters/${selectedDisasterForAssign.id || selectedDisasterForAssign._id}/assign-volunteer`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -2359,7 +2381,7 @@ export default function LiveDisastersClient() {
                   const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
                     (av: any) => {
                       const volId = av.volunteerId;
-                      return typeof volId === 'string' ? volId : (volId as any)?._id?.toString() || '';
+                      return typeof volId === 'string' ? volId : (volId as any)?.id?.toString() || (volId as any)?._id?.toString() || '';
                     }
                   ) || [];
 
@@ -2375,7 +2397,7 @@ export default function LiveDisastersClient() {
 
                   const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
 
-                  return !assignedVolunteerIds.includes(v._id) && !isOnMission;
+                  return !assignedVolunteerIds.includes(v.id || v._id) && !isOnMission;
                 }).length === 0 ? (
                   <p className="text-sm text-[var(--text-muted)] text-center py-4">
                     All available volunteers are already assigned to this disaster or are currently on mission.
@@ -2386,7 +2408,7 @@ export default function LiveDisastersClient() {
                       const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
                         (av: any) => {
                           const volId = av.volunteerId;
-                          return typeof volId === 'string' ? volId : (volId as any)?._id?.toString() || '';
+                          return typeof volId === 'string' ? volId : (volId as any)?.id?.toString() || (volId as any)?._id?.toString() || '';
                         }
                       ) || [];
 
@@ -2400,17 +2422,17 @@ export default function LiveDisastersClient() {
                       );
                       const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
 
-                      return !assignedVolunteerIds.includes(v._id) && !isOnMission;
+                      return !assignedVolunteerIds.includes(v.id || v._id) && !isOnMission;
                     })
                     .map((volunteer) => {
                       const name = volunteer.userId?.firstName && volunteer.userId?.lastName
                         ? `${volunteer.userId.firstName} ${volunteer.userId.lastName}`
                         : volunteer.userId?.name || volunteer.volunteerId || 'Unknown';
-                      const isChecked = selectedVolunteerIds.includes(volunteer._id);
+                      const isChecked = selectedVolunteerIds.includes(volunteer.id || volunteer._id);
 
                       return (
                         <label
-                          key={volunteer._id}
+                          key={volunteer.id || volunteer._id}
                           className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isChecked
                               ? 'bg-purple-500/10 border-purple-500/50'
                               : 'bg-[var(--bg-input)] border-[var(--border-color)] hover:border-purple-500/30'
@@ -2421,9 +2443,9 @@ export default function LiveDisastersClient() {
                             checked={isChecked}
                             onChange={(e) => {
                               if (e.target.checked) {
-                                setSelectedVolunteerIds([...selectedVolunteerIds, volunteer._id]);
+                                setSelectedVolunteerIds([...selectedVolunteerIds, volunteer.id || volunteer._id]);
                               } else {
-                                setSelectedVolunteerIds(selectedVolunteerIds.filter(id => id !== volunteer._id));
+                                setSelectedVolunteerIds(selectedVolunteerIds.filter(id => id !== (volunteer.id || volunteer._id)));
                               }
                             }}
                             className="mt-1 w-4 h-4 text-purple-600 bg-[var(--bg-primary)] border-[var(--border-color)] rounded focus:ring-purple-500 focus:ring-2"
