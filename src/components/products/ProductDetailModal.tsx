@@ -23,7 +23,8 @@ import {
 const Model3DViewer = dynamic(() => import('@/components/products/Model3DViewer'), { ssr: false });
 
 interface Product {
-  _id: string;
+  _id?: string;
+  id?: string;
   name: string;
   description?: string;
   category: string;

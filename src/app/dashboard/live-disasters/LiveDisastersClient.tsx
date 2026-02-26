@@ -131,6 +131,7 @@ interface ManagedDisaster {
   estimatedAffectedPeople?: number;
   assignedVolunteers?: AssignedVolunteer[];
   createdAt: string;
+  source?: string;
 }
 
 interface Volunteer {
@@ -1331,7 +1332,7 @@ export default function LiveDisastersClient() {
           </Card>
         ) : (
           <Table
-            rowKey={(d, i) => d.id ?? d._id ?? `db-disaster-${i}`}
+            rowKey={(d, i) => d._id ?? `db-disaster-${i}`}
             data={databaseDisasters.filter(d => {
               // Apply search filter
               if (searchQuery) {
@@ -1441,7 +1442,8 @@ export default function LiveDisastersClient() {
                                   const vId = av.volunteerId || av;
                                   if (typeof vId === 'string') volId = vId;
                                   else if (typeof vId === 'object') {
-                                    volId = vId.id || vId._id || String(vId.id || vId._id || '');
+                                    const o = vId as { _id?: string; volunteerId?: string };
+                                    volId = o._id ?? o.volunteerId ?? String(o._id ?? o.volunteerId ?? '');
                                   }
                                 }
                                 const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
@@ -1532,7 +1534,7 @@ export default function LiveDisastersClient() {
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); handleDeleteDisaster(disaster.id || disaster._id); }}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteDisaster(disaster._id); }}
                             className="p-2 rounded-lg text-red-400 hover:bg-red-500/20 transition-colors"
                             title="Delete"
                           >
@@ -1547,7 +1549,6 @@ export default function LiveDisastersClient() {
                 },
               },
             ]}
-            rowKey="_id"
           />
         )}
       </div>
@@ -1986,10 +1987,10 @@ export default function LiveDisastersClient() {
                 {selectedDisasterForVolunteers.assignedVolunteers.map((av, idx) => {
                   const volunteer = av.volunteerId || av;
                   let volId = '';
-                  if (typeof volunteer === 'object' && (volunteer?.id || volunteer?._id)) {
-                    volId = typeof (volunteer.id || volunteer._id) === 'string'
-                      ? (volunteer.id || volunteer._id)
-                      : String(volunteer.id || volunteer._id);
+                  const o = typeof volunteer === 'object' && volunteer ? (volunteer as { _id?: string; volunteerId?: string }) : null;
+                  if (o && (o._id ?? o.volunteerId)) {
+                    const raw = o._id ?? o.volunteerId ?? '';
+                    volId = typeof raw === 'string' ? raw : String(raw);
                   } else if (typeof volunteer === 'string') {
                     volId = volunteer;
                   }
@@ -2054,7 +2055,7 @@ export default function LiveDisastersClient() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (volId) {
-                                    handleRemoveVolunteerFromDisaster(selectedDisasterForVolunteers.id || selectedDisasterForVolunteers._id, volId);
+                                    handleRemoveVolunteerFromDisaster(selectedDisasterForVolunteers._id, volId);
                                   }
                                 }}
                                 className="ml-auto p-1.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
@@ -2126,9 +2127,9 @@ export default function LiveDisastersClient() {
 
                           {/* Expandable Additional Details */}
                           {(() => {
-                            const volId = typeof (volunteer?.id || volunteer?._id) === 'string'
-                              ? (volunteer.id || volunteer._id)
-                              : (volunteer as any)?.id?.toString() || (volunteer as any)?._id?.toString() || '';
+                            const v = volunteer as { _id?: string; volunteerId?: string } | null;
+                            const raw = v?._id ?? v?.volunteerId;
+                            const volId = typeof raw === 'string' ? raw : (raw != null ? String(raw) : '');
                             const isExpanded = expandedVolunteers.has(volId);
                             const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
 
@@ -2293,7 +2294,7 @@ export default function LiveDisastersClient() {
               try {
                 // Assign all selected volunteers
                 const assignPromises = selectedVolunteerIds.map(volunteerId =>
-                  fetch(`/api/disasters/${selectedDisasterForAssign.id || selectedDisasterForAssign._id}/assign-volunteer`, {
+                  fetch(`/api/disasters/${selectedDisasterForAssign._id}/assign-volunteer`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
