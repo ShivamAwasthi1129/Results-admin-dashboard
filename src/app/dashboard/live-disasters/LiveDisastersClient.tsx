@@ -166,7 +166,7 @@ export default function LiveDisastersClient() {
   const [filterSource, setFilterSource] = useState<'all' | 'database'>('all');
   const [filterFromDate, setFilterFromDate] = useState<string>(() => {
     const d = new Date();
-    d.setMonth(d.getMonth() - 1);
+    d.setFullYear(d.getFullYear() - 5);
     return d.toISOString().slice(0, 10);
   });
   const [filterToDate, setFilterToDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -793,7 +793,7 @@ export default function LiveDisastersClient() {
     const d = new Date();
     setFilterToDate(d.toISOString().slice(0, 10));
     const from = new Date();
-    from.setMonth(from.getMonth() - 1);
+    from.setFullYear(from.getFullYear() - 5);
     setFilterFromDate(from.toISOString().slice(0, 10));
     setSelectedDisaster(null);
   };
