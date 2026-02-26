@@ -826,11 +826,21 @@ export default function DashboardClient() {
               </div>
             </div>
             <div className="flex-1 relative min-h-[500px]">
-              {liveDisasters.length === 0 ? (
+              {isLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-input)]">
                   <div className="text-center">
                     <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-sm text-[var(--text-muted)]">Loading disaster data...</p>
+                  </div>
+                </div>
+              ) : liveDisasters.length === 0 ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-input)] z-10">
+                  <div className="text-center">
+                    <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
+                      <ShieldCheckIcon className="w-8 h-8 text-blue-500" />
+                    </div>
+                    <p className="font-medium text-[var(--text-primary)] mb-1">No Active Disasters</p>
+                    <p className="text-sm text-[var(--text-muted)]">All clear in your monitored regions.</p>
                   </div>
                 </div>
               ) : (
