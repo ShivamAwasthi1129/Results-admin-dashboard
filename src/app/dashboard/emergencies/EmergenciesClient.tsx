@@ -63,7 +63,10 @@ export default function EmergenciesClient({ initialEmergencies }: EmergenciesCli
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();
-      if (data.success) setEmergencies(data.data.emergencies);
+      if (data.success) {
+        const list = data.data?.emergencies ?? (Array.isArray(data.data) ? data.data : []);
+        setEmergencies(list);
+      }
     } catch (error) {
       toast.error('Failed to fetch emergencies');
     } finally {
@@ -95,15 +98,19 @@ export default function EmergenciesClient({ initialEmergencies }: EmergenciesCli
         method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body)
       });
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await response.json() : { success: response.ok };
       if (data.success) {
         toast.success(selectedEmergency ? 'Emergency updated!' : 'Emergency added!');
         setShowModal(false);
         setSelectedEmergency(null);
         resetForm();
-        fetchEmergencies();
-      } else toast.error(data.error);
+        await fetchEmergencies();
+      } else {
+        toast.error(data.error || (response.ok ? 'Something went wrong' : 'Operation failed'));
+      }
     } catch (error) {
+      console.error('Emergency submit error:', error);
       toast.error('Operation failed');
     }
   };

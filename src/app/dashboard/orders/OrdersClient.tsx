@@ -66,7 +66,6 @@ interface OrderLineItem {
 interface Order {
   id?: string;
   _id: string;
-  id: string;
   stripe_session_id?: string;
   customer_email: string;
   amount_total?: number;

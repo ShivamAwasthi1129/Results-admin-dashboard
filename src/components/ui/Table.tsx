@@ -33,10 +33,13 @@ function Table<T extends Record<string, any>>({
   className = '',
   compact = false,
 }: TableProps<T>) {
-  const getRowKey = (item: T, index: number): string | number => {
-    if (typeof rowKey === 'function') return rowKey(item, index);
-    if (rowKey) return item[rowKey];
-    return index;
+  const getRowKey = (item: T, index: number): string => {
+    let key: string | number;
+    if (typeof rowKey === 'function') key = rowKey(item, index);
+    else if (rowKey) key = item[rowKey];
+    else key = index;
+    const s = key != null && key !== '' ? String(key) : `row-${index}`;
+    return `table-row-${index}-${s}`;
   };
 
   const getCellValue = (item: T, column: Column<T>): React.ReactNode => {

@@ -24,6 +24,7 @@ import {
 
 interface Shelter {
   id: string;
+  _id?: string;
   name: string;
   addressLine1: string;
   addressLine2?: string;
@@ -257,7 +258,8 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
             'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            id: selectedShelter.id,
+            id: selectedShelter.id ?? selectedShelter._id,
+            _id: selectedShelter._id ?? selectedShelter.id,
             name: formData.name.trim(),
             addressLine1: formData.addressLine1.trim(),
             addressLine2: formData.addressLine2.trim() || '',

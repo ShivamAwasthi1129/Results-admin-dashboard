@@ -411,16 +411,17 @@ export default function DashboardClient() {
         productsFetchingRef.current = true;
         try {
           setIsLoadingProducts(true);
-          const response = await fetch('/api/products?status=active&limit=20', {
+          const response = await fetch('/api/products?status=active&limit=500', {
             headers: { Authorization: `Bearer ${tokenForFetch}` }
           });
           if (response.ok) {
             const data = await response.json();
-            if (data.success && data.data?.products) {
-              updateCache('products', data.data.products);
-              setProducts(data.data.products);
-              return data.data.products;
-            }
+            const list = data.success && (data.data?.products ?? Array.isArray(data.data))
+              ? (data.data?.products ?? data.data)
+              : [];
+            updateCache('products', list);
+            setProducts(list);
+            return list;
           }
         } catch (error) {
           console.error('Error fetching products:', error);
