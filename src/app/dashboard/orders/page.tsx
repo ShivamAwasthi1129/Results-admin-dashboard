@@ -51,9 +51,8 @@ async function fetchOrders(): Promise<Order[]> {
       return [];
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/orders?limit=100`
-      : 'http://localhost:3000/api/orders?limit=100';
+    const backendUrl = process.env.DOMAIN_NAME || 'https://r3sults-backend.vercel.app';
+    const apiUrl = `${backendUrl.replace(/\/$/, '')}/api/admin/orders?limit=100`;
 
     const response = await fetchWithTimeout(
       apiUrl,
