@@ -48,6 +48,18 @@ const DynamicAllUsersMap = dynamic(() => import('@/components/user-management/Al
   loading: () => <div className="h-[600px] flex items-center justify-center bg-[var(--bg-input)] rounded-lg"><div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div>
 });
 
+export interface UserAddress {
+  id: string;
+  label: string | null;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  pincode: string;
+  isDefault: boolean;
+  createdAt?: string;
+}
+
 export interface User {
   id: string;
   _id?: string;
@@ -63,6 +75,7 @@ export interface User {
   state: string | null;
   country: string;
   pincode: string | null;
+  addresses?: UserAddress[];
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   bloodGroup: string | null;
@@ -617,21 +630,52 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm">
-                          {user.address ? (
-                            <p className="text-[var(--text-primary)] flex items-center gap-2 mb-1">
-                              <MapPinIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
-                              <span className="truncate max-w-[180px]">{user.address}</span>
-                            </p>
-                          ) : null}
-                          {(user.city || user.state) && (
-                            <p className="text-[var(--text-secondary)] mb-1">
-                              {[user.city, user.state].filter(Boolean).join(', ')}
+                          {(user.addresses && user.addresses.length > 0) ? (() => {
+                            const defaultAddr = user.addresses.find(a => a.isDefault) || user.addresses[0];
+                            return (
+                              <>
+                                <p className="text-[var(--text-primary)] flex items-center gap-2 mb-1">
+                                  <MapPinIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
+                                  <span className="truncate max-w-[180px]">{defaultAddr.address}</span>
+                                  {user.addresses.length > 1 && (
+                                    <span className="flex-shrink-0 text-[10px] font-semibold bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded-full">
+                                      +{user.addresses.length - 1}
+                                    </span>
+                                  )}
+                                </p>
+                                {(defaultAddr.city || defaultAddr.state) && (
+                                  <p className="text-[var(--text-secondary)] mb-1">
+                                    {[defaultAddr.city, defaultAddr.state].filter(Boolean).join(', ')}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                                  {defaultAddr.country && <span>{defaultAddr.country}</span>}
+                                  {defaultAddr.pincode && <span>• {defaultAddr.pincode}</span>}
+                                </div>
+                              </>
+                            );
+                          })() : user.address ? (
+                            <>
+                              <p className="text-[var(--text-primary)] flex items-center gap-2 mb-1">
+                                <MapPinIcon className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
+                                <span className="truncate max-w-[180px]">{user.address}</span>
+                              </p>
+                              {(user.city || user.state) && (
+                                <p className="text-[var(--text-secondary)] mb-1">
+                                  {[user.city, user.state].filter(Boolean).join(', ')}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                                {user.country && <span>{user.country}</span>}
+                                {user.pincode && <span>• {user.pincode}</span>}
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-[var(--text-muted)] flex items-center gap-2">
+                              <MapPinIcon className="w-4 h-4 flex-shrink-0" />
+                              No address
                             </p>
                           )}
-                          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                            {user.country && <span>{user.country}</span>}
-                            {user.pincode && <span>• {user.pincode}</span>}
-                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -1060,41 +1104,64 @@ export default function UserManagementClient({ initialData }: UserManagementClie
             </div>
 
             {/* Location Information */}
-            {(selectedUser.address || selectedUser.city || selectedUser.state) && (
+            {((selectedUser.addresses && selectedUser.addresses.length > 0) || selectedUser.address || selectedUser.city || selectedUser.state) && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
                     <MapPinIcon className="w-5 h-5" />
-                    Location
+                    Addresses
+                    {selectedUser.addresses && selectedUser.addresses.length > 0 && (
+                      <span className="text-xs font-normal text-[var(--text-muted)]">({selectedUser.addresses.length})</span>
+                    )}
                   </h4>
-                  {/* <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setIsViewModalOpen(false);
-                      handleViewUserMap(selectedUser);
-                    }}
-                    leftIcon={<MapIcon className="w-4 h-4" />}
-                  >
-                    View on Map
-                  </Button> */}
                 </div>
-                <div className="bg-[var(--bg-input)] p-4 rounded-lg space-y-2">
-                  {selectedUser.address && (
-                    <p className="text-[var(--text-primary)]">{selectedUser.address}</p>
-                  )}
-                  {(selectedUser.city || selectedUser.state) && (
-                    <p className="text-[var(--text-secondary)]">
-                      {[selectedUser.city, selectedUser.state].filter(Boolean).join(', ')}
-                    </p>
-                  )}
-                  {selectedUser.country && (
-                    <p className="text-sm text-[var(--text-muted)]">{selectedUser.country}</p>
-                  )}
-                  {selectedUser.pincode && (
-                    <p className="text-sm text-[var(--text-muted)]">PIN Code: {selectedUser.pincode}</p>
-                  )}
-                </div>
+                {selectedUser.addresses && selectedUser.addresses.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedUser.addresses.map((addr) => (
+                      <div key={addr.id} className="bg-[var(--bg-input)] p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          {addr.label && (
+                            <span className="text-xs font-semibold text-[var(--text-primary)] bg-[var(--bg-card)] px-2 py-0.5 rounded-full border border-[var(--border-color)]">
+                              {addr.label}
+                            </span>
+                          )}
+                          {addr.isDefault && (
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[var(--text-primary)]">{addr.address}</p>
+                        {(addr.city || addr.state) && (
+                          <p className="text-[var(--text-secondary)] text-sm mt-1">
+                            {[addr.city, addr.state].filter(Boolean).join(', ')}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] mt-1">
+                          {addr.country && <span>{addr.country}</span>}
+                          {addr.pincode && <span>• {addr.pincode}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-[var(--bg-input)] p-4 rounded-lg space-y-2">
+                    {selectedUser.address && (
+                      <p className="text-[var(--text-primary)]">{selectedUser.address}</p>
+                    )}
+                    {(selectedUser.city || selectedUser.state) && (
+                      <p className="text-[var(--text-secondary)]">
+                        {[selectedUser.city, selectedUser.state].filter(Boolean).join(', ')}
+                      </p>
+                    )}
+                    {selectedUser.country && (
+                      <p className="text-sm text-[var(--text-muted)]">{selectedUser.country}</p>
+                    )}
+                    {selectedUser.pincode && (
+                      <p className="text-sm text-[var(--text-muted)]">PIN Code: {selectedUser.pincode}</p>
+                    )}
+                  </div>
+                )}
                 <div className="mt-3 border border-[var(--border-color)] rounded-lg overflow-hidden">
                   <DynamicUserMap 
                     user={selectedUser} 
