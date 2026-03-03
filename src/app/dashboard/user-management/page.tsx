@@ -21,7 +21,6 @@ async function fetchUsers(token: string | null) {
     });
 
     clearTimeout(timeoutId);
-
     if (!response.ok) {
       console.error(`[fetchUsers] Failed to fetch users: ${response.status} ${response.statusText}`);
       const errorText = await response.text().catch(() => 'Unknown error');
