@@ -293,7 +293,7 @@ export default function DashboardClient() {
 
       const fetchDisasters = async () => {
         try {
-          const response = await fetch('/api/live-disasters');
+          const response = await fetch('/api/merged-live-disasters');
           if (response.ok) {
             const data = await response.json();
             if (data.success) {

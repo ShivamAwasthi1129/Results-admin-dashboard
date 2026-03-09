@@ -564,26 +564,27 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                   <p className="text-xs text-[var(--text-muted)] mb-2">
                     This customer has multiple addresses. Choose the one where the damage occurred.
                   </p>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {customerAddressList.map((addr, idx) => {
-                      const label = [addr.street, addr.city, addr.state, addr.pincode || addr.zipCode].filter(Boolean).join(', ') || `Address ${idx + 1}`;
-                      const isSelected = selectedCustomerAddress === addr;
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSelectCustomerAddress(addr)}
-                          className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${
-                            isSelected
-                              ? 'border-[var(--primary-600)] bg-[var(--primary-50)] dark:bg-[var(--primary-900/20)] text-[var(--text-primary)]'
-                              : 'border-[var(--border-color)] bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)]'
-                          }`}
-                        >
-                          <span className="font-medium">{label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <Select
+                    label=""
+                    value={(() => {
+                      if (!selectedCustomerAddress) return '';
+                      const idx = customerAddressList.indexOf(selectedCustomerAddress);
+                      return idx >= 0 ? String(idx) : '';
+                    })()}
+                    onChange={(value) => {
+                      const idx = parseInt(value, 10);
+                      if (!Number.isNaN(idx) && customerAddressList[idx]) {
+                        handleSelectCustomerAddress(customerAddressList[idx]);
+                      }
+                    }}
+                    options={[
+                      { value: '', label: 'Select an address...' },
+                      ...customerAddressList.map((addr, idx) => {
+                        const label = [addr.street, addr.city, addr.state, addr.pincode || addr.zipCode].filter(Boolean).join(', ') || `Address ${idx + 1}`;
+                        return { value: String(idx), label };
+                      }),
+                    ]}
+                  />
                 </div>
               )}
             </div>

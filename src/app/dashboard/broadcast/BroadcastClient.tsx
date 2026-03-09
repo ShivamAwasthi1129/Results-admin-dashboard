@@ -16,6 +16,13 @@ import {
   ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 
+interface BroadcastRecipient {
+  id: string;
+  fullName: string;
+  email: string | null;
+  phoneNumber: string | null;
+}
+
 interface Broadcast {
   id: string;
   title: string;
@@ -26,6 +33,8 @@ interface Broadcast {
   sentBy: string;
   sentCount: number;
   createdAt: string;
+  recipients?: BroadcastRecipient[];
+  sentByUser?: unknown;
 }
 
 interface Pagination {
@@ -41,6 +50,14 @@ function getApiBase(): string {
   }
   const base = process.env.NEXT_PUBLIC_APP_URL || process.env.DOMAIN_NAME || 'http://localhost:3000';
   return base.replace(/\/$/, '');
+}
+
+/** Backend domain from env (e.g. https://r3sults-backend.vercel.app) for direct API calls like view-by-id */
+function getBackendBase(): string {
+  const base = typeof window !== 'undefined'
+    ? (process.env.NEXT_PUBLIC_DOMAIN_NAME || '').replace(/\/$/, '')
+    : (process.env.DOMAIN_NAME || '').replace(/\/$/, '');
+  return base;
 }
 
 export default function BroadcastClient() {
@@ -120,22 +137,31 @@ export default function BroadcastClient() {
 
   const fetchOne = async (id: string) => {
     if (!token) return;
+    const backendBase = getBackendBase();
+    if (!backendBase) {
+      toast.error('Backend URL not configured (NEXT_PUBLIC_DOMAIN_NAME)');
+      return;
+    }
     try {
-      const base = getApiBase();
-      const res = await fetch(`${base}/api/admin/broadcast/${id}`, {
+      const url = `${backendBase}/api/admin/broadcast/${id}`;
+      const res = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         credentials: 'include',
       });
+      const data = await res.json();
       if (!res.ok) {
-        toast.error('Broadcast not found');
+        toast.error(data?.message || data?.error || 'Broadcast not found');
         return;
       }
-      const data = await res.json();
-      setSelected(data?.data?.broadcast ?? null);
+      const broadcast = data?.data?.broadcast ?? null;
+      setSelected(broadcast);
       setDetailOpen(true);
+      if (data?.message) {
+        toast.success(data.message);
+      }
     } catch (e) {
       toast.error('Failed to load broadcast');
     }
@@ -368,6 +394,37 @@ export default function BroadcastClient() {
               <p className="text-sm text-[var(--text-muted)]">Created at</p>
               <p className="text-[var(--text-primary)]">{formatDate(selected.createdAt)}</p>
             </div>
+
+            {selected.recipients && selected.recipients.length > 0 && (
+              <div className="pt-4 border-t border-[var(--border-color)]">
+                <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Recipients ({selected.recipients.length})</p>
+                <div className="max-h-60 overflow-y-auto rounded-lg border border-[var(--border-color)]">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[var(--bg-input)] sticky top-0">
+                      <tr>
+                        <th className="text-left py-2 px-3 text-[var(--text-muted)] font-medium">Name</th>
+                        <th className="text-left py-2 px-3 text-[var(--text-muted)] font-medium">Email</th>
+                        <th className="text-left py-2 px-3 text-[var(--text-muted)] font-medium">Phone</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border-color)]">
+                      {selected.recipients.map((r) => (
+                        <tr key={r.id}>
+                          <td className="py-2 px-3 text-[var(--text-primary)]">{r.fullName || '—'}</td>
+                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.email || '—'}</td>
+                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.phoneNumber || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {selected.recipients && selected.recipients.length === 0 && (
+              <div className="pt-4 border-t border-[var(--border-color)]">
+                <p className="text-sm text-[var(--text-muted)]">No recipients for this broadcast.</p>
+              </div>
+            )}
           </div>
         )}
       </Modal>

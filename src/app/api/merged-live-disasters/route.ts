@@ -3,17 +3,14 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const EONET_EVENTS_URL = 'https://eonet.gsfc.nasa.gov/api/v3/events';
 const EONET_WILDFIRES_URL = 'https://eonet.gsfc.nasa.gov/api/v3/events?category=wildfires&status=open&limit=100';
 const EONET_SEVERE_STORMS_URL = 'https://eonet.gsfc.nasa.gov/api/v3/events?category=severeStorms&status=open&limit=100';
 
-/** Backend base URL (ngrok or Vercel) - used for non–hurricane/wildfire live disasters only */
 function getBackendUrl(): string {
   const raw = process.env.NEXT_PUBLIC_NGROK_DOMAIN || process.env.DOMAIN_NAME || 'https://r3sults-backend.vercel.app';
   return raw.replace(/\/$/, '');
 }
 
-/** Map EONET category id to display type/category (only used for wildfires + severeStorms here) */
 function categoryToType(categories?: { id: string; title: string }[]): string {
   if (!categories?.length) return 'other';
   const id = (categories[0]?.id || '').toLowerCase();
@@ -23,7 +20,6 @@ function categoryToType(categories?: { id: string; title: string }[]): string {
   return id || title || 'other';
 }
 
-/** Derive severity from magnitude or default to medium */
 function deriveSeverity(magnitudeValue?: number): string {
   if (magnitudeValue == null) return 'medium';
   if (magnitudeValue >= 7) return 'critical';
@@ -32,7 +28,6 @@ function deriveSeverity(magnitudeValue?: number): string {
   return 'low';
 }
 
-/** Extract first point from EONET geometry */
 function getCoordinates(geometry: any): { lat: number; lng: number } | undefined {
   if (!geometry) return undefined;
   const first = Array.isArray(geometry) ? geometry[0] : geometry;
@@ -51,15 +46,9 @@ function getCoordinates(geometry: any): { lat: number; lng: number } | undefined
   return undefined;
 }
 
-/**
- * Fetch hurricanes (severeStorms) and wildfires from NASA EONET API v3.
- * Wildfires: https://eonet.gsfc.nasa.gov/api/v3/events?category=wildfires&status=open&limit=100
- * Severe storms (hurricanes/cyclones): https://eonet.gsfc.nasa.gov/api/v3/events?category=severeStorms&status=open&limit=100
- */
 async function fetchEonetHurricaneAndWildfires(): Promise<any[]> {
   const urls = [EONET_WILDFIRES_URL, EONET_SEVERE_STORMS_URL];
   const allEvents: any[] = [];
-
   for (const url of urls) {
     try {
       const res = await fetch(url, { cache: 'no-store' });
@@ -68,10 +57,9 @@ async function fetchEonetHurricaneAndWildfires(): Promise<any[]> {
       const events = raw.events ?? raw.features ?? [];
       if (Array.isArray(events)) allEvents.push(...events);
     } catch {
-      // skip this category on network error
+      /* skip */
     }
   }
-
   return allEvents.map((e: any) => {
     const props = e.properties ?? e;
     const geom = e.geometry ?? e.geometries?.[0];
@@ -82,7 +70,6 @@ async function fetchEonetHurricaneAndWildfires(): Promise<any[]> {
     const magnitudeValue = props.magnitudeValue ?? props.magnitude ?? firstGeom?.magnitudeValue ?? firstGeom?.magnitude;
     const date = props.date ?? props.closed ?? e.closed ?? firstGeom?.date ?? new Date().toISOString();
     const sourceName = (props.sources?.[0] ?? e.sources?.[0])?.title ?? 'NASA EONET';
-
     return {
       id: props.id ?? e.id ?? `eonet-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       title: props.title ?? e.title ?? 'Untitled event',
@@ -91,12 +78,7 @@ async function fetchEonetHurricaneAndWildfires(): Promise<any[]> {
       category: type,
       severity: deriveSeverity(magnitudeValue),
       status: (props.closed ?? e.closed) ? 'closed' : 'open',
-      location: {
-        coordinates: coords,
-        country: undefined,
-        state: undefined,
-        region: undefined,
-      },
+      location: { coordinates: coords, country: undefined, state: undefined, region: undefined },
       magnitude: magnitudeValue,
       magnitudeUnit: props.magnitudeUnit ?? firstGeom?.magnitudeUnit,
       date,
@@ -106,7 +88,6 @@ async function fetchEonetHurricaneAndWildfires(): Promise<any[]> {
   });
 }
 
-/** Normalize backend disaster so it has location.coordinates as { lat, lng } for the map */
 function normalizeBackendDisaster(d: any): any {
   let coordinates: { lat: number; lng: number } | undefined;
   const loc = d.location ?? {};
@@ -124,12 +105,7 @@ function normalizeBackendDisaster(d: any): any {
     category: d.category ?? d.type ?? 'other',
     severity: d.severity ?? 'medium',
     status: d.status ?? 'active',
-    location: {
-      coordinates,
-      country: loc.country,
-      state: loc.state,
-      region: loc.region,
-    },
+    location: { coordinates, country: loc.country, state: loc.state, region: loc.region },
     date: d.date ?? d.createdAt ?? new Date().toISOString(),
     source: d.source ?? 'Backend',
     isLive: true,
@@ -138,7 +114,6 @@ function normalizeBackendDisaster(d: any): any {
   };
 }
 
-/** Fetch other categories (non–hurricane, non–wildfire) from your backend (ngrok/vercel). */
 async function fetchBackendOtherDisasters(): Promise<any[]> {
   try {
     const backend = getBackendUrl();
@@ -164,10 +139,7 @@ async function fetchBackendOtherDisasters(): Promise<any[]> {
 export async function GET() {
   try {
     const [eonetDisasters, backendDisasters] = await Promise.all([
-      fetchEonetHurricaneAndWildfires().catch((err) => {
-        console.error('[api/live-disasters] EONET fetch error:', err);
-        return [];
-      }),
+      fetchEonetHurricaneAndWildfires().catch(() => []),
       fetchBackendOtherDisasters(),
     ]);
     const disasters = [...eonetDisasters, ...backendDisasters];
@@ -184,10 +156,7 @@ export async function GET() {
       },
     });
   } catch (err) {
-    console.error('[api/live-disasters] Error:', err);
-    return NextResponse.json(
-      { success: false, error: 'Live disasters service error' },
-      { status: 500 }
-    );
+    console.error('[merged-live-disasters] Error:', err);
+    return NextResponse.json({ success: false, error: 'Live disasters service error' }, { status: 500 });
   }
 }

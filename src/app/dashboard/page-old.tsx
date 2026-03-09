@@ -438,7 +438,7 @@ export default function DashboardPage() {
 
     const fetchLiveDisasters = async () => {
       try {
-        const response = await fetch('/api/live-disasters');
+        const response = await fetch('/api/merged-live-disasters');
         const data = await response.json();
         if (data.success) {
           const disasters = data.data.disasters || [];

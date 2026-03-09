@@ -699,7 +699,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
           </div>
 
           {/* ID Info */}
-          <div className="p-5 bg-gradient-to-br from-purple-500/5 to-purple-600/10 rounded-2xl border border-purple-500/20 backdrop-blur-sm">
+          {/* <div className="p-5 bg-gradient-to-br from-purple-500/5 to-purple-600/10 rounded-2xl border border-purple-500/20 backdrop-blur-sm">
             <h4 className="text-sm font-semibold text-purple-500 mb-4 flex items-center gap-2">
               <IdentificationIcon className="w-5 h-5" /> Identification
             </h4>
@@ -726,7 +726,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                 options={[{ value: '', label: 'Select State' }, ...US_STATES]} 
               />
             </div>
-          </div>
+          </div> */}
 
           {/* Role & Password */}
           <div className="p-5 bg-gradient-to-br from-[var(--primary-500)]/5 to-[var(--primary-600)]/10 rounded-2xl border border-[var(--primary-500)]/20 backdrop-blur-sm">
