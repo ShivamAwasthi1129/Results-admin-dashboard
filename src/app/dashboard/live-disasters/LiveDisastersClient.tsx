@@ -72,6 +72,11 @@ const LiveDisasterMap = dynamic(
   { ssr: false, loading: () => <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div> }
 );
 
+const LiveDisastersMappingLoader = dynamic(
+  () => import('@/components/dashboard/LiveDisastersMappingLoader').then((m) => ({ default: m.LiveDisastersMappingLoader })),
+  { ssr: false }
+);
+
 interface LiveDisaster {
   id: string;
   title: string;
@@ -408,7 +413,7 @@ export default function LiveDisastersClient() {
             const raw = JSON.parse(event.data);
             const fromWs = featureCollectionToDisasters(raw);
             setLiveDisasters((prev) => {
-              const eonetOnly = prev.filter((d) => d.type === 'cyclone' || d.type === 'wildfire');
+              const eonetOnly = prev.filter((d) => d.type === 'cyclone' || d.type === 'wildfire' || d.type === 'volcanic');
               const merged = [...eonetOnly, ...fromWs];
               return merged;
             });
@@ -703,11 +708,15 @@ export default function LiveDisastersClient() {
     return eventDate >= from && eventDate <= to;
   };
 
-  /** Normalize disaster type for filter/card match (floods -> flood, snow storm -> snow_storm) */
+  /** Normalize disaster type for filter/card match (floods -> flood, snow storm -> snow_storm, feature -> other) */
   const normalizeTypeForFilter = (type: string): string => {
     const t = (type || '').toLowerCase().trim().replace(/\s+/g, '_');
-    if (t === 'floods') return 'flood';
-    if (t === 'snow_storm' || t === 'snowstorm') return 'snow_storm';
+    if (!t || t === 'feature') return 'other';
+    if (t === 'floods' || t === 'flooding') return 'flood';
+    if (t === 'snow_storm' || t === 'snowstorm' || t === 'snow_storms') return 'snow_storm';
+    if (t === 'earthquakes') return 'earthquake';
+    if (t === 'cyclone' || t === 'hurricane' || t === 'storm') return 'cyclone';
+    if (t === 'volcanoes' || t === 'volcano') return 'volcanic';
     return t || 'other';
   };
 
@@ -820,6 +829,10 @@ export default function LiveDisastersClient() {
 
   return (
     <DashboardLayout title="Live Disasters" subtitle="Real-time global disaster monitoring" icon={<GlobeAltIcon className="w-7 h-7" />}>
+      {isInitialLoading ? (
+        <LiveDisastersMappingLoader />
+      ) : (
+        <>
       {/* Quick Stats - clickable filter cards (order: Hurricane, Floods, Wildfires, Snow Storm, Power Outage, Earthquakes, Volcanic Eruptions) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         <Card
@@ -2532,6 +2545,8 @@ export default function LiveDisastersClient() {
           </form>
         )}
       </Modal>
+        </>
+      )}
     </DashboardLayout>
   );
 }

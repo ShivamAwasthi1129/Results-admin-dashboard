@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Modal, Button, Input, Select } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
@@ -12,6 +13,7 @@ import {
   XMarkIcon,
   UserIcon,
   MagnifyingGlassIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 
 interface CreateDamageReportModalProps {
@@ -121,6 +123,7 @@ function mapApiUserToCustomer(user: ApiUser): Customer {
 }
 
 export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: CreateDamageReportModalProps) {
+  const router = useRouter();
   const { token, user } = useAuth();
   const cache = useCustomersCache();
   const cachedCustomers = cache?.customers ?? [];
@@ -510,29 +513,45 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                     <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
                     <p className="text-sm text-[var(--text-muted)] mt-2">Loading customers...</p>
                   </div>
-                ) : filteredCustomers.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-[var(--text-muted)]">
-                    No customers found
-                  </div>
                 ) : (
-                  filteredCustomers.slice(0, 20).map((customer) => (
-                    <button
-                      key={customer.id || customer._id}
-                      type="button"
-                      onClick={() => handleCustomerSelect(customer)}
-                      className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)] last:border-b-0"
-                    >
-                      <div className="font-medium text-[var(--text-primary)]">
-                        {customer.firstName} {customer.lastName}
+                  <>
+                    {filteredCustomers.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-[var(--text-muted)]">
+                        No customers found
                       </div>
-                      <div className="text-sm text-[var(--text-muted)]">{customer.email}</div>
-                      {customer.address?.city && (
-                        <div className="text-xs text-[var(--text-muted)]">
-                          {customer.address.city}, {customer.address.state}
-                        </div>
-                      )}
+                    ) : (
+                      filteredCustomers.slice(0, 20).map((customer) => (
+                        <button
+                          key={customer.id || customer._id}
+                          type="button"
+                          onClick={() => handleCustomerSelect(customer)}
+                          className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)]"
+                        >
+                          <div className="font-medium text-[var(--text-primary)]">
+                            {customer.firstName} {customer.lastName}
+                          </div>
+                          <div className="text-sm text-[var(--text-muted)]">{customer.email}</div>
+                          {customer.address?.city && (
+                            <div className="text-xs text-[var(--text-muted)]">
+                              {customer.address.city}, {customer.address.state}
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomerDropdown(false);
+                        onClose();
+                        router.push('/dashboard/user-management?addUser=1');
+                      }}
+                      className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-t border-[var(--border-color)] flex items-center gap-2 text-[var(--primary-600)] font-medium"
+                    >
+                      <PlusIcon className="w-5 h-5 shrink-0" />
+                   Add new user
                     </button>
-                  ))
+                  </>
                 )}
               </div>
             )}

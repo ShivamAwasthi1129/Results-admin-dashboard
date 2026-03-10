@@ -9,7 +9,8 @@ const EONET_SEVERE_STORMS_URL = 'https://eonet.gsfc.nasa.gov/api/v3/events?categ
 
 /** Backend base URL (ngrok or Vercel) - used for non–hurricane/wildfire live disasters only */
 function getBackendUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_NGROK_DOMAIN || process.env.DOMAIN_NAME || 'https://r3sults-backend.vercel.app';
+  const raw = process.env.NEXT_PUBLIC_NGROK_DOMAIN;
+  if (!raw) return '';
   return raw.replace(/\/$/, '');
 }
 

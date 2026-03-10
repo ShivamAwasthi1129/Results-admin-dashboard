@@ -76,6 +76,7 @@ const SearchModal: React.FC = () => {
       disaster: '🌋',
       emergency: '🚨',
       volunteer: '🤝',
+      service: '🏢',
       serviceProvider: '🏢',
     };
     return icons[type] || '📄';
@@ -87,6 +88,7 @@ const SearchModal: React.FC = () => {
       disaster: 'bg-red-500/20 text-red-400',
       emergency: 'bg-orange-500/20 text-orange-400',
       volunteer: 'bg-green-500/20 text-green-400',
+      service: 'bg-purple-500/20 text-purple-400',
       serviceProvider: 'bg-purple-500/20 text-purple-400',
     };
     return colors[type] || 'bg-gray-500/20 text-gray-400';

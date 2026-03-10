@@ -62,6 +62,7 @@ function normalizeMarkerType(type: string): string {
   const t = (type || '').toLowerCase().trim();
   if (t === 'floods') return 'flood';
   if (t === 'snow storm' || t === 'snowstorm') return 'snow_storm';
+  if (t === 'volcanoes' || t === 'volcano') return 'volcanic';
   return t || 'other';
 }
 
