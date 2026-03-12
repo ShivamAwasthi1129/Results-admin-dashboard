@@ -131,145 +131,60 @@ export default function SOSPage() {
     emergencyContactRelation: '',
   });
 
-  // Mock data for SOS alerts - USA based
-  useEffect(() => {
-    const mockAlerts: SOSAlert[] = [
-      {
-        id: '1',
-        name: 'John Smith',
-        phone: '+1 (305) 555-0123',
-        email: 'john.smith@email.com',
-        photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-        location: { lat: 25.7617, lng: -80.1918, address: '123 Ocean Drive', city: 'Miami', state: 'FL', zipcode: '33139' },
-        lastKnownLocation: { lat: 25.7620, lng: -80.1915, address: 'Near South Beach', timestamp: new Date(Date.now() - 5 * 60000).toISOString() },
-        type: 'rescue',
-        priority: 'critical',
-        status: 'pending',
-        message: 'Stuck on rooftop due to flash flooding. Family of 4 needs immediate rescue. Water rising rapidly.',
-        createdAt: new Date(Date.now() - 10 * 60000).toISOString(),
-        peopleCount: 4,
-        wearableDevice: {
-          id: 'WD-001',
-          type: 'smartwatch',
-          brand: 'Apple',
-          model: 'Apple Watch Ultra 2',
-          batteryLevel: 78,
-          lastSync: new Date(Date.now() - 2 * 60000).toISOString(),
-          isOnline: true,
-          heartRate: 92,
-          steps: 3245,
-          location: { lat: 25.7620, lng: -80.1915 },
-        },
-        medicalInfo: {
-          bloodType: 'A+',
-          allergies: ['Penicillin'],
-          medications: ['Lisinopril'],
-          conditions: ['Hypertension'],
-          emergencyContact: { name: 'Mary Smith', phone: '+1 (305) 555-0124', relation: 'Wife' },
-        },
-      },
-      {
-        id: '2',
-        name: 'Emily Johnson',
-        phone: '+1 (713) 555-0456',
-        email: 'emily.j@email.com',
-        photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-        location: { lat: 29.7604, lng: -95.3698, address: '456 Main Street', city: 'Houston', state: 'TX', zipcode: '77002' },
-        type: 'medical',
-        priority: 'high',
-        status: 'assigned',
-        message: 'Elderly parent needs medical attention. Diabetic patient without insulin for 2 days.',
-        createdAt: new Date(Date.now() - 25 * 60000).toISOString(),
-        assignedTo: 'Medical Team Alpha - Houston',
-        peopleCount: 1,
-        wearableDevice: {
-          id: 'WD-002',
-          type: 'medical_alert',
-          brand: 'Medical Guardian',
-          model: 'Freedom Alert',
-          batteryLevel: 45,
-          lastSync: new Date(Date.now() - 10 * 60000).toISOString(),
-          isOnline: true,
-          heartRate: 68,
-        },
-        medicalInfo: {
-          bloodType: 'O-',
-          allergies: ['Aspirin', 'Sulfa drugs'],
-          medications: ['Insulin', 'Metformin'],
-          conditions: ['Type 2 Diabetes', 'Heart Disease'],
-          emergencyContact: { name: 'Michael Johnson', phone: '+1 (713) 555-0457', relation: 'Son' },
-        },
-      },
-      {
-        id: '3',
-        name: 'Robert Williams',
-        phone: '+1 (405) 555-0789',
-        email: 'rwilliams@email.com',
-        photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
-        location: { lat: 35.4676, lng: -97.5164, address: '789 Tornado Alley Rd', city: 'Oklahoma City', state: 'OK', zipcode: '73102' },
-        type: 'evacuation',
-        priority: 'critical',
-        status: 'in_progress',
-        message: 'Tornado damaged our building. 30 families need immediate evacuation. Some injuries reported.',
-        createdAt: new Date(Date.now() - 45 * 60000).toISOString(),
-        assignedTo: 'FEMA Response Unit B',
-        peopleCount: 120,
-        wearableDevice: {
-          id: 'WD-003',
-          type: 'gps_tracker',
-          brand: 'Garmin',
-          model: 'inReach Mini 2',
-          batteryLevel: 90,
-          lastSync: new Date(Date.now() - 1 * 60000).toISOString(),
-          isOnline: true,
-          location: { lat: 35.4676, lng: -97.5164 },
-        },
-      },
-      {
-        id: '4',
-        name: 'Sarah Davis',
-        phone: '+1 (310) 555-0321',
-        email: 'sarah.d@email.com',
-        photo: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-        location: { lat: 34.0522, lng: -118.2437, address: '1234 Hillside Ave', city: 'Los Angeles', state: 'CA', zipcode: '90028' },
-        type: 'fire',
-        priority: 'high',
-        status: 'pending',
-        message: 'Wildfire approaching neighborhood. Need help evacuating elderly neighbors who cannot drive.',
-        createdAt: new Date(Date.now() - 60 * 60000).toISOString(),
-        peopleCount: 8,
-        wearableDevice: {
-          id: 'WD-004',
-          type: 'fitness_tracker',
-          brand: 'Fitbit',
-          model: 'Charge 6',
-          batteryLevel: 62,
-          lastSync: new Date(Date.now() - 15 * 60000).toISOString(),
-          isOnline: true,
-          heartRate: 110,
-          steps: 8750,
-        },
-      },
-      {
-        id: '5',
-        name: 'James Brown',
-        phone: '+1 (504) 555-0654',
-        email: 'jbrown@email.com',
-        location: { lat: 29.9511, lng: -90.0715, address: '567 French Quarter Blvd', city: 'New Orleans', state: 'LA', zipcode: '70112' },
-        type: 'food_water',
-        priority: 'medium',
-        status: 'resolved',
-        message: 'Relief camp running low on clean water. 200+ people affected. Water supplies contaminated.',
-        createdAt: new Date(Date.now() - 120 * 60000).toISOString(),
-        assignedTo: 'Red Cross Supply Unit',
-        peopleCount: 200,
-      },
-    ];
-
-    setTimeout(() => {
-      setAlerts(mockAlerts);
+  // Fetch live SOS alerts
+  const fetchAlerts = async () => {
+    try {
+      const baseUrl = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_DOMAIN_NAME) 
+        ? process.env.NEXT_PUBLIC_DOMAIN_NAME.replace(/\/$/, '') 
+        : '';
+        
+      const response = await fetch(`${baseUrl}/api/admin/emergencies`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      
+      if (data.success && data.data && data.data.emergencies) {
+        // Map backend AdminEmergency schema to frontend SOSAlert interface
+        const mappedAlerts: SOSAlert[] = data.data.emergencies.map((em: any) => ({
+          id: em.id,
+          name: em.requestedBy?.name || 'Unknown',
+          phone: em.requestedBy?.phone || 'Unknown',
+          email: em.requestedBy?.email || 'Unknown',
+          photo: '', // backend doesn't store photo
+          location: {
+            lat: em.location?.coordinates?.[0] || 0,
+            lng: em.location?.coordinates?.[1] || 0,
+            address: em.location?.address || 'Unknown Address',
+            city: '',
+            state: '',
+            zipcode: '',
+          },
+          type: em.type || 'rescue',
+          priority: em.priority || 'medium',
+          status: em.status || 'pending',
+          message: em.description || '',
+          createdAt: em.createdAt || new Date().toISOString(),
+          assignedTo: em.assignedTo?.[0] || undefined,
+          peopleCount: em.numberOfPeople || 1,
+        }));
+        setAlerts(mappedAlerts);
+      }
+    } catch (error) {
+      console.error('Error fetching SOS alerts:', error);
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
+  };
+
+  useEffect(() => {
+    // Initial fetch
+    fetchAlerts();
+
+    // Set up polling every 10 seconds for real-time updates
+    const interval = setInterval(fetchAlerts, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Initialize map when map modal opens
