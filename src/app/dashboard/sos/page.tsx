@@ -154,8 +154,8 @@ export default function SOSPage() {
           email: em.requestedBy?.email || 'Unknown',
           photo: '', // backend doesn't store photo
           location: {
-            lat: em.location?.coordinates?.[0] || 0,
-            lng: em.location?.coordinates?.[1] || 0,
+            lat: em.location?.coordinates?.[1] || 0,
+            lng: em.location?.coordinates?.[0] || 0,
             address: em.location?.address || 'Unknown Address',
             city: '',
             state: '',
