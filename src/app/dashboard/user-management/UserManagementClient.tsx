@@ -32,6 +32,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PlusIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 import dynamic from 'next/dynamic';
 
@@ -169,6 +170,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const [showAllPaths, setShowAllPaths] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [isSubmittingAddUser, setIsSubmittingAddUser] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [addUserForm, setAddUserForm] = useState({
     phoneNumber: '',
     email: '',
@@ -350,6 +352,50 @@ export default function UserManagementClient({ initialData }: UserManagementClie
 
   const handleViewAllUsersMap = () => {
     setViewMode('map');
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    const userId = user.id || (user as any)._id;
+    if (!userId) return;
+    if (!window.confirm(`Are you sure you want to delete "${user.fullName || user.email || user.phoneNumber || 'this user'}"? This action cannot be undone.`)) return;
+    const t = token ?? getAuthToken();
+    if (!t) {
+      toast.error('Please log in to delete a user');
+      return;
+    }
+    const base = (process.env.NEXT_PUBLIC_DOMAIN_NAME || '').replace(/\/$/, '');
+    if (!base) {
+      toast.error('Backend URL not configured (NEXT_PUBLIC_DOMAIN_NAME)');
+      return;
+    }
+    const url = `${base}/api/admin/users-mgmt/delete-app-user/${userId}`;
+    setDeletingUserId(userId);
+    try {
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${t}`,
+        },
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && (data.success !== false)) {
+        toast.success(data.message || 'User deleted successfully');
+        if (selectedUser?.id === userId || (selectedUser as any)?._id === userId) {
+          setSelectedUser(null);
+          setIsViewModalOpen(false);
+        }
+        fetchUsers();
+      } else {
+        toast.error(data.message || data.error || 'Failed to delete user');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete user');
+    } finally {
+      setDeletingUserId(null);
+    }
   };
 
   const formatDate = (dateString: string | null) => {
@@ -897,6 +943,19 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                           >
                             View
                           </Button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteUser(user); }}
+                            disabled={deletingUserId === (user.id || (user as any)._id)}
+                            className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete user"
+                          >
+                            {deletingUserId === (user.id || (user as any)._id) ? (
+                              <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <TrashIcon className="w-4 h-4" />
+                            )}
+                          </button>
                           {/* <Button
                             variant="secondary"
                             size="sm"
@@ -1096,6 +1155,19 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       >
                         View
                       </Button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteUser(user); }}
+                        disabled={deletingUserId === (user.id || (user as any)._id)}
+                        className="p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete user"
+                      >
+                        {deletingUserId === (user.id || (user as any)._id) ? (
+                          <ArrowPathIcon className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <TrashIcon className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                       <Button
                         variant="secondary"
                         size="sm"
