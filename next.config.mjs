@@ -46,13 +46,15 @@ const nextConfig = {
       { source: '/api/seed/:path*', destination: `${backend}/api/admin/seed/:path*` },
       { source: '/api/mobile/:path*', destination: `${backend}/api/admin/mobile/:path*` },
       { source: '/api/currency', destination: `${backend}/api/currency` },
-      { source: '/api/:path*', destination: `${backend}/api/:path*` }
+      // No catch-all so /api/printify/* is never proxied to backend; local routes handle it
     ];
     return {
       beforeFiles: [
         { source: '/api/live-disasters', destination: '/api/live-disasters' },
         { source: '/api/merged-live-disasters', destination: '/api/merged-live-disasters' },
-        { source: '/api/adjusters/assign-report', destination: '/api/adjusters/assign-report' }
+        { source: '/api/adjusters/assign-report', destination: '/api/adjusters/assign-report' },
+        // Printify API: handle all printify routes locally (must be one rule so no subpath is sent to backend)
+        { source: '/api/printify/:path*', destination: '/api/printify/:path*' }
       ],
       afterFiles: allRewrites
     };

@@ -2,6 +2,8 @@
 
 **Purpose:** Let users on your **Results client website** place orders for **custom print shirts**; send those orders to **Printify** for fulfillment; **store and track** all orders in your **admin dashboard**.
 
+**Client-side storefront:** For a single-prompt spec to build the full e-commerce flow on the client site (product list, product detail with size/color/quantity, checkout, create order), see **[CLIENT_PRINTIFY_ECOMMERCE.md](./CLIENT_PRINTIFY_ECOMMERCE.md)**.
+
 ---
 
 ## 1. Overview
@@ -412,6 +414,8 @@ PRINTIFY_WEBHOOK_SECRET=your_webhook_secret_from_openssl_rand_hex_20
 
 Use `PRINTIFY_SHOP_ID` in all shop-scoped API calls and when registering webhooks.
 
+**Admin dashboard:** The **Printify Stock** module (`/dashboard/printify-stock`) lists all products. If the list API returns no variants, the app fetches the full product when you open detail so **color/size** selection **updates the preview image in real time**. **Checkout:** Select variant → see **price** → **Continue to checkout** → fill **shipping address** and **shipping method** (1=Standard, 2=Priority, 3=Express, 4=Economy) → **Place order** (`POST /api/printify/orders`). **Edit product:** `PUT /api/printify/products/[productId]` (title/description). **Design editing** (canvas, front/back) is not in the Printify API. **If you get 404 on PUT:** Restart the dev server so rewrites apply. You can select **color and size** in the product detail; the **preview image updates in real time** when the selected variant has a matching mockup (options with “Show in preview”). Once a variant is selected, **Proceed to checkout** sends you to Orders with product/variant context in the URL (variant ID can be copied). **Edit product** allows updating title and description via the API (requires `products.write` scope and `PUT /api/printify/products/[productId]`).
+
 ---
 
 ## 12. Quick reference – main APIs
@@ -419,7 +423,10 @@ Use `PRINTIFY_SHOP_ID` in all shop-scoped API calls and when registering webhook
 | Action | Method | Endpoint |
 |--------|--------|----------|
 | Shops | GET | `/v1/shops.json` |
+| List products (shop) | GET | `/v1/shops/{shop_id}/products.json` (query: `page`, `limit`) |
 | Blueprints | GET | `/v1/catalog/blueprints.json` |
+
+**List products response (per product):** Each product includes `id`, `title`, `description`, `images[]` (mockup URLs, `position`), `variants[]`, `options[]` (name, type: color/size, values with id/title/colors), `print_areas[]` (placeholders with position, decoration_method, images), `views[]` (label, position, files with src), `tags[]`, `created_at`, `updated_at`, `is_locked`, and other fields. The admin Printify Stock module displays these in structured sections (options with color swatches, print areas, views) and a searchable variants table.
 | Print providers for blueprint | GET | `/v1/catalog/blueprints/{blueprint_id}/print_providers.json` |
 | Variants | GET | `/v1/catalog/blueprints/{blueprint_id}/print_providers/{print_provider_id}/variants.json` |
 | Upload image | POST | `/v1/uploads/images.json` |
@@ -431,7 +438,14 @@ Use `PRINTIFY_SHOP_ID` in all shop-scoped API calls and when registering webhook
 
 ---
 
-## 13. Official links
+## 13. Troubleshooting
+
+- **404 on PUT `/api/printify/products/[productId]` or GET single product:** The Next.js rewrites in `next.config.mjs` send `/api/printify/*` to the app. **Restart the dev server** after changing `next.config.mjs` so the `beforeFiles` rules apply. If you still see `{ "success": false, "message": "Route not found" }`, the request is being proxied to your backend—confirm the rewrite order and that no other rule matches first.
+- **404 from Printify (not from Next):** If the route is hit but Printify returns 404, check that `shop_id` matches the shop that owns the product (e.g. product from shop A, request with `shop_id` of shop B).
+
+---
+
+## 14. Official links
 
 - [Printify API docs](https://developers.printify.com/)
 - [API terms](https://printify.com/API-terms/)
