@@ -59,6 +59,55 @@ interface PrintifyOrder {
   [key: string]: unknown;
 }
 
+const ORDER_STATUS_HELP: Record<string, string> = {
+  pending: 'Just created; should move forward shortly.',
+  'on-hold': 'Waiting (e.g. payment or validation) before production.',
+  'sending-to-production': 'Being sent to the print provider.',
+  'in-production': 'Print provider is fulfilling the order.',
+  fulfilled: 'All items have been fulfilled.',
+  'partially-fulfilled': 'Some items fulfilled; others still in progress.',
+  canceled: 'Order was canceled.',
+  'payment-not-received': 'Charge failed; payment not received.',
+  'has-issues': 'Problem with the order (e.g. address). Check Printify for details.',
+  unfulfillable: 'Inventory or technical issue; cannot fulfill as placed.',
+  'cost-calculation': 'Cost is being calculated.',
+  'source-check-failed': 'Source validation failed.',
+};
+
+function orderStatusBadgeVariant(status: string): 'success' | 'danger' | 'warning' | 'secondary' | 'primary' {
+  if (status === 'fulfilled') return 'success';
+  if (status === 'partially-fulfilled') return 'primary';
+  if (status === 'canceled') return 'secondary';
+  if (['has-issues', 'unfulfillable', 'payment-not-received', 'source-check-failed'].includes(status)) return 'danger';
+  if (['in-production', 'sending-to-production'].includes(status)) return 'primary';
+  if (status === 'on-hold') return 'warning';
+  return 'warning';
+}
+
+function getOrderRowDisplay(ord: PrintifyOrder) {
+  const printifyId = String(ord.id ?? '').trim();
+  const labelRaw = String(ord.label ?? ord.external_id ?? '').trim();
+  const merged = labelRaw.match(/^#?([a-f0-9]{24})([\s\S]*)$/i);
+  let secondLine = '';
+  if (merged?.[2]?.trim()) {
+    secondLine = merged[2].trim();
+  } else if (ord.metadata && typeof ord.metadata === 'object' && (ord.metadata as { shop_order_label?: string }).shop_order_label) {
+    secondLine = String((ord.metadata as { shop_order_label?: string }).shop_order_label);
+  } else {
+    const titles = ord.line_items?.map((i) => i.metadata?.title).filter(Boolean) as string[];
+    secondLine = titles?.length ? titles.join(', ') : labelRaw && labelRaw !== printifyId ? labelRaw : '';
+  }
+  const firstLine = printifyId ? `#${printifyId}` : merged?.[1] ? `#${merged[1]}` : labelRaw.slice(0, 32) || '—';
+  return { firstLine, secondLine: secondLine || '—' };
+}
+
+const SHIPPING_METHOD_LABELS: Record<number, string> = {
+  1: 'Standard',
+  2: 'Priority / express',
+  3: 'Printify Express',
+  4: 'Economy',
+};
+
 interface PrintifyImage {
   mockup_id?: string;
   id?: number;
@@ -1174,24 +1223,121 @@ export default function PrintifyStockClient() {
         )}
 
         {activeTab === 'orders' && selectedShopId && (
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden max-w-full">
             {ordersLoading ? (
               <div className="p-12 text-center text-[var(--text-muted)]">Loading orders…</div>
             ) : orders.length === 0 ? (
               <div className="p-12 text-center text-[var(--text-muted)]">No orders in this shop.</div>
             ) : (
               <>
-                <div className="overflow-x-auto overflow-y-hidden">
-                  <table className="w-full text-left table-fixed" style={{ minWidth: 0 }}>
+                {/* Mobile / narrow: stacked cards — no horizontal scroll */}
+                <div className="md:hidden space-y-3 p-3">
+                  {orders.map((ord) => {
+                    const addr = ord.address_to ?? {};
+                    const customer = [addr.first_name, addr.last_name].filter(Boolean).join(' ') || '—';
+                    const totalCents = ord.total_price ?? 0;
+                    const totalFormatted = totalCents >= 100 ? `$${(totalCents / 100).toFixed(2)}` : `$${Number(totalCents).toFixed(2)}`;
+                    const sentAt = ord.sent_to_production_at ?? null;
+                    const tracking = ord.shipments?.[0];
+                    const status = ord.status ?? '—';
+                    const { firstLine, secondLine } = getOrderRowDisplay(ord);
+                    return (
+                      <div
+                        key={ord.id}
+                        className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-mono text-sm font-semibold text-[var(--text-primary)] break-all">{firstLine}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-1 break-words line-clamp-4">{secondLine}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-[var(--text-muted)] block text-xs">Customer</span>
+                            <span className="text-[var(--text-primary)] break-words">{customer}</span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--text-muted)] block text-xs">Total</span>
+                            <span className="text-[var(--text-primary)]">{totalFormatted}</span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--text-muted)] block text-xs">Sent to prod.</span>
+                            <span className="text-[var(--text-muted)]">{sentAt ? new Date(sentAt).toLocaleDateString() : 'Pending'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[var(--text-muted)] block text-xs">Tracking</span>
+                            {tracking?.url ? (
+                              <a href={tracking.url} target="_blank" rel="noopener noreferrer" className="text-[var(--primary-500)] hover:underline break-all text-sm">
+                                {tracking.number ?? 'Track'}
+                              </a>
+                            ) : (
+                              <span className="text-[var(--text-muted)]">Pending</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Badge variant={orderStatusBadgeVariant(status)} size="sm">{status}</Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              title="View order"
+                              onClick={() => setSelectedOrderId(ord.id)}
+                              className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-muted)] text-[var(--text-primary)] hover:bg-[var(--bg-muted)]/80"
+                              aria-label="View order"
+                            >
+                              <EyeIcon className="h-4 w-4" />
+                            </button>
+                            {status === 'on-hold' && (
+                              <button
+                                type="button"
+                                title="Submit to production"
+                                disabled={orderActionLoading === ord.id}
+                                onClick={() => sendOrderToProduction(ord.id)}
+                                className="p-2 rounded-lg border border-[var(--primary-500)] bg-[var(--primary-500)] text-white disabled:opacity-50"
+                                aria-label="Submit to production"
+                              >
+                                <PlayIcon className="h-4 w-4" />
+                              </button>
+                            )}
+                            {status !== 'fulfilled' && status !== 'canceled' && (
+                              <button
+                                type="button"
+                                title="Cancel order"
+                                disabled={orderActionLoading === ord.id}
+                                onClick={() => cancelOrderAction(ord.id)}
+                                className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-muted)] disabled:opacity-50"
+                                aria-label="Cancel order"
+                              >
+                                <XCircleIcon className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* md+: table with wrapped order column — avoid wide single-line cells */}
+                <div className="hidden md:block w-full overflow-hidden">
+                  <table className="w-full text-left table-fixed border-collapse">
+                    <colgroup>
+                      <col className="w-[min(28%,20rem)]" />
+                      <col className="w-[10%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[15%]" />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-[var(--border-color)] bg-[var(--bg-muted)]">
-                        <th className="p-3 font-medium text-[var(--text-muted)] w-[22%] min-w-0">Order</th>
-                        <th className="p-3 font-medium text-[var(--text-muted)] w-[11%] min-w-0">Sent to prod.</th>
-                        <th className="p-3 font-medium text-[var(--text-muted)] w-[14%] min-w-0">Customer</th>
-                        <th className="p-3 font-medium text-[var(--text-muted)] w-[9%] min-w-0">Total</th>
-                        <th className="p-3 font-medium text-[var(--text-muted)] w-[12%] min-w-0">Tracking</th>
-                        <th className="p-3 font-medium text-[var(--text-muted)] w-[12%] min-w-0">Status</th>
-                        <th className="p-3 font-medium text-[var(--text-muted)] w-[20%] min-w-0">Actions</th>
+                        <th className="p-3 font-medium text-[var(--text-muted)] align-bottom">Order</th>
+                        <th className="p-3 font-medium text-[var(--text-muted)] align-bottom">Sent to prod.</th>
+                        <th className="p-3 font-medium text-[var(--text-muted)] align-bottom">Customer</th>
+                        <th className="p-3 font-medium text-[var(--text-muted)] align-bottom">Total</th>
+                        <th className="p-3 font-medium text-[var(--text-muted)] align-bottom">Tracking</th>
+                        <th className="p-3 font-medium text-[var(--text-muted)] align-bottom">Status</th>
+                        <th className="p-3 font-medium text-[var(--text-muted)] align-bottom text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1200,37 +1346,37 @@ export default function PrintifyStockClient() {
                         const customer = [addr.first_name, addr.last_name].filter(Boolean).join(' ') || '—';
                         const totalCents = ord.total_price ?? 0;
                         const totalFormatted = totalCents >= 100 ? `$${(totalCents / 100).toFixed(2)}` : `$${Number(totalCents).toFixed(2)}`;
-                        const label = ord.label ?? ord.external_id ?? ord.id;
-                        const productTitle = ord.line_items?.[0]?.metadata?.title ?? label;
                         const sentAt = ord.sent_to_production_at ?? null;
                         const tracking = ord.shipments?.[0];
                         const status = ord.status ?? '—';
-                        const orderLabel = `#${String(label).slice(0, 40)}${String(label).length > 40 ? '…' : ''}`;
+                        const { firstLine, secondLine } = getOrderRowDisplay(ord);
                         return (
-                          <tr key={ord.id} className="border-b border-[var(--border-color)] hover:bg-[var(--bg-muted)]/50">
-                            <td className="p-3 min-w-0 align-top">
-                              <span className="font-medium text-[var(--text-primary)] block truncate" title={`${label}${productTitle !== label ? ` · ${productTitle}` : ''}`}>{orderLabel}</span>
-                              {productTitle !== label && <span className="text-xs text-[var(--text-muted)] block truncate" title={productTitle}>{productTitle}</span>}
+                          <tr key={ord.id} className="border-b border-[var(--border-color)] hover:bg-[var(--bg-muted)]/50 align-top">
+                            <td className="p-3 min-w-0 max-w-0">
+                              <span className="font-mono text-sm font-medium text-[var(--text-primary)] block break-all">{firstLine}</span>
+                              <span className="text-xs text-[var(--text-muted)] block mt-1 break-words hyphens-auto max-h-20 overflow-y-auto leading-snug">{secondLine}</span>
                             </td>
-                            <td className="p-3 text-[var(--text-muted)] text-sm whitespace-nowrap">{sentAt ? new Date(sentAt).toLocaleDateString() : 'Pending'}</td>
-                            <td className="p-3 text-[var(--text-primary)] text-sm truncate min-w-0" title={customer}>{customer}</td>
-                            <td className="p-3 text-[var(--text-primary)] text-sm whitespace-nowrap">{totalFormatted}</td>
-                            <td className="p-3 min-w-0">
+                            <td className="p-3 text-[var(--text-muted)] text-sm whitespace-nowrap align-top">{sentAt ? new Date(sentAt).toLocaleDateString() : 'Pending'}</td>
+                            <td className="p-3 text-[var(--text-primary)] text-sm break-words min-w-0 align-top" title={customer}>{customer}</td>
+                            <td className="p-3 text-[var(--text-primary)] text-sm whitespace-nowrap align-top">{totalFormatted}</td>
+                            <td className="p-3 min-w-0 align-top">
                               {tracking?.url ? (
-                                <a href={tracking.url} target="_blank" rel="noopener noreferrer" className="text-[var(--primary-500)] hover:underline text-sm truncate block" title={tracking.number ?? 'Track'}>{tracking.number ?? 'Track'}</a>
+                                <a href={tracking.url} target="_blank" rel="noopener noreferrer" className="text-[var(--primary-500)] hover:underline text-sm break-all line-clamp-2" title={tracking.number ?? 'Track'}>{tracking.number ?? 'Track'}</a>
                               ) : (
                                 <span className="text-[var(--text-muted)] text-sm">Pending</span>
                               )}
                             </td>
-                            <td className="p-3"><Badge variant={status === 'fulfilled' ? 'success' : status === 'canceled' ? 'secondary' : 'primary'}>{status}</Badge></td>
-                            <td className="p-3">
-                              <div className="flex items-center gap-1 flex-nowrap">
-                                <button type="button" title="View order" onClick={(e) => { e.stopPropagation(); setSelectedOrderId(ord.id); }} className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] hover:bg-[var(--bg-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]" aria-label="View order"><EyeIcon className="h-4 w-4" /></button>
+                            <td className="p-3 align-top">
+                              <Badge variant={orderStatusBadgeVariant(status)} size="sm" className="max-w-full truncate">{status}</Badge>
+                            </td>
+                            <td className="p-3 align-top text-right">
+                              <div className="inline-flex items-center gap-1 flex-nowrap justify-end">
+                                <button type="button" title="View order" onClick={(e) => { e.stopPropagation(); setSelectedOrderId(ord.id); }} className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] hover:bg-[var(--bg-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)] shrink-0" aria-label="View order"><EyeIcon className="h-4 w-4" /></button>
                                 {status === 'on-hold' && (
-                                  <button type="button" title="Submit to production" disabled={orderActionLoading === ord.id} onClick={(e) => { e.stopPropagation(); sendOrderToProduction(ord.id); }} className="p-2 rounded-lg border border-[var(--primary-500)] bg-[var(--primary-500)] text-white hover:opacity-90 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]" aria-label="Submit to production"><PlayIcon className="h-4 w-4" /></button>
+                                  <button type="button" title="Submit to production" disabled={orderActionLoading === ord.id} onClick={(e) => { e.stopPropagation(); sendOrderToProduction(ord.id); }} className="p-2 rounded-lg border border-[var(--primary-500)] bg-[var(--primary-500)] text-white hover:opacity-90 disabled:opacity-50 shrink-0" aria-label="Submit to production"><PlayIcon className="h-4 w-4" /></button>
                                 )}
                                 {status !== 'fulfilled' && status !== 'canceled' && (
-                                  <button type="button" title="Cancel order" disabled={orderActionLoading === ord.id} onClick={(e) => { e.stopPropagation(); cancelOrderAction(ord.id); }} className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] hover:bg-[var(--bg-muted)] disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]" aria-label="Cancel order"><XCircleIcon className="h-4 w-4" /></button>
+                                  <button type="button" title="Cancel order" disabled={orderActionLoading === ord.id} onClick={(e) => { e.stopPropagation(); cancelOrderAction(ord.id); }} className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] hover:bg-[var(--bg-muted)] disabled:opacity-50 shrink-0" aria-label="Cancel order"><XCircleIcon className="h-4 w-4" /></button>
                                 )}
                               </div>
                             </td>
@@ -1513,26 +1659,80 @@ export default function PrintifyStockClient() {
         )}
         {orderDetail && (
           <>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--text-muted)]">
-              <span>Created {orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString() : '—'}</span>
-              <div className="flex flex-wrap gap-2">
-                {orderDetail.status !== 'fulfilled' && orderDetail.status !== 'canceled' && (
-                  <Button size="sm" variant="secondary" disabled={!!orderActionLoading} onClick={() => cancelOrderAction(orderDetail.id)}>
-                    <XCircleIcon className="h-4 w-4 mr-1" /> Cancel order
-                  </Button>
-                )}
-                <Button size="sm" variant="secondary" onClick={() => { toast.info('Duplicate order: use the same address and line items in a new order from checkout.'); }}>
-                  <DocumentTextIcon className="h-4 w-4 mr-1" /> Duplicate
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => setOrderDetailEditCustomer((v) => !v)}>
-                  <PencilSquareIcon className="h-4 w-4 mr-1" /> Edit order
-                </Button>
-                {orderDetail.status === 'on-hold' && (
-                  <Button size="sm" variant="primary" disabled={!!orderActionLoading} onClick={() => sendOrderToProduction(orderDetail.id)}>
-                    Submit
-                  </Button>
-                )}
-              </div>
+            {(() => {
+              const st = orderDetail.status ?? '—';
+              const help = ORDER_STATUS_HELP[st] ?? 'Current order state from Printify.';
+              return (
+                <div className="mb-4 rounded-xl border border-[var(--border-color)] bg-[var(--bg-muted)]/40 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide mb-1">Status</p>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <Badge variant={orderStatusBadgeVariant(st)}>{st}</Badge>
+                      </div>
+                      <p className="text-sm text-[var(--text-primary)] leading-relaxed">{help}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      {orderDetail.status !== 'fulfilled' && orderDetail.status !== 'canceled' && (
+                        <Button size="sm" variant="secondary" disabled={!!orderActionLoading} onClick={() => cancelOrderAction(orderDetail.id)}>
+                          <XCircleIcon className="h-4 w-4 mr-1" /> Cancel order
+                        </Button>
+                      )}
+                      <Button size="sm" variant="secondary" onClick={() => setOrderDetailEditCustomer((v) => !v)}>
+                        <PencilSquareIcon className="h-4 w-4 mr-1" /> Edit order
+                      </Button>
+                      {orderDetail.status === 'on-hold' && (
+                        <Button size="sm" variant="primary" disabled={!!orderActionLoading} onClick={() => sendOrderToProduction(orderDetail.id)}>
+                          Submit to production
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mt-3 pt-3 border-t border-[var(--border-color)]">
+                    Created {orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString() : '—'}
+                  </p>
+                </div>
+              );
+            })()}
+
+            <div className="mb-4 rounded-lg border border-[var(--border-color)] p-3 bg-[var(--bg-card)] text-sm space-y-1">
+              <p className="font-medium text-[var(--text-primary)] mb-2">Order identifiers</p>
+              <p className="text-[var(--text-muted)] break-all">
+                <span className="text-[var(--text-muted)] font-medium">Printify ID:</span>{' '}
+                <span className="text-[var(--text-primary)] font-mono">{orderDetail.id}</span>
+              </p>
+              {orderDetail.external_id != null && String(orderDetail.external_id) !== String(orderDetail.id) && (
+                <p className="text-[var(--text-muted)] break-all">
+                  <span className="font-medium">External / reference:</span>{' '}
+                  <span className="text-[var(--text-primary)]">{String(orderDetail.external_id)}</span>
+                </p>
+              )}
+              {orderDetail.label != null && String(orderDetail.label).trim() !== '' && (
+                <p className="text-[var(--text-muted)] break-all">
+                  <span className="font-medium">Label:</span>{' '}
+                  <span className="text-[var(--text-primary)]">{String(orderDetail.label)}</span>
+                </p>
+              )}
+              {orderDetail.metadata && typeof orderDetail.metadata === 'object' && Object.keys(orderDetail.metadata as object).length > 0 && (
+                <p className="text-[var(--text-muted)] break-words">
+                  <span className="font-medium">Metadata:</span>{' '}
+                  <span className="text-[var(--text-primary)] text-xs">{JSON.stringify(orderDetail.metadata)}</span>
+                </p>
+              )}
+              {orderDetail.shipping_method != null && (
+                <p className="text-[var(--text-muted)]">
+                  <span className="font-medium">Shipping method:</span>{' '}
+                  {SHIPPING_METHOD_LABELS[Number(orderDetail.shipping_method)] ?? `Option ${orderDetail.shipping_method}`}
+                </p>
+              )}
+              {orderDetail.total_tax != null && Number(orderDetail.total_tax) > 0 && (
+                <p className="text-[var(--text-muted)]">
+                  <span className="font-medium">Tax (raw):</span>{' '}
+                  {Number(orderDetail.total_tax) >= 100
+                    ? `$${(Number(orderDetail.total_tax) / 100).toFixed(2)}`
+                    : `$${Number(orderDetail.total_tax).toFixed(2)}`}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left: Product + Timeline + Tracking */}
@@ -1556,7 +1756,20 @@ export default function PrintifyStockClient() {
                               {item.metadata?.sku ? `SKU ${item.metadata.sku}` : ''}
                               {item.metadata?.variant_label ? ` – ${item.metadata.variant_label}` : ''}
                             </p>
-                            <p className="text-[var(--text-muted)]">Printed by Printify · Qty {item.quantity ?? 1}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <p className="text-[var(--text-muted)] text-sm">Qty {item.quantity ?? 1}</p>
+                              {item.status && (
+                                <Badge variant={orderStatusBadgeVariant(String(item.status))} size="sm">
+                                  Item: {item.status}
+                                </Badge>
+                              )}
+                              {item.product_id != null && (
+                                <span className="text-xs text-[var(--text-muted)] font-mono">Product {item.product_id}</span>
+                              )}
+                              {item.variant_id != null && (
+                                <span className="text-xs text-[var(--text-muted)] font-mono">Variant {item.variant_id}</span>
+                              )}
+                            </div>
                           </div>
                         </li>
                       ))}
@@ -1564,24 +1777,23 @@ export default function PrintifyStockClient() {
                   </div>
                 )}
                 <div className="rounded-lg border border-[var(--border-color)] p-4 bg-[var(--bg-card)]">
-                  <h4 className="font-medium text-[var(--text-primary)] mb-3">Order status</h4>
-                  <div className="flex flex-wrap gap-4 items-center mb-3">
-                    {['pending', 'on-hold', 'sending-to-production', 'in-production', 'fulfilled'].map((s) => (
-                      <span
-                        key={s}
-                        className={`text-xs font-medium ${orderDetail.status === s ? 'text-[var(--primary)]' : 'text-[var(--text-muted)]'}`}
-                      >
-                        {s === 'on-hold' ? 'On hold' : s.replace(/-/g, ' ')}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-sm text-[var(--text-muted)]">
-                    Created {orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString() : '—'}
-                    {orderDetail.sent_to_production_at && <> · Sent to production {new Date(orderDetail.sent_to_production_at).toLocaleString()}</>}
-                    {orderDetail.fulfilled_at && <> · Fulfilled {new Date(orderDetail.fulfilled_at).toLocaleString()}</>}
-                  </p>
-                  <p className="text-sm mt-2 text-[var(--text-primary)]">
-                    Production costs: USD {((orderDetail.total_price ?? 0) >= 100 ? (orderDetail.total_price! / 100) : orderDetail.total_price ?? 0).toFixed(2)}
+                  <h4 className="font-medium text-[var(--text-primary)] mb-3">Timeline & costs</h4>
+                  <ul className="text-sm text-[var(--text-muted)] space-y-2 mb-3">
+                    <li>
+                      <span className="font-medium text-[var(--text-primary)]">Created:</span>{' '}
+                      {orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString() : '—'}
+                    </li>
+                    <li>
+                      <span className="font-medium text-[var(--text-primary)]">Sent to production:</span>{' '}
+                      {orderDetail.sent_to_production_at ? new Date(orderDetail.sent_to_production_at).toLocaleString() : 'Not yet'}
+                    </li>
+                    <li>
+                      <span className="font-medium text-[var(--text-primary)]">Fulfilled:</span>{' '}
+                      {orderDetail.fulfilled_at ? new Date(orderDetail.fulfilled_at).toLocaleString() : '—'}
+                    </li>
+                  </ul>
+                  <p className="text-sm text-[var(--text-primary)]">
+                    Production cost: USD {((orderDetail.total_price ?? 0) >= 100 ? (orderDetail.total_price! / 100) : orderDetail.total_price ?? 0).toFixed(2)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-[var(--border-color)] p-4 bg-[var(--bg-card)]">
@@ -1746,8 +1958,13 @@ export default function PrintifyStockClient() {
               setEditSaving(true);
               setEditError(null);
               try {
+                const editShopId = String(detailProduct.shop_id ?? selectedShopId ?? '').trim();
+                if (!editShopId) {
+                  setEditError('Shop ID is missing; select a shop and try again.');
+                  return;
+                }
                 const res = await fetch(
-                  `/api/printify/products/${encodeURIComponent(String(detailProduct.id))}?shop_id=${encodeURIComponent(selectedShopId || String(detailProduct.shop_id) || '')}`,
+                  `/api/printify/products/${encodeURIComponent(String(detailProduct.id))}?shop_id=${encodeURIComponent(editShopId)}`,
                   {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -1759,7 +1976,19 @@ export default function PrintifyStockClient() {
                   setEditError(data?.error ?? 'Update failed');
                   return;
                 }
-                setDetailProduct((prev) => prev ? { ...prev, title: editTitle, description: editDescription } : null);
+                const updated = data?.data;
+                if (updated && typeof updated === 'object') {
+                  setDetailProduct((prev) => (prev ? { ...prev, ...(updated as object) } : null));
+                  setFullProduct((prev) =>
+                    prev && String(prev.id) === String(detailProduct.id) ? { ...prev, ...(updated as object) } : prev
+                  );
+                  setProducts((list) =>
+                    list.map((p) => (String(p.id) === String(detailProduct.id) ? { ...p, ...(updated as object) } : p))
+                  );
+                } else {
+                  setDetailProduct((prev) => (prev ? { ...prev, title: editTitle, description: editDescription } : null));
+                }
+                toast.success('Product updated');
                 setEditModalOpen(false);
               } catch (err) {
                 setEditError('Request failed');

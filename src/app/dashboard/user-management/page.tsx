@@ -3,9 +3,10 @@ import UserManagementClient from './UserManagementClient';
 
 async function fetchUsers(token: string | null) {
   try {
-    const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const externalApiUrl = `${base.replace(/\/$/, '')}/api/admin/users`;
-    console.log(`[fetchUsers] Fetching from external API: ${externalApiUrl}`);
+    const domain = process.env.DOMAIN_NAME?.replace(/\/$/, '');
+    const base = domain || process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+    const externalApiUrl = `${base}/api/admin/users`;
+    console.log(`[fetchUsers] Fetching users from: ${externalApiUrl}`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);

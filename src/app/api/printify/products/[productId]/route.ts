@@ -101,6 +101,33 @@ export async function PUT(
 
   try {
     const url = `${PRINTIFY_BASE}/shops/${encodeURIComponent(shopId)}/products/${encodeURIComponent(productId)}.json`;
+    // Printify expects a full product payload on PUT; merge into current product so title/description updates work reliably.
+    const getRes = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'User-Agent': 'Results-Admin-Dashboard',
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      cache: 'no-store',
+    });
+    const current = await getRes.json().catch(() => null);
+    if (!getRes.ok || !current || typeof current !== 'object') {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            (current as { message?: string })?.message ??
+            (current as { error?: string })?.error ??
+            `Could not load product for update (${getRes.status})`,
+        },
+        { status: getRes.status >= 500 ? 502 : getRes.status || 502 }
+      );
+    }
+    const merged = {
+      ...(current as Record<string, unknown>),
+      ...(body.title !== undefined ? { title: body.title } : {}),
+      ...(body.description !== undefined ? { description: body.description } : {}),
+    };
     const res = await fetch(url, {
       method: 'PUT',
       headers: {
@@ -108,7 +135,7 @@ export async function PUT(
         'User-Agent': 'Results-Admin-Dashboard',
         'Content-Type': 'application/json; charset=utf-8',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(merged),
       cache: 'no-store',
     });
 
