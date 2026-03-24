@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Modal, Button, Input, Select } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
@@ -12,6 +13,7 @@ import {
   XMarkIcon,
   UserIcon,
   MagnifyingGlassIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 
 interface CreateDamageReportModalProps {
@@ -20,6 +22,14 @@ interface CreateDamageReportModalProps {
   onSuccess: () => void;
 }
 
+type CustomerAddress = {
+  street?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  zipCode?: string;
+};
+
 interface Customer {
   id?: string;
   _id: string;
@@ -27,16 +37,93 @@ interface Customer {
   lastName: string;
   email: string;
   phone?: string;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    pincode?: string;
-    zipCode?: string;
+  address?: CustomerAddress;
+  /** When a customer has multiple addresses, use this list; otherwise address is used. */
+  addresses?: CustomerAddress[];
+}
+
+/** User shape from /api/admin/users (same as User Management). */
+interface ApiUserAddress {
+  id?: string;
+  label?: string | null;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  pincode?: string;
+  isDefault?: boolean;
+}
+interface ApiUser {
+  id?: string;
+  _id?: string;
+  fullName?: string | null;
+  email?: string | null;
+  phoneNumber?: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  addresses?: ApiUserAddress[];
+}
+
+/** Map API user to Customer for damage report; supports multiple addresses. */
+function mapApiUserToCustomer(user: ApiUser): Customer {
+  const parts = (user.fullName || user.email || 'Unknown').trim().split(/\s+/);
+  const firstName = parts[0] || 'Unknown';
+  const lastName = parts.slice(1).join(' ') || '';
+  const id = user.id || user._id || '';
+
+  if (user.addresses && user.addresses.length > 0) {
+    const addresses: CustomerAddress[] = user.addresses.map((a) => ({
+      street: a.address ?? undefined,
+      city: a.city ?? undefined,
+      state: a.state ?? undefined,
+      pincode: a.pincode ?? undefined,
+      zipCode: a.pincode ?? undefined,
+    }));
+    const single = user.addresses.find((a) => a.isDefault) || user.addresses[0];
+    return {
+      _id: id,
+      id,
+      firstName,
+      lastName,
+      email: user.email ?? '',
+      phone: user.phoneNumber ?? undefined,
+      address: {
+        street: single?.address,
+        city: single?.city,
+        state: single?.state,
+        pincode: single?.pincode,
+        zipCode: single?.pincode,
+      },
+      addresses,
+    };
+  }
+
+  const hasLegacy = user.address || user.city || user.state || user.pincode;
+  const address: CustomerAddress | undefined = hasLegacy
+    ? {
+        street: user.address ?? undefined,
+        city: user.city ?? undefined,
+        state: user.state ?? undefined,
+        pincode: user.pincode ?? undefined,
+        zipCode: user.pincode ?? undefined,
+      }
+    : undefined;
+
+  return {
+    _id: id,
+    id,
+    firstName,
+    lastName,
+    email: user.email ?? '',
+    phone: user.phoneNumber ?? undefined,
+    address,
   };
 }
 
 export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: CreateDamageReportModalProps) {
+  const router = useRouter();
   const { token, user } = useAuth();
   const cache = useCustomersCache();
   const cachedCustomers = cache?.customers ?? [];
@@ -49,7 +136,18 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  /** When customer has multiple addresses, admin selects one; this is that chosen address. */
+  const [selectedCustomerAddress, setSelectedCustomerAddress] = useState<CustomerAddress | null>(null);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Normalize customer addresses: prefer addresses[] array, fallback to single address
+  const getCustomerAddressList = (customer: Customer | null): CustomerAddress[] => {
+    if (!customer) return [];
+    if (customer.addresses?.length) return customer.addresses;
+    if (customer.address) return [customer.address];
+    return [];
+  };
+  const customerAddressList = getCustomerAddressList(selectedCustomer);
   
   const [formData, setFormData] = useState({
     // Property Address (can be different from customer address)
@@ -104,22 +202,31 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
     if (!token) return;
     setIsLoadingCustomers(true);
     try {
-      const response = await fetch('/api/customers?limit=1000', {
+      const response = await fetch('/api/admin/users?page=1&limit=1000', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         credentials: 'include',
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data?.customers) {
-          setCustomers(data.data.customers);
-        }
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        console.error('Error fetching users for damage report:', err);
+        toast.error(err.error || err.message || 'Failed to load users');
+        return;
+      }
+
+      const data = await response.json();
+      if (data.success && data.data?.users) {
+        const users: ApiUser[] = data.data.users;
+        setCustomers(users.map(mapApiUserToCustomer));
+      } else {
+        setCustomers([]);
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
+      toast.error('Failed to load user list');
     } finally {
       setIsLoadingCustomers(false);
     }
@@ -136,21 +243,42 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
     );
   });
 
+  const applyAddressToForm = (addr: CustomerAddress) => {
+    setFormData((prev) => ({
+      ...prev,
+      propertyStreet: addr.street ?? prev.propertyStreet,
+      propertyCity: addr.city ?? prev.propertyCity,
+      propertyState: addr.state ?? prev.propertyState,
+      propertyZipCode: addr.pincode ?? addr.zipCode ?? prev.propertyZipCode,
+    }));
+  };
+
   const handleCustomerSelect = (customer: Customer) => {
     setSelectedCustomer(customer);
     setCustomerSearchQuery(`${customer.firstName} ${customer.lastName}`);
     setShowCustomerDropdown(false);
-    
-    // Pre-fill property address from customer address if available
-    if (customer.address) {
+
+    const addressList = getCustomerAddressList(customer);
+    if (addressList.length === 1) {
+      setSelectedCustomerAddress(addressList[0]);
+      applyAddressToForm(addressList[0]);
+    } else if (addressList.length > 1) {
+      setSelectedCustomerAddress(null);
       setFormData((prev) => ({
         ...prev,
-        propertyStreet: customer.address?.street || prev.propertyStreet,
-        propertyCity: customer.address?.city || prev.propertyCity,
-        propertyState: customer.address?.state || prev.propertyState,
-        propertyZipCode: customer.address?.pincode || customer.address?.zipCode || prev.propertyZipCode,
+        propertyStreet: '',
+        propertyCity: '',
+        propertyState: '',
+        propertyZipCode: '',
       }));
+    } else {
+      setSelectedCustomerAddress(null);
     }
+  };
+
+  const handleSelectCustomerAddress = (addr: CustomerAddress) => {
+    setSelectedCustomerAddress(addr);
+    applyAddressToForm(addr);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -158,6 +286,10 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
     
     if (!selectedCustomer) {
       toast.error('Please select a customer first');
+      return;
+    }
+    if (customerAddressList.length > 1 && !selectedCustomerAddress) {
+      toast.error('Please select one address for this report from the customer\'s addresses.');
       return;
     }
     if (fundingExceedsEstimated) {
@@ -199,18 +331,19 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         isPrimary: idx === 0,
       }));
 
-      const payload = {
+      const addressForPayload = selectedCustomerAddress ?? (selectedCustomer.address ? selectedCustomer.address : selectedCustomer.addresses?.[0]);
+        const payload = {
         customer: {
           customerId: selectedCustomer.id || selectedCustomer._id || '',
           firstName: selectedCustomer.firstName,
           lastName: selectedCustomer.lastName,
           email: selectedCustomer.email,
           phone: selectedCustomer.phone,
-          address: selectedCustomer.address ? {
-            street: selectedCustomer.address.street,
-            city: selectedCustomer.address.city,
-            state: selectedCustomer.address.state,
-            zipCode: selectedCustomer.address.pincode || selectedCustomer.address.zipCode,
+          address: addressForPayload ? {
+            street: addressForPayload.street,
+            city: addressForPayload.city,
+            state: addressForPayload.state,
+            zipCode: addressForPayload.pincode || addressForPayload.zipCode,
           } : undefined,
         },
         propertyAddress: {
@@ -257,6 +390,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   const resetForm = () => {
     setUploadedImages([]);
     setSelectedCustomer(null);
+    setSelectedCustomerAddress(null);
     setCustomerSearchQuery('');
     setFormData({
       propertyStreet: '',
@@ -379,29 +513,45 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                     <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
                     <p className="text-sm text-[var(--text-muted)] mt-2">Loading customers...</p>
                   </div>
-                ) : filteredCustomers.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-[var(--text-muted)]">
-                    No customers found
-                  </div>
                 ) : (
-                  filteredCustomers.slice(0, 20).map((customer) => (
-                    <button
-                      key={customer.id || customer._id}
-                      type="button"
-                      onClick={() => handleCustomerSelect(customer)}
-                      className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)] last:border-b-0"
-                    >
-                      <div className="font-medium text-[var(--text-primary)]">
-                        {customer.firstName} {customer.lastName}
+                  <>
+                    {filteredCustomers.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-[var(--text-muted)]">
+                        No customers found
                       </div>
-                      <div className="text-sm text-[var(--text-muted)]">{customer.email}</div>
-                      {customer.address?.city && (
-                        <div className="text-xs text-[var(--text-muted)]">
-                          {customer.address.city}, {customer.address.state}
-                        </div>
-                      )}
+                    ) : (
+                      filteredCustomers.slice(0, 20).map((customer) => (
+                        <button
+                          key={customer.id || customer._id}
+                          type="button"
+                          onClick={() => handleCustomerSelect(customer)}
+                          className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)]"
+                        >
+                          <div className="font-medium text-[var(--text-primary)]">
+                            {customer.firstName} {customer.lastName}
+                          </div>
+                          <div className="text-sm text-[var(--text-muted)]">{customer.email}</div>
+                          {customer.address?.city && (
+                            <div className="text-xs text-[var(--text-muted)]">
+                              {customer.address.city}, {customer.address.state}
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomerDropdown(false);
+                        onClose();
+                        router.push('/dashboard/user-management?addUser=1');
+                      }}
+                      className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-t border-[var(--border-color)] flex items-center gap-2 text-[var(--primary-600)] font-medium"
+                    >
+                      <PlusIcon className="w-5 h-5 shrink-0" />
+                   Add new user
                     </button>
-                  ))
+                  </>
                 )}
               </div>
             )}
@@ -425,6 +575,37 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                   </p>
                 </div>
               </div>
+              {customerAddressList.length > 1 && (
+                <div className="mt-4 pt-4 border-t border-green-200 dark:border-green-800">
+                  <h4 className="text-sm font-medium text-[var(--text-primary)] mb-2">
+                    Select address for this report <span className="text-red-500">*</span>
+                  </h4>
+                  <p className="text-xs text-[var(--text-muted)] mb-2">
+                    This customer has multiple addresses. Choose the one where the damage occurred.
+                  </p>
+                  <Select
+                    label=""
+                    value={(() => {
+                      if (!selectedCustomerAddress) return '';
+                      const idx = customerAddressList.indexOf(selectedCustomerAddress);
+                      return idx >= 0 ? String(idx) : '';
+                    })()}
+                    onChange={(value) => {
+                      const idx = parseInt(value, 10);
+                      if (!Number.isNaN(idx) && customerAddressList[idx]) {
+                        handleSelectCustomerAddress(customerAddressList[idx]);
+                      }
+                    }}
+                    options={[
+                      { value: '', label: 'Select an address...' },
+                      ...customerAddressList.map((addr, idx) => {
+                        const label = [addr.street, addr.city, addr.state, addr.pincode || addr.zipCode].filter(Boolean).join(', ') || `Address ${idx + 1}`;
+                        return { value: String(idx), label };
+                      }),
+                    ]}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -704,7 +885,15 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
           <Button variant="secondary" type="button" onClick={() => { resetForm(); onClose(); }}>
             Cancel
           </Button>
-          <Button type="submit" isLoading={isSubmitting} disabled={!selectedCustomer || fundingExceedsEstimated}>
+          <Button
+            type="submit"
+            isLoading={isSubmitting}
+            disabled={
+              !selectedCustomer ||
+              fundingExceedsEstimated ||
+              (customerAddressList.length > 1 && !selectedCustomerAddress)
+            }
+          >
             Submit Report
           </Button>
         </div>

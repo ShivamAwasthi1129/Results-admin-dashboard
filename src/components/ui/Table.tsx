@@ -77,7 +77,7 @@ function Table<T extends Record<string, any>>({
                     style={{ 
                       width: column.width ??
                              (column.key === 'image' ? '60px' : 
-                             column.key === 'name' ? '30%' :
+                             column.key === 'name' ? '19%' :
                              column.key === 'category' ? '15%' :
                              column.key === 'price' ? '15%' :
                              column.key === 'stock' ? '12%' :

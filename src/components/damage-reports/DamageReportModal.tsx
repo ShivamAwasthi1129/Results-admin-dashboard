@@ -376,6 +376,33 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
       });
 
       if (response.ok) {
+        // When an adjuster is assigned, update the adjuster's assignedReports so the Adjuster module shows this report
+        const adjusterDbId = formData.assignedAdjuster?.adjusterDbId ?? (formData.assignedAdjuster as any)?.adjusterDbId;
+        if (adjusterDbId && token) {
+          try {
+            const assignRes = await fetch('/api/adjusters/assign-report', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                adjusterId: adjusterDbId,
+                reportId: report.id,
+                reportNumber: report.reportNumber || report.id,
+                customerId: report.customer?.customerId,
+              }),
+            });
+            const assignData = await assignRes.json().catch(() => ({}));
+            if (!assignRes.ok) {
+              console.warn('Adjuster assign-report failed:', assignData);
+              toast.warn('Report saved but adjuster assignment list may not have updated.');
+            }
+          } catch (err) {
+            console.warn('Failed to update adjuster assigned reports:', err);
+            toast.warn('Report saved but adjuster assignment list may not have updated.');
+          }
+        }
         toast.success('Damage report updated successfully');
         setIsEditing(false);
         onUpdate();
@@ -451,7 +478,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
     setFormData({ ...formData, workflowSteps: updatedSteps, currentStep: newCurrentStep });
   };
 
-  const handleAssignAdjuster = (adjuster: { id: string; adjusterId: string; firstName: string; lastName: string; email: string; phone?: string; companyName?: string }) => {
+  const handleAssignAdjuster = async (adjuster: { id: string; adjusterId: string; firstName: string; lastName: string; email: string; phone?: string; companyName?: string }) => {
     const fullName = `${adjuster.firstName} ${adjuster.lastName}`;
     const updatedSteps = [...(formData.workflowSteps || [])];
     const step3Index = updatedSteps.findIndex(s => s.stepNumber === 3);
@@ -495,6 +522,35 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
       currentStep: 4,
     });
     setShowAssignAdjuster(false);
+
+    // Update the adjuster's assignedReports immediately so the Adjuster module shows this report
+    if (token && report?.id) {
+      try {
+        const assignRes = await fetch('/api/adjusters/assign-report', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            adjusterId: adjuster.id,
+            reportId: report.id,
+            reportNumber: report.reportNumber || report.id,
+            customerId: report.customer?.customerId,
+          }),
+        });
+        const assignData = await assignRes.json().catch(() => ({}));
+        if (assignRes.ok) {
+          toast.success('Adjuster assigned. They will see this report in their Adjuster module.');
+        } else {
+          console.warn('Assign-report failed:', assignData);
+          toast.warn('Adjuster selected here, but their assignment list may not have updated. Try saving the report.');
+        }
+      } catch (err) {
+        console.warn('Failed to update adjuster assigned reports:', err);
+        toast.warn('Adjuster selected here, but their assignment list may not have updated. Save the report to retry.');
+      }
+    }
   };
 
   const inspectionBudget = formData.workflowSteps?.find(s => s.stepNumber === 4)?.stepData?.inspectionBudget || [];
@@ -942,9 +998,9 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
 
             {/* Assigned Adjuster */}
             {formData.assignedAdjuster && (
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
-                <h3 className="font-semibold text-green-800 dark:text-green-300 mb-2 flex items-center gap-2">
-                  <CheckCircleIcon className="w-5 h-5" />
+              <div className="bg-[var(--bg-card)] rounded-lg p-4 border border-[var(--border-color)]">
+                <h3 className="font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
+                  <CheckCircleIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   Assigned Adjuster
                 </h3>
                 <p className="font-medium text-[var(--text-primary)]">{formData.assignedAdjuster.fullName}</p>
@@ -1324,8 +1380,8 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
                             <div className="mt-3 pt-3 border-t border-[var(--border-color)]">
                               <p className="text-xs font-medium text-[var(--text-secondary)] mb-2">Assigned Adjuster</p>
                               {formData.assignedAdjuster ? (
-                                <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                                  <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center text-green-600 dark:text-green-300 font-semibold">
+                                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">
+                                  <div className="w-10 h-10 rounded-full bg-[var(--bg-input)] flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-semibold border border-[var(--border-color)]">
                                     {formData.assignedAdjuster.fullName?.split(' ').map(n => n[0]).join('') || 'A'}
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -1336,7 +1392,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
                                       {formData.assignedAdjuster.companyName && <span className="flex items-center gap-1"><BuildingOfficeIcon className="w-3 h-3" />{formData.assignedAdjuster.companyName}</span>}
                                     </div>
                                     {formData.assignedAdjuster.assignedDate && (
-                                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">Assigned: {formatDate(formData.assignedAdjuster.assignedDate)}</p>
+                                      <p className="text-xs text-[var(--text-muted)] mt-1">Assigned: {formatDate(formData.assignedAdjuster.assignedDate)}</p>
                                     )}
                                   </div>
                                   {isEditing && (
@@ -1554,11 +1610,11 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
                           {/* Step 7: Completed */}
                           {isStep7 && step.status === 'completed' && (
                             <div className="mt-3 pt-3 border-t border-[var(--border-color)]">
-                              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                                <CheckCircleIcon className="w-6 h-6 text-green-500" />
+                              <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">
+                                <CheckCircleIcon className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                 <div>
-                                  <p className="font-medium text-green-700 dark:text-green-300">All work completed!</p>
-                                  {step.completedAt && <p className="text-xs text-green-600 dark:text-green-400">Completed on: {formatDate(step.completedAt)}</p>}
+                                  <p className="font-medium text-[var(--text-primary)]">All work completed!</p>
+                                  {step.completedAt && <p className="text-xs text-[var(--text-muted)]">Completed on: {formatDate(step.completedAt)}</p>}
                                 </div>
                               </div>
                             </div>

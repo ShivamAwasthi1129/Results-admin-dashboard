@@ -13,7 +13,8 @@
     "migrate:products": "tsx scripts/migrate-products.ts",
     "add-media:products": "tsx scripts/add-media-to-products.ts",
     "update-products:real-media": "tsx scripts/update-products-with-real-media.ts",
-    "test-and-update-3d-models": "tsx scripts/test-and-update-3d-models.ts"
+    "test-and-update-3d-models": "tsx scripts/test-and-update-3d-models.ts",
+    "test:merged-live-disasters": "tsx scripts/test-merged-live-disasters.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

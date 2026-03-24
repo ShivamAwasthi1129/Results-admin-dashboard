@@ -1,8 +1,48 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+
+const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
+const MAX_WAYPOINTS_PER_REQUEST = 50;
+
+/** Fetch road-following route between points from OSRM; returns [lat, lng][] or null on failure. */
+async function fetchRoadRoute(points: Array<{ latitude: number; longitude: number }>): Promise<[number, number][] | null> {
+  if (points.length < 2) return null;
+  const coords = points.map((p) => `${p.longitude},${p.latitude}`).join(';');
+  const url = `${OSRM_BASE}/${coords}?overview=full&geometries=geojson`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const coordsList = data?.routes?.[0]?.geometry?.coordinates;
+    if (!Array.isArray(coordsList) || coordsList.length === 0) return null;
+    return coordsList.map(([lng, lat]: [number, number]) => [lat, lng]);
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch road route for many points by chunking waypoints and merging geometries. */
+async function fetchRoadRouteChunked(points: Array<{ latitude: number; longitude: number }>): Promise<[number, number][] | null> {
+  if (points.length < 2) return null;
+  if (points.length <= MAX_WAYPOINTS_PER_REQUEST) return fetchRoadRoute(points);
+  const merged: [number, number][] = [];
+  const step = MAX_WAYPOINTS_PER_REQUEST - 1;
+  for (let start = 0; start < points.length; start += step) {
+    const end = Math.min(start + MAX_WAYPOINTS_PER_REQUEST, points.length);
+    const chunk = points.slice(start, end);
+    const segment = await fetchRoadRoute(chunk);
+    if (!segment || segment.length === 0) {
+      if (merged.length === 0) return null;
+      break;
+    }
+    if (merged.length > 0) segment.shift();
+    merged.push(...segment);
+  }
+  return merged.length > 0 ? merged : null;
+}
 
 // Add custom tooltip styles inline
 if (typeof document !== 'undefined') {
@@ -17,17 +57,17 @@ if (typeof document !== 'undefined') {
       margin-top: -15px !important;
       max-width: 320px !important;
       font-family: system-ui, -apple-system, sans-serif !important;
-      z-index: 99999 !important;
+      z-index: 1000000 !important;
       position: relative !important;
     }
     .leaflet-tooltip.custom-location-tooltip {
-      z-index: 99999 !important;
+      z-index: 1000000 !important;
     }
     .leaflet-tooltip-top.custom-location-tooltip::before,
     .leaflet-tooltip-bottom.custom-location-tooltip::before,
     .leaflet-tooltip-left.custom-location-tooltip::before,
     .leaflet-tooltip-right.custom-location-tooltip::before {
-      z-index: 99998 !important;
+      z-index: 999999 !important;
     }
     .custom-location-tooltip::before {
       border-top-color: white !important;
@@ -103,6 +143,7 @@ export default function TrackingMap({
   const polylineRef = useRef<L.Polyline | null>(null);
   const pathStartMarkerRef = useRef<L.Marker | null>(null);
   const pathEndMarkerRef = useRef<L.Marker | null>(null);
+  const [routedPath, setRoutedPath] = useState<L.LatLngExpression[] | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -114,6 +155,12 @@ export default function TrackingMap({
       zoomControl: true,
       attributionControl: false,
     });
+
+    // Ensure tooltip pane is above map tiles so user cards show on hover
+    const panes = mapRef.current.getPanes();
+    if (panes?.tooltipPane) {
+      (panes.tooltipPane as HTMLElement).style.zIndex = '1000000';
+    }
 
     // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -128,6 +175,29 @@ export default function TrackingMap({
       }
     };
   }, []);
+
+  // Fetch road-following route from OSRM when path points change
+  useEffect(() => {
+    if (!pathPoints || pathPoints.length < 2) {
+      setRoutedPath(null);
+      return;
+    }
+    const validPath = pathPoints.filter(
+      (p) => typeof p.latitude === 'number' && !isNaN(p.latitude) && typeof p.longitude === 'number' && !isNaN(p.longitude)
+    );
+    if (validPath.length < 2) {
+      setRoutedPath(null);
+      return;
+    }
+    const chronological = [...validPath].reverse();
+    let cancelled = false;
+    setRoutedPath(null);
+    (async () => {
+      const route = await fetchRoadRouteChunked(chronological);
+      if (!cancelled && route && route.length > 0) setRoutedPath(route);
+    })();
+    return () => { cancelled = true; };
+  }, [pathPoints]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -158,13 +228,15 @@ export default function TrackingMap({
 
     const bounds: L.LatLngExpression[] = [];
 
-    // Draw path (e.g. tracking history) – API returns newest first, so reverse for chronological trail
+    // Draw path (e.g. tracking history) – use road-following route when available, else straight line
     if (pathPoints && pathPoints.length > 0) {
       const validPath = pathPoints.filter(
         (p) => typeof p.latitude === 'number' && !isNaN(p.latitude) && typeof p.longitude === 'number' && !isNaN(p.longitude)
       );
       const chronological = [...validPath].reverse();
-      const latLngs: L.LatLngExpression[] = chronological.map((p) => [p.latitude, p.longitude]);
+      const straightLatLngs: L.LatLngExpression[] = chronological.map((p) => [p.latitude, p.longitude]);
+      const latLngs: L.LatLngExpression[] =
+        routedPath && routedPath.length > 0 ? routedPath : straightLatLngs;
       chronological.forEach((p) => bounds.push([p.latitude, p.longitude]));
 
       const polyline = L.polyline(latLngs, {
@@ -484,7 +556,7 @@ export default function TrackingMap({
     } else {
       console.warn('[TrackingMap] No valid bounds to fit - no markers added');
     }
-  }, [locations, geofences, pathPoints, onLocationClick]);
+  }, [locations, geofences, pathPoints, routedPath, onLocationClick]);
 
   // Pan to selected location
   useEffect(() => {

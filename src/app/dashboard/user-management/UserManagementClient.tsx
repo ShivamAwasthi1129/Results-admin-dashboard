@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout';
 import { useCustomersCache } from '@/context/CustomersCacheContext';
 import { Card, Badge, Button, Input, Select, Modal } from '@/components/ui';
+import { PhoneInput } from '@/components/ui/PhoneInput';
 import { toast } from 'react-toastify';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -29,6 +31,8 @@ import {
   MapIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  PlusIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 import dynamic from 'next/dynamic';
 
@@ -141,8 +145,10 @@ function mapUserToCachedCustomer(user: User): import('@/context/CustomersCacheCo
 }
 
 export default function UserManagementClient({ initialData }: UserManagementClientProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const cache = useCustomersCache();
-  const setCustomersCache = cache?.setCustomers ?? (() => {});
+  const setCustomersCache = cache?.setCustomers ?? (() => { });
   const { token: authToken } = useAuth();
   const token = authToken ?? getAuthToken();
 
@@ -162,6 +168,28 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const [mapUser, setMapUser] = useState<User | null>(null);
   const [showUserPath, setShowUserPath] = useState(false);
   const [showAllPaths, setShowAllPaths] = useState(false);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [isSubmittingAddUser, setIsSubmittingAddUser] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [addUserForm, setAddUserForm] = useState({
+    phoneNumber: '',
+    email: '',
+    fullName: '',
+    password: '',
+    username: '',
+    role: 'MEMBER',
+    gender: '',
+    dateOfBirth: '',
+    bloodGroup: '',
+    address: '',
+    city: '',
+    state: '',
+    country: 'India',
+    pincode: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    profilePictureUrl: '',
+  });
 
   const fetchUsersPage = async (pageNum: number) => {
     const t = token ?? getAuthToken();
@@ -212,7 +240,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   };
 
   const fetchUsers = () => fetchUsersPage(1);
-  
+
   // Fetch user locations from tracking API (send auth token in header)
   const fetchUserLocations = async () => {
     const t = token ?? getAuthToken();
@@ -264,6 +292,14 @@ export default function UserManagementClient({ initialData }: UserManagementClie
     }
     fetchUserLocations();
   }, [token]);
+
+  // Open Add New User modal when redirected from Create Damage Report with ?addUser=1
+  useEffect(() => {
+    if (searchParams.get('addUser') === '1') {
+      setShowAddUserModal(true);
+      router.replace('/dashboard/user-management', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
@@ -318,6 +354,50 @@ export default function UserManagementClient({ initialData }: UserManagementClie
     setViewMode('map');
   };
 
+  const handleDeleteUser = async (user: User) => {
+    const userId = user.id || (user as any)._id;
+    if (!userId) return;
+    if (!window.confirm(`Are you sure you want to delete "${user.fullName || user.email || user.phoneNumber || 'this user'}"? This action cannot be undone.`)) return;
+    const t = token ?? getAuthToken();
+    if (!t) {
+      toast.error('Please log in to delete a user');
+      return;
+    }
+    const base = (process.env.NEXT_PUBLIC_DOMAIN_NAME || '').replace(/\/$/, '');
+    if (!base) {
+      toast.error('Backend URL not configured (NEXT_PUBLIC_DOMAIN_NAME)');
+      return;
+    }
+    const url = `${base}/api/admin/users-mgmt/delete-app-user/${userId}`;
+    setDeletingUserId(userId);
+    try {
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${t}`,
+        },
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && (data.success !== false)) {
+        toast.success(data.message || 'User deleted successfully');
+        if (selectedUser?.id === userId || (selectedUser as any)?._id === userId) {
+          setSelectedUser(null);
+          setIsViewModalOpen(false);
+        }
+        fetchUsers();
+      } else {
+        toast.error(data.message || data.error || 'Failed to delete user');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete user');
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -350,6 +430,87 @@ export default function UserManagementClient({ initialData }: UserManagementClie
         return 'secondary';
       default:
         return 'info';
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = token ?? getAuthToken();
+    if (!t) {
+      toast.error('Please log in to create a user');
+      return;
+    }
+    const { phoneNumber, email, fullName, password, username, role, gender, dateOfBirth, bloodGroup, address, city, state, country, pincode, emergencyContactName, emergencyContactPhone, profilePictureUrl } = addUserForm;
+    if (!phoneNumber?.trim() && !email?.trim()) {
+      toast.error('At least one of phone number or email is required');
+      return;
+    }
+    if (password && password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    setIsSubmittingAddUser(true);
+    try {
+      const body: Record<string, string | undefined> = {
+        phoneNumber: phoneNumber.trim() || undefined,
+        email: email.trim() || undefined,
+        fullName: fullName.trim() || undefined,
+        password: password || undefined,
+        username: username.trim() || undefined,
+        role: role || undefined,
+        gender: gender || undefined,
+        dateOfBirth: dateOfBirth || undefined,
+        bloodGroup: bloodGroup.trim() || undefined,
+        address: address.trim() || undefined,
+        city: city.trim() || undefined,
+        state: state.trim() || undefined,
+        country: country.trim() || undefined,
+        pincode: pincode.trim() || undefined,
+        emergencyContactName: emergencyContactName.trim() || undefined,
+        emergencyContactPhone: emergencyContactPhone.trim() || undefined,
+        profilePictureUrl: profilePictureUrl.trim() || undefined,
+      };
+      const res = await fetch('/api/users/create-app-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${t}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        toast.success(data.message || 'User created successfully');
+        setShowAddUserModal(false);
+        setAddUserForm({
+          phoneNumber: '',
+          email: '',
+          fullName: '',
+          password: '',
+          username: '',
+          role: 'MEMBER',
+          gender: '',
+          dateOfBirth: '',
+          bloodGroup: '',
+          address: '',
+          city: '',
+          state: '',
+          country: 'India',
+          pincode: '',
+          emergencyContactName: '',
+          emergencyContactPhone: '',
+          profilePictureUrl: '',
+        });
+        fetchUsers();
+      } else {
+        toast.error(data.message || data.error || 'Failed to create user');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to create user');
+    } finally {
+      setIsSubmittingAddUser(false);
     }
   };
 
@@ -397,108 +558,118 @@ export default function UserManagementClient({ initialData }: UserManagementClie
       </div>
 
       {/* Filters & Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6 items-center">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6 items-center">
 
-{/* Search */}
-<div className="w-full">
-  <Input
-    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-    placeholder="Search by name, email, username, or phone..."
-    value={searchQuery}
-    onChange={(e) => setSearchQuery(e.target.value)}
-  />
-</div>
+        {/* Search */}
+        <div className="w-full">
+          <Input
+            icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+            placeholder="Search by name, email, username, or phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
 
-{/* Role Filter */}
-<div className="w-full">
-  <Select
-    options={[
-      { value: 'all', label: 'All Roles' },
-      ...uniqueRoles.map((role) => ({
-        value: role,
-        label: role.replace('_', ' '),
-      })),
-    ]}
-    value={roleFilter}
-    onChange={setRoleFilter}
-    icon={<FunnelIcon className="w-5 h-5" />}
-  />
-</div>
+        {/* Role Filter */}
+        <div className="w-full">
+          <Select
+            options={[
+              { value: 'all', label: 'All Roles' },
+              ...uniqueRoles.map((role) => ({
+                value: role,
+                label: role.replace('_', ' '),
+              })),
+            ]}
+            value={roleFilter}
+            onChange={setRoleFilter}
+            icon={<FunnelIcon className="w-5 h-5" />}
+          />
+        </div>
 
-{/* Status Filter */}
-<div className="w-full">
-  <Select
-    options={[
-      { value: 'all', label: 'All Status' },
-      { value: 'active', label: 'Active' },
-      { value: 'inactive', label: 'Inactive' },
-      { value: 'deleted', label: 'Deleted' },
-    ]}
-    value={statusFilter}
-    onChange={setStatusFilter}
-    icon={<FunnelIcon className="w-5 h-5" />}
-  />
-</div>
+        {/* Status Filter */}
+        <div className="w-full">
+          <Select
+            options={[
+              { value: 'all', label: 'All Status' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' },
+              { value: 'deleted', label: 'Deleted' },
+            ]}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            icon={<FunnelIcon className="w-5 h-5" />}
+          />
+        </div>
 
-{/* View Mode Toggle */}
-<div className="w-full">
-  <div className="flex items-center border border-[var(--border-color)] rounded-lg overflow-hidden w-full">
-    <button
-      onClick={() => setViewMode('table')}
-      className={`flex-1 p-2 transition-colors ${
-        viewMode === 'table'
-          ? 'bg-[var(--primary-500)] text-white'
-          : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
-      }`}
-      title="Table View"
-    >
-      <TableCellsIcon className="w-4 h-4 mx-auto" />
-    </button>
+        {/* View Mode Toggle */}
+        <div className="w-full">
+          <div className="flex items-center border border-[var(--border-color)] rounded-lg overflow-hidden w-full">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex-1 p-2 transition-colors ${viewMode === 'table'
+                  ? 'bg-[var(--primary-500)] text-white'
+                  : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+                }`}
+              title="Table View"
+            >
+              <TableCellsIcon className="w-4 h-4 mx-auto" />
+            </button>
 
-    <button
-      onClick={() => setViewMode('grid')}
-      className={`flex-1 p-2 transition-colors ${
-        viewMode === 'grid'
-          ? 'bg-[var(--primary-500)] text-white'
-          : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
-      }`}
-      title="Grid View"
-    >
-      <Squares2X2Icon className="w-4 h-4 mx-auto" />
-    </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`flex-1 p-2 transition-colors ${viewMode === 'grid'
+                  ? 'bg-[var(--primary-500)] text-white'
+                  : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+                }`}
+              title="Grid View"
+            >
+              <Squares2X2Icon className="w-4 h-4 mx-auto" />
+            </button>
 
-    <button
-      onClick={() => setViewMode('map')}
-      className={`flex-1 p-2 transition-colors ${
-        viewMode === 'map'
-          ? 'bg-[var(--primary-500)] text-white'
-          : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
-      }`}
-      title="Map View"
-    >
-      <MapIcon className="w-4 h-4 mx-auto" />
-    </button>
-  </div>
-</div>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`flex-1 p-2 transition-colors ${viewMode === 'map'
+                  ? 'bg-[var(--primary-500)] text-white'
+                  : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+                }`}
+              title="Map View"
+            >
+              <MapIcon className="w-4 h-4 mx-auto" />
+            </button>
+          </div>
+        </div>
 
-{/* Refresh */}
-<div className="w-full">
-  <Button
-    variant="secondary"
-    onClick={fetchUsers}
-    leftIcon={
-      <ArrowPathIcon
-        className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
-      />
-    }
-    disabled={isLoading}
-    className="w-full"
-  >
-    Refresh
-  </Button>
-</div>
+        {/* Refresh */}
+        <div className="w-full">
+          <Button
+            variant="secondary"
+            onClick={fetchUsers}
+            leftIcon={
+              <ArrowPathIcon
+                className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
+              />
+            }
+            disabled={isLoading}
+            className="w-full"
+          >
+            Refresh
+          </Button>
 
-</div>
+        </div>
+        {/* Add New User */}
+        <div className="w-full">
+          <Button
+            variant="primary"
+            onClick={() => setShowAddUserModal(true)}
+            leftIcon={<PlusIcon className="w-4 h-4" />}
+            className="w-full"
+          >
+            Add New User
+          </Button>
+        </div>
+
+
+      </div>
 
 
       {/* Users Display */}
@@ -772,6 +943,19 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                           >
                             View
                           </Button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteUser(user); }}
+                            disabled={deletingUserId === (user.id || (user as any)._id)}
+                            className="p-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete user"
+                          >
+                            {deletingUserId === (user.id || (user as any)._id) ? (
+                              <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <TrashIcon className="w-4 h-4" />
+                            )}
+                          </button>
                           {/* <Button
                             variant="secondary"
                             size="sm"
@@ -971,6 +1155,19 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                       >
                         View
                       </Button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteUser(user); }}
+                        disabled={deletingUserId === (user.id || (user as any)._id)}
+                        className="p-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete user"
+                      >
+                        {deletingUserId === (user.id || (user as any)._id) ? (
+                          <ArrowPathIcon className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <TrashIcon className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                       <Button
                         variant="secondary"
                         size="sm"
@@ -1163,9 +1360,9 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                   </div>
                 )}
                 <div className="mt-3 border border-[var(--border-color)] rounded-lg overflow-hidden">
-                  <DynamicUserMap 
-                    user={selectedUser} 
-                    showPath={false} 
+                  <DynamicUserMap
+                    user={selectedUser}
+                    showPath={false}
                     height="300px"
                     userLocation={selectedUser ? userLocations[selectedUser.id] : undefined}
                   />
@@ -1432,6 +1629,159 @@ export default function UserManagementClient({ initialData }: UserManagementClie
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Add New User Modal */}
+      <Modal
+        isOpen={showAddUserModal}
+        onClose={() => setShowAddUserModal(false)}
+        title="Add New User"
+        subtitle="Register a new app user. At least one of phone or email is required."
+        size="lg"
+      >
+        <form onSubmit={handleCreateUser} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <PhoneInput
+              label="Phone Number"
+              value={addUserForm.phoneNumber}
+              onChange={(value) => setAddUserForm((f) => ({ ...f, phoneNumber: value || '' }))}
+              placeholder="+911234567890"
+            />
+            <Input
+              label="Email"
+              type="email"
+              placeholder="user@example.com"
+              value={addUserForm.email}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, email: e.target.value }))}
+            />
+          </div>
+          <p className="text-xs text-[var(--text-muted)]">At least one of phone number or email is required.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Full Name"
+              placeholder="John Doe"
+              value={addUserForm.fullName}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, fullName: e.target.value }))}
+            />
+            <Input
+              label="Username"
+              placeholder="Unique username (optional)"
+              value={addUserForm.username}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, username: e.target.value }))}
+            />
+          </div>
+
+          <Input
+            label="Password"
+            type="password"
+            placeholder="Min 6 characters (optional)"
+            value={addUserForm.password}
+            onChange={(e) => setAddUserForm((f) => ({ ...f, password: e.target.value }))}
+            minLength={6}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Role"
+              value={addUserForm.role}
+              onChange={(v) => setAddUserForm((f) => ({ ...f, role: v }))}
+              options={[
+                { value: 'MEMBER', label: 'Member' },
+                { value: 'ADMIN', label: 'Admin' },
+                { value: 'SUPER_ADMIN', label: 'Super Admin' },
+                { value: 'GUEST', label: 'Guest' },
+              ]}
+            />
+            <Select
+              label="Gender"
+              value={addUserForm.gender}
+              onChange={(v) => setAddUserForm((f) => ({ ...f, gender: v }))}
+              options={[
+                { value: '', label: 'Select (optional)' },
+                { value: 'male', label: 'Male' },
+                { value: 'female', label: 'Female' },
+                { value: 'other', label: 'Other' },
+              ]}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Date of Birth"
+              type="date"
+              value={addUserForm.dateOfBirth}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+            />
+            <Input
+              label="Blood Group"
+              placeholder="e.g. O+, A-"
+              value={addUserForm.bloodGroup}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, bloodGroup: e.target.value }))}
+            />
+          </div>
+
+          <Input
+            label="Address"
+            placeholder="Street address"
+            value={addUserForm.address}
+            onChange={(e) => setAddUserForm((f) => ({ ...f, address: e.target.value }))}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Input
+              label="City"
+              value={addUserForm.city}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, city: e.target.value }))}
+            />
+            <Input
+              label="State"
+              value={addUserForm.state}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, state: e.target.value }))}
+            />
+            <Input
+              label="Pincode / ZIP"
+              value={addUserForm.pincode}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, pincode: e.target.value }))}
+            />
+          </div>
+
+          <Input
+            label="Country"
+            value={addUserForm.country}
+            onChange={(e) => setAddUserForm((f) => ({ ...f, country: e.target.value }))}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Emergency Contact Name"
+              value={addUserForm.emergencyContactName}
+              onChange={(e) => setAddUserForm((f) => ({ ...f, emergencyContactName: e.target.value }))}
+            />
+            <PhoneInput
+              label="Emergency Contact Phone"
+              value={addUserForm.emergencyContactPhone}
+              onChange={(value) => setAddUserForm((f) => ({ ...f, emergencyContactPhone: value || '' }))}
+            />
+          </div>
+
+          <Input
+            label="Profile Picture URL"
+            type="url"
+            placeholder="https://..."
+            value={addUserForm.profilePictureUrl}
+            onChange={(e) => setAddUserForm((f) => ({ ...f, profilePictureUrl: e.target.value }))}
+          />
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-[var(--border-color)]">
+            <Button type="button" variant="secondary" onClick={() => setShowAddUserModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" isLoading={isSubmittingAddUser} disabled={isSubmittingAddUser}>
+              Create User
+            </Button>
+          </div>
+        </form>
       </Modal>
     </DashboardLayout>
   );

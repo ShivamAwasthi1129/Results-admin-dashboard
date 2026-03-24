@@ -32,6 +32,8 @@ import {
   ShoppingCartIcon,
   DocumentTextIcon,
   ClipboardDocumentCheckIcon,
+  MegaphoneIcon,
+  ArchiveBoxIcon,
 } from '@heroicons/react/24/outline';
 import { Avatar } from '@/components/ui';
 import ResultsLogo from '@/Results_logo.png';
@@ -77,9 +79,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Device Management', href: '/dashboard/devices', icon: DevicePhoneMobileIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Incident Management', href: '/dashboard/incidents', icon: ClipboardDocumentListIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
     { name: 'Damage Reports', href: '/dashboard/damage-reports', icon: DocumentTextIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'Broadcast', href: '/dashboard/broadcast', icon: MegaphoneIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Adjusters', href: '/dashboard/adjusters', icon: ClipboardDocumentCheckIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'Printify Stock', href: '/dashboard/printify-stock', icon: ArchiveBoxIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCartIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },

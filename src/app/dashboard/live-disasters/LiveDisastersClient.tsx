@@ -10,9 +10,6 @@ import dynamic from 'next/dynamic';
 import {
   GlobeAltIcon,
   MapPinIcon,
-  FireIcon,
-  CloudIcon,
-  SunIcon,
   ArrowTopRightOnSquareIcon,
   ClockIcon,
   SignalIcon,
@@ -33,9 +30,27 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   CheckCircleIcon,
+  CloudIcon,
+  FireIcon,
   BoltIcon,
+  SunIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
+
+const typeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  cyclone: CloudIcon,
+  flood: CloudIcon,
+  floods: CloudIcon,
+  wildfire: FireIcon,
+  snow_storm: CloudIcon,
+  power_outage: BoltIcon,
+  earthquake: SunIcon,
+  volcanic: FireIcon,
+  landslide: SignalIcon,
+  drought: SunIcon,
+  iceberg: CloudIcon,
+  default: MapPinIcon,
+};
 const USA_STATES = [
   'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
   'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho',
@@ -49,11 +64,17 @@ const USA_STATES = [
   'West Virginia', 'Wisconsin', 'Wyoming', 'District of Columbia',
 ];
 import { MultiSelect } from '@/components/ui/MultiSelect';
+import { featureCollectionToDisasters } from '@/lib/geoDisasters';
 
 // Dynamic import for map to avoid SSR issues
 const LiveDisasterMap = dynamic(
   () => import('@/components/dashboard/LiveDisasterMap'),
   { ssr: false, loading: () => <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" /></div> }
+);
+
+const LiveDisastersMappingLoader = dynamic(
+  () => import('@/components/dashboard/LiveDisastersMappingLoader').then((m) => ({ default: m.LiveDisastersMappingLoader })),
+  { ssr: false }
 );
 
 interface LiveDisaster {
@@ -74,20 +95,11 @@ interface LiveDisaster {
   magnitudeUnit?: string;
   date: string;
   source: string;
+  url?: string;
   isLive: boolean;
+  /** GeoJSON Polygon/MultiPolygon for map rendering */
+  geometry?: { type: string; coordinates: number[] | number[][] | number[][][] | number[][][][] };
 }
-
-const typeIcons: Record<string, any> = {
-  wildfire: FireIcon,
-  cyclone: CloudIcon,
-  flood: CloudIcon,
-  earthquake: BoltIcon,
-  volcanic: FireIcon,
-  iceberg: CloudIcon,
-  drought: SunIcon,
-  landslide: MapPinIcon,
-  default: MapPinIcon,
-};
 
 const severityColors: Record<string, { bg: string; text: string; border: string }> = {
   low: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
@@ -159,6 +171,8 @@ export default function LiveDisastersClient() {
   const [isLoadingDatabase, setIsLoadingDatabase] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedDisaster, setSelectedDisaster] = useState<any | null>(null);
+  const [expandedListDisasterId, setExpandedListDisasterId] = useState<string | null>(null);
+  const [selectedListKey, setSelectedListKey] = useState<string | null>(null);
   const [filterType, setFilterType] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
@@ -232,13 +246,15 @@ export default function LiveDisastersClient() {
   const fetchLiveDisasters = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/live-disasters');
+      const response = await fetch(`/api/merged-live-disasters?t=${Date.now()}`);
       const data = await response.json();
       if (data.success) {
         const allLiveFromApi = data.data.disasters || [];
         setLiveDisasters(allLiveFromApi);
         updateCache('disasters', allLiveFromApi);
-        setLastUpdated(new Date(data.data.metadata.lastUpdated));
+        if (data.data.metadata?.lastUpdated) {
+          setLastUpdated(new Date(data.data.metadata.lastUpdated));
+        }
       }
     } catch (error) {
       console.error('Failed to fetch live disasters:', error);
@@ -247,18 +263,17 @@ export default function LiveDisastersClient() {
     }
   };
 
-  // Fetch NASA EONET disasters for the dropdown
+  // Fetch live disasters from microservice for the dropdown (same source as map)
   const fetchNasaDisasters = async () => {
     setIsLoadingNasaDisasters(true);
     try {
-      const response = await fetch('/api/live-disasters');
+      const response = await fetch('/api/merged-live-disasters');
       const data = await response.json();
       if (data.success) {
-        // Get all disasters (not just USA) for selection
         setNasaDisasters(data.data.disasters || []);
       }
     } catch (error) {
-      console.error('Failed to fetch NASA disasters:', error);
+      console.error('Failed to fetch live disasters:', error);
     } finally {
       setIsLoadingNasaDisasters(false);
     }
@@ -282,57 +297,7 @@ export default function LiveDisastersClient() {
         // The map will filter to USA, but the list shows all
         const allDisastersFromApi = data.data.disasters || [];
         setDatabaseDisasters(allDisastersFromApi);
-
-        // Transform ALL database disasters for map (worldwide)
-        const transformedDatabaseDisasters = allDisastersFromApi.map((d: ManagedDisaster) => {
-          // Handle coordinates - database stores as [lng, lat] (GeoJSON format)
-          let coordinates: { lat: number; lng: number } | undefined;
-          if (d.location?.coordinates) {
-            if (Array.isArray(d.location.coordinates) && d.location.coordinates.length === 2) {
-              // GeoJSON format: [lng, lat]
-              coordinates = {
-                lat: d.location.coordinates[1],
-                lng: d.location.coordinates[0]
-              };
-            } else if (typeof d.location.coordinates === 'object' && 'lat' in d.location.coordinates) {
-              // Object format: {lat, lng}
-              coordinates = d.location.coordinates as { lat: number; lng: number };
-            }
-          }
-
-          return {
-            id: d._id,
-            title: d.title,
-            description: d.description,
-            type: d.type,
-            category: d.type,
-            severity: d.severity,
-            status: d.status,
-            location: {
-              coordinates: coordinates,
-              country: d.location?.country || 'USA',
-              state: d.location?.state,
-            },
-            date: d.createdAt,
-            isLive: false,
-            source: 'database',
-            affectedArea: d.affectedArea,
-            estimatedAffectedPeople: d.estimatedAffectedPeople,
-          };
-        });
-
-        // Combine live (worldwide) and database (worldwide) for display
-        const combined = [
-          ...liveDisasters.map(d => ({
-            ...d,
-            id: d.id,
-            isLive: true,
-            source: 'live'
-          })),
-          ...transformedDatabaseDisasters
-        ];
-        setAllDisasters(combined);
-        console.log('Database disasters set:', combined.length);
+        console.log('Database disasters set:', allDisastersFromApi.length);
       } else {
         console.error('Failed to fetch disasters:', data);
         toast.error(data.error || 'Failed to fetch database disasters');
@@ -345,18 +310,14 @@ export default function LiveDisastersClient() {
     }
   };
 
-  // Render from cache immediately, then refresh in background
+  // Always fetch live disasters from our API (NASA EONET + your backend merged); then load database + volunteers
   useEffect(() => {
     if (!token) return;
-    const cachedLive = getCachedData('disasters');
-    if (cachedLive && Array.isArray(cachedLive) && cachedLive.length > 0) {
-      setLiveDisasters(cachedLive);
-    }
     const loadInitialData = async () => {
       setIsInitialLoading(true);
       try {
+        await fetchLiveDisasters();
         await Promise.all([
-          fetchLiveDisasters(),
           fetchDatabaseDisasters(),
           fetchVolunteers(),
         ]);
@@ -428,7 +389,6 @@ export default function LiveDisastersClient() {
 
   // Refresh data periodically
   useEffect(() => {
-    // Refresh every 5 minutes
     const interval = setInterval(() => {
       fetchLiveDisasters();
       if (token) {
@@ -438,6 +398,37 @@ export default function LiveDisastersClient() {
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [token]);
+
+  // WebSocket: real-time updates from ngrok – merge with existing live data so we keep NASA EONET (hurricane/wildfire) and only update "other" from WS
+  useEffect(() => {
+    const base = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_NGROK_DOMAIN || '').replace(/\/$/, '') : '';
+    if (!base || !base.startsWith('http')) return;
+    const wsUrl = base.replace(/^http/, 'ws') + '/ws/disasters';
+    let ws: WebSocket | null = null;
+    const connect = () => {
+      try {
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = (event) => {
+          try {
+            const raw = JSON.parse(event.data);
+            const fromWs = featureCollectionToDisasters(raw);
+            setLiveDisasters((prev) => {
+              const eonetOnly = prev.filter((d) => d.type === 'cyclone' || d.type === 'wildfire' || d.type === 'volcanic');
+              const merged = [...eonetOnly, ...fromWs];
+              return merged;
+            });
+          } catch (_) {}
+        };
+        ws.onclose = () => {
+          ws = null;
+          setTimeout(connect, 10000);
+        };
+        ws.onerror = () => { ws?.close(); };
+      } catch (_) {}
+    };
+    connect();
+    return () => { ws?.close(); };
+  }, []);
 
   // Fetch database disasters when search query changes
   useEffect(() => {
@@ -717,9 +708,21 @@ export default function LiveDisastersClient() {
     return eventDate >= from && eventDate <= to;
   };
 
+  /** Normalize disaster type for filter/card match (floods -> flood, snow storm -> snow_storm, feature -> other) */
+  const normalizeTypeForFilter = (type: string): string => {
+    const t = (type || '').toLowerCase().trim().replace(/\s+/g, '_');
+    if (!t || t === 'feature') return 'other';
+    if (t === 'floods' || t === 'flooding') return 'flood';
+    if (t === 'snow_storm' || t === 'snowstorm' || t === 'snow_storms') return 'snow_storm';
+    if (t === 'earthquakes') return 'earthquake';
+    if (t === 'cyclone' || t === 'hurricane' || t === 'storm') return 'cyclone';
+    if (t === 'volcanoes' || t === 'volcano') return 'volcanic';
+    return t || 'other';
+  };
+
   const filteredDisasters = allDisasters.filter(d => {
     if (!filterDisasterByDate(d)) return false;
-    if (filterType !== 'all' && d.type !== filterType) return false;
+    if (filterType !== 'all' && normalizeTypeForFilter(d.type) !== normalizeTypeForFilter(filterType)) return false;
     if (filterSeverity !== 'all' && d.severity !== filterSeverity) return false;
     if (filterCountry !== 'all' && (d.location?.country || '') !== filterCountry) return false;
     if (filterState !== 'all' && d.location?.state !== filterState) return false;
@@ -752,12 +755,14 @@ export default function LiveDisastersClient() {
   const currentYear = new Date().getFullYear();
   const stats = {
     total: allDisasters.length,
-    volcanic: allDisasters.filter(d => d.type === 'volcanic').length,
-    iceberg: allDisasters.filter(d => d.type === 'iceberg').length,
-    wildfires: allDisasters.filter(d => d.type === 'wildfire').length,
-    earthquakes: allDisasters.filter(d => d.type === 'earthquake').length,
-    storms: allDisasters.filter(d => d.type === 'cyclone').length,
-    flood: allDisasters.filter(d => d.type === 'flood').length,
+    volcanic: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'volcanic').length,
+    iceberg: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'iceberg').length,
+    wildfires: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'wildfire').length,
+    earthquakes: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'earthquake').length,
+    storms: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'cyclone').length,
+    flood: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'flood').length,
+    snowStorm: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'snow_storm').length,
+    powerOutage: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'power_outage').length,
     live: liveDisasters.length,
     database: databaseDisasters.filter((d: ManagedDisaster) => {
       const y = d.createdAt ? new Date(d.createdAt).getFullYear() : NaN;
@@ -765,12 +770,14 @@ export default function LiveDisastersClient() {
     }).length,
   };
 
-  // Stable random numbers for Snow Storm and Power Outage (no real data source)
-  const [snowStormCount] = useState(() => Math.floor(Math.random() * 20) + 1);
-  const [powerOutageCount] = useState(() => Math.floor(Math.random() * 15) + 1);
-
-  const uniqueTypes = Array.from(new Set(allDisasters.map(d => d.type))).sort();
+  const uniqueTypes = Array.from(new Set(allDisasters.map(d => d.type))).filter(Boolean).sort();
   const uniqueCountries = Array.from(new Set(allDisasters.map(d => d.location?.country).filter(Boolean))).sort();
+
+  const getTypeDisplayLabel = (type: string) => {
+    if (type === 'cyclone') return 'Hurricane';
+    if (type === 'wildfire') return 'Wildfires';
+    return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
 
   // Get states/provinces for the selected country dynamically from disaster data
   const getStatesForCountry = (country: string): string[] => {
@@ -787,13 +794,13 @@ export default function LiveDisastersClient() {
 
   // Auto-scroll to selected disaster in the list
   useEffect(() => {
-    if (selectedDisaster) {
-      const element = document.getElementById(`disaster-${selectedDisaster.id}`);
+    if (selectedListKey) {
+      const element = document.getElementById(`disaster-${selectedListKey}`);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [selectedDisaster]);
+  }, [selectedListKey]);
 
   const clearAllFilters = () => {
     setFilterType('all');
@@ -822,6 +829,10 @@ export default function LiveDisastersClient() {
 
   return (
     <DashboardLayout title="Live Disasters" subtitle="Real-time global disaster monitoring" icon={<GlobeAltIcon className="w-7 h-7" />}>
+      {isInitialLoading ? (
+        <LiveDisastersMappingLoader />
+      ) : (
+        <>
       {/* Quick Stats - clickable filter cards (order: Hurricane, Floods, Wildfires, Snow Storm, Power Outage, Earthquakes, Volcanic Eruptions) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         <Card
@@ -857,20 +868,26 @@ export default function LiveDisastersClient() {
           <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.wildfires}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
-        <Card className="p-3 border-l-4 border-l-gray-400 cursor-default">
+        <Card
+          className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 ${filterType === 'snow_storm' ? 'ring-2 ring-cyan-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'snow_storm' ? 'all' : 'snow_storm'); setFilterSeverity('all'); }}
+        >
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Snow Storm</p>
             <span className="text-lg" aria-hidden>❄️</span>
           </div>
-          <p className="text-2xl font-bold text-gray-400 leading-tight">{snowStormCount}</p>
+          <p className="text-2xl font-bold text-cyan-400 leading-tight">{stats.snowStorm}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
-        <Card className="p-3 border-l-4 border-l-gray-400 cursor-default">
+        <Card
+          className={`p-3 border-l-4 border-l-slate-500 cursor-pointer transition-all hover:ring-2 hover:ring-slate-400/30 ${filterType === 'power_outage' ? 'ring-2 ring-slate-400/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'power_outage' ? 'all' : 'power_outage'); setFilterSeverity('all'); }}
+        >
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Power Outage</p>
-            <BoltIcon className="w-5 h-5 text-gray-400" />
+            <BoltIcon className="w-5 h-5 text-slate-400" />
           </div>
-          <p className="text-2xl font-bold text-gray-400 leading-tight">{powerOutageCount}</p>
+          <p className="text-2xl font-bold text-slate-400 leading-tight">{stats.powerOutage}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
@@ -879,7 +896,7 @@ export default function LiveDisastersClient() {
         >
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-medium text-[var(--text-muted)]">Earthquakes</p>
-            <BoltIcon className="w-5 h-5 text-yellow-400" />
+            <SunIcon className="w-5 h-5 text-yellow-400" />
           </div>
           <p className="text-2xl font-bold text-yellow-400 leading-tight">{stats.earthquakes}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
@@ -937,7 +954,7 @@ export default function LiveDisastersClient() {
               >
                 <option value="all">All Types</option>
                 {uniqueTypes.map(type => (
-                  <option key={type} value={type} className="capitalize">{type}</option>
+                  <option key={type} value={type}>{getTypeDisplayLabel(type)}</option>
                 ))}
               </select>
             </div>
@@ -1090,23 +1107,35 @@ export default function LiveDisastersClient() {
           <Card padding="none" className="h-[600px] overflow-hidden">
             <div className="h-full">
               <LiveDisasterMap
-                disasters={filteredDisasters.filter((d: any) => d.location?.coordinates).map((d: any) => ({
-                  id: d.id,
-                  title: d.title,
-                  type: d.type,
-                  severity: d.severity,
-                  description: d.description,
-                  date: d.date,
-                  magnitude: d.magnitude,
-                  magnitudeUnit: d.magnitudeUnit,
-                  location: {
-                    coordinates: d.location?.coordinates,
-                    country: d.location?.country,
-                    state: d.location?.state,
-                  },
-                  source: d.source === 'database' ? 'database' : 'live',
-                }))}
-                selectedId={selectedDisaster?.id}
+                disasters={filteredDisasters.filter((d: any) => {
+                  const c = d.location?.coordinates;
+                  return c && (Array.isArray(c) ? c.length >= 2 : c?.lat != null && c?.lng != null);
+                }).map((d: any) => {
+                  const c = d.location?.coordinates;
+                  let coordinates: { lat: number; lng: number } | undefined;
+                  if (Array.isArray(c) && c.length >= 2) {
+                    coordinates = { lat: Number(c[1]), lng: Number(c[0]) };
+                  } else if (c && typeof c === 'object' && 'lat' in c && 'lng' in c) {
+                    coordinates = { lat: Number(c.lat), lng: Number(c.lng) };
+                  }
+                  return {
+                    id: d.id,
+                    title: d.title,
+                    type: d.type,
+                    severity: d.severity,
+                    description: d.description,
+                    date: d.date,
+                    magnitude: d.magnitude,
+                    magnitudeUnit: d.magnitudeUnit,
+                    location: {
+                      coordinates,
+                      country: d.location?.country,
+                      state: d.location?.state,
+                    },
+                    source: d.source === 'database' ? 'database' : 'live',
+                  };
+                })}
+                selectedId={selectedDisaster?.id ?? selectedDisaster?._id}
                 highlightedId={highlightedDisasterId}
                 onSelectDisaster={(id) => {
                   const disaster = allDisasters.find(d => d.id === id) || filteredDisasters.find(d => d.id === id);
@@ -1164,29 +1193,39 @@ export default function LiveDisastersClient() {
               ) : (
                 <div className="divide-y divide-[var(--border-color)]">
                   {listFilteredDisasters.map((disaster, index) => {
-                    const Icon = typeIcons[disaster.type] || typeIcons.default;
                     const colors = severityColors[disaster.severity] || severityColors.medium;
-                    const disasterKey = disaster.id ?? disaster._id ?? `disaster-${index}`;
+                    const Icon = typeIcons[disaster.type] || typeIcons.default;
+                    const disasterId = disaster.id ?? disaster._id ?? `disaster-${index}`;
                     const isSelected = selectedDisaster && (selectedDisaster.id === disaster.id || selectedDisaster._id === disaster._id);
+                    const isExpanded = expandedListDisasterId === disasterId;
+                    const listItemKey = `list-${index}-${disasterId}-${(disaster.source ?? 'live')}`;
 
                     return (
                       <button
-                        key={disasterKey}
-                        id={`disaster-${disasterKey}`}
+                        key={listItemKey}
+                        id={`disaster-${listItemKey}`}
                         onClick={() => {
-                          setSelectedDisaster(isSelected ? null : disaster);
+                          if (isExpanded) {
+                            setExpandedListDisasterId(null);
+                            setSelectedDisaster(null);
+                            setSelectedListKey(null);
+                          } else {
+                            setExpandedListDisasterId(disasterId);
+                            setSelectedDisaster(disaster);
+                            setSelectedListKey(listItemKey);
+                          }
                           setHighlightedDisasterId(disaster.id ?? disaster._id ?? null);
                           setTimeout(() => setHighlightedDisasterId(null), 2000);
                         }}
-                        className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-all duration-200 ${isSelected
+                        className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-all duration-200 ${isExpanded
                             ? 'bg-[var(--bg-input)] border-l-4 border-purple-500 shadow-lg'
-                            : highlightedDisasterId === (disaster.id ?? disaster._id)
+                            : highlightedDisasterId === disasterId
                               ? 'bg-purple-500/10 border-l-4 border-purple-400 animate-pulse'
                               : 'border-l-4 border-transparent'
                           }`}
-                        onMouseEnter={() => setHighlightedDisasterId(disaster.id ?? disaster._id ?? null)}
+                        onMouseEnter={() => setHighlightedDisasterId(disasterId)}
                         onMouseLeave={() => {
-                          if (highlightedDisasterId === (disaster.id ?? disaster._id) && !isSelected) {
+                          if (highlightedDisasterId === disasterId && !isExpanded) {
                             setHighlightedDisasterId(null);
                           }
                         }}
@@ -1228,15 +1267,15 @@ export default function LiveDisastersClient() {
                           </div>
                         </div>
 
-                        {/* Expanded Details */}
-                        {isSelected && (
+                        {/* Expanded Details - only this item (carousel: one expanded at a time) */}
+                        {isExpanded && (
                           <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
                             <p className="text-sm text-[var(--text-secondary)] mb-4">
                               {disaster.description}
                             </p>
-                            {disaster.source && (
+                            {disaster.url && (
                               <a
-                                href={disaster.source}
+                                href={disaster.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300"
@@ -1258,7 +1297,7 @@ export default function LiveDisastersClient() {
             {/* Data Sources */}
             <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-input)]">
               <p className="text-xs text-[var(--text-muted)] text-center">
-                Data from <span className="text-purple-400">NASA EONET</span> & <span className="text-purple-400">ReliefWeb</span>
+                Data from <span className="text-purple-400">Disasters API</span> (microservice) & <span className="text-purple-400">ReliefWeb</span>
               </p>
             </div>
           </Card>
@@ -1510,7 +1549,7 @@ export default function LiveDisastersClient() {
                       useCustomDisaster: true,
                     });
                     setShowAddModal(true);
-                    fetchNasaDisasters().catch(err => console.error('Error fetching NASA disasters:', err));
+                    fetchNasaDisasters().catch(err => console.error('Error fetching live disasters:', err));
                   };
                   return (
                     <div className="flex items-center justify-center gap-1">
@@ -1580,7 +1619,7 @@ export default function LiveDisastersClient() {
                   <div className="relative">
                     <Input
                       value={formData.selectedNasaDisasterId
-                        ? nasaDisasters.find(d => d.id === formData.selectedNasaDisasterId)?.title || formData.title || disasterSearchQuery
+                        ? (allDisasters.find(d => (d.id ?? d._id) === formData.selectedNasaDisasterId)?.title) || formData.title || disasterSearchQuery
                         : formData.title || disasterSearchQuery
                       }
                       onChange={(e) => {
@@ -1650,8 +1689,8 @@ export default function LiveDisastersClient() {
                   {showDisasterDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
                       {(() => {
-                        // Filter disasters by search query (name and location)
-                        const filteredDisasters = nasaDisasters.filter(disaster => {
+                        // Combined list: live (EONET + backend) + database; filter by search query
+                        const filteredDisasters = allDisasters.filter(disaster => {
                           if (!disasterSearchQuery) return true;
                           const query = disasterSearchQuery.toLowerCase();
                           const titleMatch = disaster.title?.toLowerCase().includes(query);
@@ -1673,8 +1712,10 @@ export default function LiveDisastersClient() {
                           <>
                             {filteredDisasters.length > 0 && (
                               <>
-                                {filteredDisasters.map((disaster) => {
-                                  const isSelected = formData.selectedNasaDisasterId === disaster.id;
+                                {filteredDisasters.map((disaster, ddIndex) => {
+                                  const did = disaster.id ?? disaster._id;
+                                  const isSelected = formData.selectedNasaDisasterId === did;
+                                  const dropdownItemKey = `dd-${ddIndex}-${did}-${(disaster.source ?? 'live')}`;
                                   const coords = disaster.location?.coordinates;
                                   const locationStr = [
                                     disaster.location?.region,
@@ -1684,7 +1725,7 @@ export default function LiveDisastersClient() {
 
                                   return (
                                     <button
-                                      key={disaster.id}
+                                      key={dropdownItemKey}
                                       type="button"
                                       onClick={() => {
                                         // Build address from location data
@@ -1701,7 +1742,7 @@ export default function LiveDisastersClient() {
 
                                         setFormData({
                                           ...formData,
-                                          selectedNasaDisasterId: disaster.id,
+                                          selectedNasaDisasterId: did,
                                           useCustomDisaster: false,
                                           title: disaster.title,
                                           description: disaster.description || '',
@@ -1773,7 +1814,7 @@ export default function LiveDisastersClient() {
 
                             {!hasNoMatches && filteredDisasters.length === 0 && !disasterSearchQuery && (
                               <div className="p-4 text-center text-sm text-[var(--text-muted)]">
-                                Start typing to search disasters from NASA EONET API
+                                Start typing to search disasters from Disasters API
                               </div>
                             )}
                           </>
@@ -1791,7 +1832,7 @@ export default function LiveDisastersClient() {
             {/* Auto-filled fields when NASA disaster is selected */}
             {formData.selectedNasaDisasterId && !formData.useCustomDisaster && (
               <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-2">
-                <p className="text-xs font-medium text-purple-400">Auto-filled from NASA EONET:</p>
+                <p className="text-xs font-medium text-purple-400">Auto-filled from Disasters API:</p>
                 <div className="text-xs text-[var(--text-muted)] space-y-1">
                   <p><span className="font-medium">Title:</span> {formData.title}</p>
                   <p><span className="font-medium">Type:</span> {formData.type}</p>
@@ -2504,6 +2545,8 @@ export default function LiveDisastersClient() {
           </form>
         )}
       </Modal>
+        </>
+      )}
     </DashboardLayout>
   );
 }

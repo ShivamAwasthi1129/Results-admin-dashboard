@@ -445,7 +445,7 @@ export default function SOSPage() {
       key: 'name',
       label: 'Person',
       render: (alert: SOSAlert) => (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {alert.photo ? (
             <Image
               src={alert.photo}
@@ -565,42 +565,33 @@ export default function SOSPage() {
       key: 'actions',
       label: 'Actions',
       render: (alert: SOSAlert) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<EyeIcon className="w-4 h-4" />}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleViewDetails(alert);
-            }}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            title="View details"
+            onClick={(e) => { e.stopPropagation(); handleViewDetails(alert); }}
+            className="p-2 rounded-lg bg-[var(--primary-500)] text-white hover:opacity-90 transition-opacity"
           >
-            View
-          </Button>
+            <EyeIcon className="w-4 h-4" />
+          </button>
           {alert.status === 'pending' && (
-            <Button
-              variant="gradient"
-              size="sm"
-              leftIcon={<UserGroupIcon className="w-4 h-4" />}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAssignTeam(alert);
-              }}
+            <button
+              type="button"
+              title="Assign team"
+              onClick={(e) => { e.stopPropagation(); handleAssignTeam(alert); }}
+              className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 transition-opacity"
             >
-              Assign
-            </Button>
+              <UserGroupIcon className="w-4 h-4" />
+            </button>
           )}
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<MapPinIcon className="w-4 h-4" />}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleViewOnMap(alert);
-            }}
+          <button
+            type="button"
+            title="View on map"
+            onClick={(e) => { e.stopPropagation(); handleViewOnMap(alert); }}
+            className="p-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors"
           >
-            Map
-          </Button>
+            <MapPinIcon className="w-4 h-4" />
+          </button>
         </div>
       ),
     },
