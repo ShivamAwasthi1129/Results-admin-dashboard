@@ -100,6 +100,7 @@ export interface User {
   createdAt: string;
   updatedAt: string;
   status?: string;
+  unsafeReason?: string;
   adminGroups?: any[];
   memberGroups?: any[];
 }
@@ -869,8 +870,27 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                               <Badge variant="warning" size="sm" dot>Subscriber</Badge>
                             )}
                           </div>
+                          <div className="flex flex-col gap-1 mt-2 border-t border-[var(--border-color)] pt-2">
+                            <span className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wider">Safety Status</span>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {user.status === 'SAFE' && (
+                                <Badge variant="success" size="sm" dot>Safe</Badge>
+                              )}
+                              {user.status === 'UNSAFE' && (
+                                <Badge variant="danger" size="sm" dot>Unsafe</Badge>
+                              )}
+                              {(!user.status || user.status === 'UNVERIFIED') && (
+                                <Badge variant="warning" size="sm" dot>Unverified</Badge>
+                              )}
+                            </div>
+                            {user.status === 'UNSAFE' && user.unsafeReason && (
+                              <p className="text-xs text-red-500 mt-0.5 max-w-[200px] truncate" title={user.unsafeReason}>
+                                Reason: {user.unsafeReason}
+                              </p>
+                            )}
+                          </div>
                           {(user.bloodGroup || user.gender) && (
-                            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] mt-2">
                               {user.bloodGroup && <span>🩸 {user.bloodGroup}</span>}
                               {user.gender && <span className="capitalize">• {user.gender}</span>}
                             </div>
@@ -1247,6 +1267,26 @@ export default function UserManagementClient({ initialData }: UserManagementClie
                     <Badge variant="warning" size="sm" dot>
                       Subscriber
                     </Badge>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
+                  <h4 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Safety Status</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedUser.status === 'SAFE' && (
+                      <Badge variant="success" size="sm" dot>Safe</Badge>
+                    )}
+                    {selectedUser.status === 'UNSAFE' && (
+                      <Badge variant="danger" size="sm" dot>Unsafe</Badge>
+                    )}
+                    {(!selectedUser.status || selectedUser.status === 'UNVERIFIED') && (
+                      <Badge variant="warning" size="sm" dot>Unverified</Badge>
+                    )}
+                  </div>
+                  {selectedUser.status === 'UNSAFE' && selectedUser.unsafeReason && (
+                    <p className="text-sm text-red-500 mt-2 p-2 bg-red-500/10 rounded-md">
+                      Reason: <span className="font-medium text-red-400">{selectedUser.unsafeReason}</span>
+                    </p>
                   )}
                 </div>
               </div>
