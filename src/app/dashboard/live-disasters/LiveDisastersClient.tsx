@@ -914,7 +914,7 @@ export default function LiveDisastersClient() {
         </Card>
       </div>
       {/* Top filter row: all filters in ONE line with search taking more space */}
-      <div className="mb-6">
+      <div className="mb-6 relative z-[30]">
         <div className="p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20 backdrop-blur-sm">
           <div className="flex items-end gap-3 w-full">
             {/* Search Bar - Takes 2x width */}
@@ -1615,7 +1615,7 @@ export default function LiveDisastersClient() {
                   <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
                 </div>
               ) : (
-                <div className="relative disaster-search-container">
+                <div className="relative disaster-search-container z-[60]">
                   <div className="relative">
                     <Input
                       value={formData.selectedNasaDisasterId
@@ -1687,7 +1687,7 @@ export default function LiveDisastersClient() {
 
                   {/* Searchable Dropdown */}
                   {showDisasterDropdown && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-[1100] max-h-60 overflow-y-auto">
                       {(() => {
                         // Combined list: live (EONET + backend) + database; filter by search query
                         const filteredDisasters = allDisasters.filter(disaster => {

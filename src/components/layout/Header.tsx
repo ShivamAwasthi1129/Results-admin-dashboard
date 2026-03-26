@@ -99,7 +99,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, icon, onMenuClick }) =
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-3 rounded-xl text-[var(--text-muted)] hover:bg-[var(--bg-input)] hover:text-[var(--text-primary)] transition-all"
+            className="p-3 rounded-xl text-[var(--text-muted)] bg-[var(--bg-input)] border border-[var(--border-color)] hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-primary)] transition-all"
             title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           >
             {theme === 'dark' ? (

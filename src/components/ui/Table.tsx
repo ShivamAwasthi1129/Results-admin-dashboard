@@ -165,7 +165,7 @@ function Table<T extends Record<string, any>>({
           </tbody>
         </table>
         {/* Scroll indicator for mobile */}
-        <div className="md:hidden absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[var(--bg-card)] to-transparent pointer-events-none z-10" />
+        <div className="md:hidden absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-[var(--bg-card)]/60 to-transparent pointer-events-none z-10" />
       </div>
     </div>
   );

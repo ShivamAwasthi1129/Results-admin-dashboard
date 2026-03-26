@@ -83,14 +83,16 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
     }
     setIsLoading(true);
     try {
-      const response = await fetch('/api/tracking/location/all', {
-        headers: {
-          Authorization: `Bearer ${t}`,
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_DOMAIN_NAME}/api/tracking/location/all`,
+        {
+          headers: {
+            Authorization: `Bearer ${t}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        }
+      );
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch locations' }));
         console.error('Failed to fetch locations:', response.status, errorData);
@@ -287,7 +289,7 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
           </div>
           <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{uniqueUsers.length}</p>
         </Card>
-        <div className="flex-1 min-w-[180px] max-w-[280px]">
+        <div className="flex-1 min-w-[240px]">
           <Input
             icon={<MagnifyingGlassIcon className="w-5 h-5" />}
             placeholder="Search by user, address, city..."

@@ -167,6 +167,7 @@ export default function LiveDisasterMap({
       zoom: 4, // Zoom level to show USA
       minZoom: 2,
       maxZoom: 18,
+      scrollWheelZoom: false,
       zoomControl: true,
       attributionControl: false,
     });
@@ -363,7 +364,7 @@ export default function LiveDisasterMap({
       {/* Map Legend Overlay - clickable severity filter */}
       {disasters.length > 0 && (
         <div 
-          className="absolute top-4 right-4 z-[1000] rounded-lg p-3 shadow-xl w-[20%]"
+          className="absolute top-4 right-4 z-[20] rounded-lg p-3 shadow-xl w-[20%]"
           style={{
             backgroundColor: 'rgba(26, 26, 46, 0.95)',
             border: '1px solid rgba(255, 255, 255, 0.1)',

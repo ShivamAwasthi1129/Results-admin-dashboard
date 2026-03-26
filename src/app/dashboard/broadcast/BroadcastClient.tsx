@@ -44,20 +44,17 @@ interface Pagination {
   totalPages?: number;
 }
 
-function getApiBase(): string {
-  if (typeof window !== 'undefined') {
-    return '';
-  }
-  const base = process.env.NEXT_PUBLIC_APP_URL || process.env.DOMAIN_NAME || 'http://localhost:3000';
-  return base.replace(/\/$/, '');
-}
-
-/** Backend domain from env (e.g. https://r3sults-backend.vercel.app) for direct API calls like view-by-id */
+/**
+ * Backend API origin (no trailing slash).
+ * Browser: NEXT_PUBLIC_DOMAIN_NAME only (embeds in client bundle).
+ * Server: NEXT_PUBLIC_DOMAIN_NAME || DOMAIN_NAME.
+ */
 function getBackendBase(): string {
-  const base = typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_DOMAIN_NAME || '').replace(/\/$/, '')
-    : (process.env.DOMAIN_NAME || '').replace(/\/$/, '');
-  return base;
+  const raw =
+    typeof window === 'undefined'
+      ? (process.env.NEXT_PUBLIC_DOMAIN_NAME || process.env.DOMAIN_NAME)
+      : process.env.NEXT_PUBLIC_DOMAIN_NAME;
+  return (raw || '').trim().replace(/\/$/, '');
 }
 
 export default function BroadcastClient() {
@@ -87,12 +84,17 @@ export default function BroadcastClient() {
       }
       setIsLoading(true);
       try {
+        const backendBase = getBackendBase();
+        if (!backendBase) {
+          toast.error('Backend URL not configured. Set NEXT_PUBLIC_DOMAIN_NAME (e.g. https://r3sults-backend.vercel.app) in .env.local');
+          setBroadcasts([]);
+          return;
+        }
         const params = new URLSearchParams();
         params.set('page', String(page));
         params.set('limit', String(pagination.limit));
         if (search.trim()) params.set('search', search.trim());
-        const base = getApiBase();
-        const url = `${base}/api/admin/broadcast?${params.toString()}`;
+        const url = `${backendBase}/api/admin/broadcast?${params.toString()}`;
         const res = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -139,7 +141,7 @@ export default function BroadcastClient() {
     if (!token) return;
     const backendBase = getBackendBase();
     if (!backendBase) {
-      toast.error('Backend URL not configured (NEXT_PUBLIC_DOMAIN_NAME)');
+      toast.error('Backend URL not configured. Set NEXT_PUBLIC_DOMAIN_NAME in .env.local');
       return;
     }
     try {
@@ -198,8 +200,12 @@ export default function BroadcastClient() {
     }
     setIsSubmitting(true);
     try {
-      const base = getApiBase();
-      const res = await fetch(`${base}/api/admin/broadcast`, {
+      const backendBase = getBackendBase();
+      if (!backendBase) {
+        toast.error('Backend URL not configured. Set NEXT_PUBLIC_DOMAIN_NAME in .env.local');
+        return;
+      }
+      const res = await fetch(`${backendBase}/api/admin/broadcast`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

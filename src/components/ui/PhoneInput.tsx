@@ -64,7 +64,9 @@ export function PhoneInput({
         .phone-input-field .PhoneInputInput {
           width: 100%;
           padding: 12px 16px;
-          padding-left: 100px;
+          padding-left: 66px;
+          text-align: left;
+          direction: ltr;
           border-radius: 12px;
           background-color: var(--bg-input);
           border: 1px solid var(--border-color);
@@ -87,11 +89,12 @@ export function PhoneInput({
         .phone-input-field .PhoneInputCountry {
           position: absolute;
           left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
+          top: 0;
+          bottom: 0;
           z-index: 1;
           display: flex;
           align-items: center;
+          justify-content: flex-start;
           gap: 8px;
         }
         
@@ -114,7 +117,7 @@ export function PhoneInput({
           top: 0;
           left: 0;
           height: 100%;
-          width: 90px;
+          width: 100px;
           opacity: 0;
           cursor: pointer;
         }

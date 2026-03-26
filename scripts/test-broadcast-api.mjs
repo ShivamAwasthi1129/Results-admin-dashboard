@@ -31,7 +31,10 @@ function loadEnv() {
 }
 loadEnv();
 
-const DOMAIN_NAME = process.env.DOMAIN_NAME || 'https://r3sults-backend.vercel.app';
+const DOMAIN_NAME =
+  process.env.NEXT_PUBLIC_DOMAIN_NAME ||
+  process.env.DOMAIN_NAME ||
+  'https://r3sults-backend.vercel.app';
 const BASE = DOMAIN_NAME.replace(/\/$/, '');
 const AUTH = process.env.AUTH_TOKEN;
 

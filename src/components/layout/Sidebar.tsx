@@ -34,6 +34,7 @@ import {
   ClipboardDocumentCheckIcon,
   MegaphoneIcon,
   ArchiveBoxIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline';
 import { Avatar } from '@/components/ui';
 import ResultsLogo from '@/Results_logo.png';
@@ -80,6 +81,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Incident Management', href: '/dashboard/incidents', icon: ClipboardDocumentListIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
     { name: 'Damage Reports', href: '/dashboard/damage-reports', icon: DocumentTextIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Broadcast', href: '/dashboard/broadcast', icon: MegaphoneIcon, roles: ['super_admin', 'admin'] as const },
+    { name: 'Newsletter', href: '/dashboard/newsletter', icon: EnvelopeIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Adjusters', href: '/dashboard/adjusters', icon: ClipboardDocumentCheckIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const },
     { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const },

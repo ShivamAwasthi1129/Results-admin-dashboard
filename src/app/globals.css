@@ -509,6 +509,16 @@ body {
 /* =============================================
    UTILITIES
    ============================================= */
+
+/* Hide scrollbars while keeping overflow scroll (e.g. wide tables) */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .gradient-text {
   background: linear-gradient(135deg, var(--primary-500), var(--primary-700));
   -webkit-background-clip: text;
@@ -662,8 +672,8 @@ table {
 /* Prevent table cells from collapsing - Force minimum widths */
 .overflow-x-auto table th,
 .overflow-x-auto table td {
-  white-space: nowrap !important;
-  min-width: 100px !important;
+  white-space: normal;
+  min-width: 0;
   max-width: none !important;
 }
 
@@ -684,7 +694,7 @@ table {
 
 /* Allow text wrapping only in specific cells with truncate class */
 .overflow-x-auto table td .truncate {
-  white-space: nowrap !important;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: inline-block;

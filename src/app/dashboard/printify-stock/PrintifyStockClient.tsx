@@ -30,20 +30,25 @@ interface PrintifyShop {
   sales_channel?: string;
 }
 
+interface PrintifyLineItem {
+  product_id?: string;
+  variant_id?: number;
+  quantity?: number;
+  metadata?: { title?: string; sku?: string; variant_label?: string; image?: string };
+  cost?: number;
+  shipping_cost?: number;
+  status?: string;
+  preview_image?: { src: string };
+  image?: { src?: string } | string;
+  images?: Array<{ src?: string } | string>;
+  [key: string]: unknown;
+}
+
 /** Printify order (list + detail) */
 interface PrintifyOrder {
   id: string;
   address_to?: { first_name?: string; last_name?: string; email?: string; phone?: string; address1?: string; address2?: string; city?: string; region?: string; zip?: string; country?: string; company?: string };
-  line_items?: Array<{
-    product_id?: string;
-    variant_id?: number;
-    quantity?: number;
-    metadata?: { title?: string; sku?: string; variant_label?: string };
-    cost?: number;
-    shipping_cost?: number;
-    status?: string;
-    preview_image?: { src: string };
-  }>;
+  line_items?: PrintifyLineItem[];
   total_price?: number;
   total_shipping?: number;
   total_tax?: number;
@@ -99,6 +104,34 @@ function getOrderRowDisplay(ord: PrintifyOrder) {
   }
   const firstLine = printifyId ? `#${printifyId}` : merged?.[1] ? `#${merged[1]}` : labelRaw.slice(0, 32) || '—';
   return { firstLine, secondLine: secondLine || '—' };
+}
+
+function getLineItemImageSrc(item: PrintifyLineItem): string | null {
+  const fromPreview = typeof item.preview_image?.src === 'string' ? item.preview_image.src.trim() : '';
+  if (fromPreview) return fromPreview;
+
+  const directImage = item.image;
+  if (typeof directImage === 'string' && directImage.trim()) return directImage.trim();
+  if (directImage && typeof directImage === 'object' && typeof (directImage as { src?: unknown }).src === 'string') {
+    const src = (directImage as { src: string }).src.trim();
+    if (src) return src;
+  }
+
+  if (Array.isArray(item.images)) {
+    for (const candidate of item.images) {
+      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+      if (candidate && typeof candidate === 'object' && typeof (candidate as { src?: unknown }).src === 'string') {
+        const src = (candidate as { src: string }).src.trim();
+        if (src) return src;
+      }
+    }
+  }
+
+  if (typeof item.metadata?.image === 'string' && item.metadata.image.trim()) {
+    return item.metadata.image.trim();
+  }
+
+  return null;
 }
 
 const SHIPPING_METHOD_LABELS: Record<number, string> = {
@@ -855,8 +888,16 @@ export default function PrintifyStockClient() {
     setCheckoutError(null);
   }, []);
 
+  const printifySubtitle = activeTab === 'products'
+    ? 'Products created in your Printify dashboard'
+    : 'Orders placed via this admin panel';
+
   return (
-    <DashboardLayout>
+    <DashboardLayout
+      title="Printify Stock"
+      subtitle={printifySubtitle}
+      icon={<ArchiveBoxIcon className="w-7 h-7" />}
+    >
       <div className="space-y-6">
         {showCheckoutPage && detailProduct && resolvedVariant ? (
           /* Checkout page */
@@ -1012,16 +1053,7 @@ export default function PrintifyStockClient() {
           </div>
         ) : (
           <>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <ArchiveBoxIcon className="h-8 w-8" />
-              Printify Stock
-            </h1>
-            <p className="text-[var(--text-muted)] mt-1">
-              {activeTab === 'products' ? 'Products created in your Printify dashboard' : 'Orders placed via this admin panel'}
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-4">
           <Button
             variant="secondary"
             onClick={() => {
@@ -1678,6 +1710,13 @@ export default function PrintifyStockClient() {
                           <XCircleIcon className="h-4 w-4 mr-1" /> Cancel order
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => toast.info('Line-item edits (quantity/color) are not available via Printify order API. Create a replacement order if changes are needed.')}
+                      >
+                        <PencilSquareIcon className="h-4 w-4 mr-1" /> Edit items
+                      </Button>
                       <Button size="sm" variant="secondary" onClick={() => setOrderDetailEditCustomer((v) => !v)}>
                         <PencilSquareIcon className="h-4 w-4 mr-1" /> Edit order
                       </Button>
@@ -1686,6 +1725,14 @@ export default function PrintifyStockClient() {
                           Submit to production
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={!!orderActionLoading}
+                        onClick={() => toast.info('Delete is not available in Printify API for existing orders. You can cancel the order instead.')}
+                      >
+                        Delete order
+                      </Button>
                     </div>
                   </div>
                   <p className="text-xs text-[var(--text-muted)] mt-3 pt-3 border-t border-[var(--border-color)]">
@@ -1741,38 +1788,41 @@ export default function PrintifyStockClient() {
                   <div className="rounded-lg border border-[var(--border-color)] p-4 bg-[var(--bg-card)]">
                     <h4 className="font-medium text-[var(--text-primary)] mb-3">Product</h4>
                     <ul className="space-y-3">
-                      {orderDetail.line_items.map((item, idx) => (
-                        <li key={idx} className="flex gap-3 text-sm">
-                          {item.preview_image?.src ? (
-                            <img src={item.preview_image.src} alt="" className="w-16 h-16 object-cover rounded border border-[var(--border-color)]" />
-                          ) : (
-                            <div className="w-16 h-16 rounded border border-[var(--border-color)] bg-[var(--bg)] flex items-center justify-center text-[var(--text-muted)]">
-                              <PhotoIcon className="h-8 w-8" />
+                      {orderDetail.line_items.map((item, idx) => {
+                        const itemImageSrc = getLineItemImageSrc(item);
+                        return (
+                          <li key={idx} className="flex gap-3 text-sm">
+                            {itemImageSrc ? (
+                              <img src={itemImageSrc} alt="" className="w-16 h-16 object-cover rounded border border-[var(--border-color)]" />
+                            ) : (
+                              <div className="w-16 h-16 rounded border border-[var(--border-color)] bg-[var(--bg)] flex items-center justify-center text-[var(--text-muted)]">
+                                <PhotoIcon className="h-8 w-8" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-[var(--text-primary)]">{item.metadata?.title ?? 'Product'}</p>
+                              <p className="text-[var(--text-muted)]">
+                                {item.metadata?.sku ? `SKU ${item.metadata.sku}` : ''}
+                                {item.metadata?.variant_label ? ` – ${item.metadata.variant_label}` : ''}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <p className="text-[var(--text-muted)] text-sm">Qty {item.quantity ?? 1}</p>
+                                {item.status && (
+                                  <Badge variant={orderStatusBadgeVariant(String(item.status))} size="sm">
+                                    Item: {item.status}
+                                  </Badge>
+                                )}
+                                {item.product_id != null && (
+                                  <span className="text-xs text-[var(--text-muted)] font-mono">Product {item.product_id}</span>
+                                )}
+                                {item.variant_id != null && (
+                                  <span className="text-xs text-[var(--text-muted)] font-mono">Variant {item.variant_id}</span>
+                                )}
+                              </div>
                             </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-[var(--text-primary)]">{item.metadata?.title ?? 'Product'}</p>
-                            <p className="text-[var(--text-muted)]">
-                              {item.metadata?.sku ? `SKU ${item.metadata.sku}` : ''}
-                              {item.metadata?.variant_label ? ` – ${item.metadata.variant_label}` : ''}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                              <p className="text-[var(--text-muted)] text-sm">Qty {item.quantity ?? 1}</p>
-                              {item.status && (
-                                <Badge variant={orderStatusBadgeVariant(String(item.status))} size="sm">
-                                  Item: {item.status}
-                                </Badge>
-                              )}
-                              {item.product_id != null && (
-                                <span className="text-xs text-[var(--text-muted)] font-mono">Product {item.product_id}</span>
-                              )}
-                              {item.variant_id != null && (
-                                <span className="text-xs text-[var(--text-muted)] font-mono">Variant {item.variant_id}</span>
-                              )}
-                            </div>
-                          </div>
-                        </li>
-                      ))}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}

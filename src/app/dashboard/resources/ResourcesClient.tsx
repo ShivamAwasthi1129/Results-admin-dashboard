@@ -544,8 +544,13 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
 
   // Batch management functions
   const handleAddBatch = () => {
+    const parsedQty = Number(batchFormData.quantity);
     if (!batchFormData.batchNumber || !batchFormData.quantity) {
       toast.error('Batch number and quantity are required');
+      return;
+    }
+    if (!Number.isFinite(parsedQty) || parsedQty <= 0) {
+      toast.error('Batch quantity must be greater than 0');
       return;
     }
 
@@ -580,8 +585,13 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
 
   const handleUpdateBatch = () => {
     if (editingBatchIndex === null) return;
+    const parsedQty = Number(batchFormData.quantity);
     if (!batchFormData.batchNumber || !batchFormData.quantity) {
       toast.error('Batch number and quantity are required');
+      return;
+    }
+    if (!Number.isFinite(parsedQty) || parsedQty <= 0) {
+      toast.error('Batch quantity must be greater than 0');
       return;
     }
 
@@ -1460,7 +1470,7 @@ export default function ResourcesClient({ initialStockEntries }: ResourcesClient
                 <select
                   value={batchFormData.condition}
                   onChange={(e) => setBatchFormData(prev => ({ ...prev, condition: e.target.value as 'New' | 'Good' | 'Fair' | 'Damaged' }))}
-                  className="w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--bg-card)] hover:bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-500)]"
                 >
                   <option value="New">New</option>
                   <option value="Good">Good</option>

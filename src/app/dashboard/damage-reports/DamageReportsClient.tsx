@@ -683,7 +683,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
       </div>
 
       {/* Outer table with column headers so Edit columns applies */}
-      <Card className="p-0 overflow-x-auto shadow-lg border-2 border-[var(--border-color)]">
+      <Card className="p-0 overflow-x-auto hide-scrollbar shadow-lg border-2 border-[var(--border-color)]">
         {isLoading ? (
           <div className="p-8 text-center">
             <div className="inline-block w-8 h-8 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
@@ -719,7 +719,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                 return (
                   <React.Fragment key={group.customerId}>
                     {/* Customer row: one cell per column */}
-                    <tr className="bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)]/60">
+                    <tr className=" bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)]/60">
                       <td className="px-4 py-3">
                         <button
                           type="button"
