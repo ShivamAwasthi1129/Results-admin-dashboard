@@ -625,7 +625,7 @@ export default function NewsletterClient() {
           <p className="text-sm text-[var(--text-muted)]">
             Sending mode: {selectedIds.size > 0 ? `selected (${selectedIds.size})` : 'all active subscribers'}
           </p>
-          <span className="text-xs text-[var(--text-muted)]">Use templates + editor toolbar to design rich campaigns.</span>
+        
         </div>
       </Card>
     </div>
