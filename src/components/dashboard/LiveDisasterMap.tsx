@@ -167,7 +167,7 @@ export default function LiveDisasterMap({
       zoom: 4, // Zoom level to show USA
       minZoom: 2,
       maxZoom: 18,
-      scrollWheelZoom: false,
+      scrollWheelZoom: true,
       zoomControl: true,
       attributionControl: false,
     });

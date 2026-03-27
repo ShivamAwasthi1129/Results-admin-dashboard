@@ -720,13 +720,68 @@ export default function LiveDisastersClient() {
     return t || 'other';
   };
 
+  /** EONET/live feeds often omit country or use "United States" while filters use "USA". */
+  const USA_LABELS = new Set([
+    'usa',
+    'us',
+    'u.s.',
+    'u.s.a.',
+    'united states',
+    'united states of america',
+    'america',
+  ]);
+
+  const normalizeCountryForFilter = (c: string | undefined | null): string => {
+    const s = (c || '').trim().toLowerCase();
+    if (!s) return '';
+    if (USA_LABELS.has(s)) return 'usa';
+    return s.replace(/\s+/g, ' ');
+  };
+
+  const isInUnitedStatesBBox = (lat: number, lng: number): boolean => {
+    if (lat >= 24.0 && lat <= 49.6 && lng >= -124.9 && lng <= -66.9) return true;
+    if (lat >= 51.0 && lat <= 71.7 && lng >= -179.0 && lng <= -129.0) return true;
+    if (lat >= 18.8 && lat <= 22.3 && lng >= -161.0 && lng <= -154.6) return true;
+    return false;
+  };
+
+  const getDisasterLatLngForCountry = (d: { location?: { coordinates?: unknown } }): { lat: number; lng: number } | null => {
+    const c = d.location?.coordinates;
+    if (!c) return null;
+    if (Array.isArray(c) && c.length >= 2) {
+      const lng = Number(c[0]);
+      const lat = Number(c[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+      return null;
+    }
+    if (typeof c === 'object' && c !== null && 'lat' in c && 'lng' in c) {
+      const lat = Number((c as { lat: number; lng: number }).lat);
+      const lng = Number((c as { lat: number; lng: number }).lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+      return null;
+    }
+    return null;
+  };
+
+  const disasterMatchesCountryFilter = (d: { location?: { country?: string; coordinates?: unknown } }, filterCountry: string): boolean => {
+    if (filterCountry === 'all') return true;
+    const fc = normalizeCountryForFilter(filterCountry);
+    const dc = normalizeCountryForFilter(d.location?.country);
+    if (fc && dc && fc === dc) return true;
+    if (fc === 'usa' && !dc) {
+      const ll = getDisasterLatLngForCountry(d);
+      if (ll && isInUnitedStatesBBox(ll.lat, ll.lng)) return true;
+    }
+    return false;
+  };
+
   const filteredDisasters = allDisasters.filter(d => {
     if (!filterDisasterByDate(d)) return false;
     if (filterType !== 'all' && normalizeTypeForFilter(d.type) !== normalizeTypeForFilter(filterType)) return false;
     if (filterSeverity !== 'all' && d.severity !== filterSeverity) return false;
-    if (filterCountry !== 'all' && (d.location?.country || '') !== filterCountry) return false;
+    if (filterCountry !== 'all' && !disasterMatchesCountryFilter(d, filterCountry)) return false;
     if (filterState !== 'all' && d.location?.state !== filterState) return false;
-    if (filterCountries.length > 0 && !filterCountries.includes(d.location?.country || '')) return false;
+    if (filterCountries.length > 0 && !filterCountries.some((sel) => disasterMatchesCountryFilter(d, sel))) return false;
     if (filterSource === 'database' && d.source !== 'database') return false;
     return true;
   });
@@ -784,7 +839,7 @@ export default function LiveDisastersClient() {
     if (!country || country === 'all') return [];
     return Array.from(new Set(
       allDisasters
-        .filter(d => d.location?.country === country && d.location?.state)
+        .filter(d => disasterMatchesCountryFilter(d, country) && d.location?.state)
         .map(d => d.location?.state)
         .filter(Boolean) as string[]
     )).sort();
@@ -888,7 +943,7 @@ export default function LiveDisastersClient() {
             <BoltIcon className="w-5 h-5 text-slate-400" />
           </div>
           <p className="text-2xl font-bold text-slate-400 leading-tight">{stats.powerOutage}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">No Data Available</p>
         </Card>
         <Card
           className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
