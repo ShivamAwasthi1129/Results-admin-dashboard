@@ -44,6 +44,7 @@ const typeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   wildfire: FireIcon,
   snow_storm: CloudIcon,
   power_outage: BoltIcon,
+  tornado: CloudIcon,
   earthquake: SunIcon,
   volcanic: FireIcon,
   landslide: SignalIcon,
@@ -175,8 +176,8 @@ export default function LiveDisastersClient() {
   const [selectedListKey, setSelectedListKey] = useState<string | null>(null);
   const [filterType, setFilterType] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState('all');
-  const [filterCountry, setFilterCountry] = useState<string>('all');
-  const [filterCountries, setFilterCountries] = useState<string[]>([]);
+  /** Multi-select: usa | mexico | canada | other. Empty = all countries. */
+  const [filterCountryRegions, setFilterCountryRegions] = useState<string[]>([]);
   const [filterState, setFilterState] = useState('all');
   const [filterSource, setFilterSource] = useState<'all' | 'database'>('all');
   const [filterFromDate, setFilterFromDate] = useState<string>(() => {
@@ -413,7 +414,9 @@ export default function LiveDisastersClient() {
             const raw = JSON.parse(event.data);
             const fromWs = featureCollectionToDisasters(raw);
             setLiveDisasters((prev) => {
-              const eonetOnly = prev.filter((d) => d.type === 'cyclone' || d.type === 'wildfire' || d.type === 'volcanic');
+              const eonetOnly = prev.filter((d) =>
+                d.type === 'cyclone' || d.type === 'wildfire' || d.type === 'volcanic' || d.type === 'tornado'
+              );
               const merged = [...eonetOnly, ...fromWs];
               return merged;
             });
@@ -715,12 +718,20 @@ export default function LiveDisastersClient() {
     if (t === 'floods' || t === 'flooding') return 'flood';
     if (t === 'snow_storm' || t === 'snowstorm' || t === 'snow_storms') return 'snow_storm';
     if (t === 'earthquakes') return 'earthquake';
+    if (
+      t === 'tornado' ||
+      t === 'tornados' ||
+      t === 'severe_storms' ||
+      t === 'severe_storm' ||
+      t === 'severestorms'
+    ) {
+      return 'tornado';
+    }
     if (t === 'cyclone' || t === 'hurricane' || t === 'storm') return 'cyclone';
     if (t === 'volcanoes' || t === 'volcano') return 'volcanic';
     return t || 'other';
   };
 
-  /** EONET/live feeds often omit country or use "United States" while filters use "USA". */
   const USA_LABELS = new Set([
     'usa',
     'us',
@@ -731,18 +742,21 @@ export default function LiveDisastersClient() {
     'america',
   ]);
 
-  const normalizeCountryForFilter = (c: string | undefined | null): string => {
-    const s = (c || '').trim().toLowerCase();
-    if (!s) return '';
-    if (USA_LABELS.has(s)) return 'usa';
-    return s.replace(/\s+/g, ' ');
-  };
-
   const isInUnitedStatesBBox = (lat: number, lng: number): boolean => {
     if (lat >= 24.0 && lat <= 49.6 && lng >= -124.9 && lng <= -66.9) return true;
     if (lat >= 51.0 && lat <= 71.7 && lng >= -179.0 && lng <= -129.0) return true;
     if (lat >= 18.8 && lat <= 22.3 && lng >= -161.0 && lng <= -154.6) return true;
     return false;
+  };
+
+  const isInMexicoBBox = (lat: number, lng: number): boolean => {
+    return lat >= 14.0 && lat <= 33.5 && lng >= -118.5 && lng <= -86.5;
+  };
+
+  const isInCanadaBBox = (lat: number, lng: number): boolean => {
+    if (isInUnitedStatesBBox(lat, lng)) return false;
+    if (isInMexicoBBox(lat, lng)) return false;
+    return lat >= 41.5 && lat <= 83.5 && lng >= -141.0 && lng <= -52.0;
   };
 
   const getDisasterLatLngForCountry = (d: { location?: { coordinates?: unknown } }): { lat: number; lng: number } | null => {
@@ -763,25 +777,30 @@ export default function LiveDisastersClient() {
     return null;
   };
 
-  const disasterMatchesCountryFilter = (d: { location?: { country?: string; coordinates?: unknown } }, filterCountry: string): boolean => {
-    if (filterCountry === 'all') return true;
-    const fc = normalizeCountryForFilter(filterCountry);
-    const dc = normalizeCountryForFilter(d.location?.country);
-    if (fc && dc && fc === dc) return true;
-    if (fc === 'usa' && !dc) {
-      const ll = getDisasterLatLngForCountry(d);
-      if (ll && isInUnitedStatesBBox(ll.lat, ll.lng)) return true;
+  type CountryBucket = 'usa' | 'mexico' | 'canada' | 'other';
+
+  const getDisasterCountryBucket = (d: { location?: { country?: string; coordinates?: unknown } }): CountryBucket => {
+    const raw = (d.location?.country || '').trim().toLowerCase();
+    if (raw) {
+      if (USA_LABELS.has(raw)) return 'usa';
+      if (raw === 'mexico' || raw === 'méxico' || raw.startsWith('mexico')) return 'mexico';
+      if (raw === 'canada' || raw === 'canadian') return 'canada';
+      return 'other';
     }
-    return false;
+    const ll = getDisasterLatLngForCountry(d);
+    if (!ll) return 'other';
+    if (isInUnitedStatesBBox(ll.lat, ll.lng)) return 'usa';
+    if (isInMexicoBBox(ll.lat, ll.lng)) return 'mexico';
+    if (isInCanadaBBox(ll.lat, ll.lng)) return 'canada';
+    return 'other';
   };
 
   const filteredDisasters = allDisasters.filter(d => {
     if (!filterDisasterByDate(d)) return false;
     if (filterType !== 'all' && normalizeTypeForFilter(d.type) !== normalizeTypeForFilter(filterType)) return false;
     if (filterSeverity !== 'all' && d.severity !== filterSeverity) return false;
-    if (filterCountry !== 'all' && !disasterMatchesCountryFilter(d, filterCountry)) return false;
+    if (filterCountryRegions.length > 0 && !filterCountryRegions.includes(getDisasterCountryBucket(d))) return false;
     if (filterState !== 'all' && d.location?.state !== filterState) return false;
-    if (filterCountries.length > 0 && !filterCountries.some((sel) => disasterMatchesCountryFilter(d, sel))) return false;
     if (filterSource === 'database' && d.source !== 'database') return false;
     return true;
   });
@@ -808,16 +827,22 @@ export default function LiveDisastersClient() {
     : filteredDisasters;
 
   const currentYear = new Date().getFullYear();
+  const disastersForCountryStats =
+    filterCountryRegions.length === 0
+      ? allDisasters
+      : allDisasters.filter((d) => filterCountryRegions.includes(getDisasterCountryBucket(d)));
+
   const stats = {
-    total: allDisasters.length,
-    volcanic: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'volcanic').length,
-    iceberg: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'iceberg').length,
-    wildfires: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'wildfire').length,
-    earthquakes: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'earthquake').length,
-    storms: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'cyclone').length,
-    flood: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'flood').length,
-    snowStorm: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'snow_storm').length,
-    powerOutage: allDisasters.filter(d => normalizeTypeForFilter(d.type) === 'power_outage').length,
+    total: disastersForCountryStats.length,
+    volcanic: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'volcanic').length,
+    iceberg: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'iceberg').length,
+    wildfires: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'wildfire').length,
+    earthquakes: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'earthquake').length,
+    storms: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'cyclone').length,
+    flood: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'flood').length,
+    snowStorm: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'snow_storm').length,
+    tornados: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'tornado').length,
+    powerOutage: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'power_outage').length,
     live: liveDisasters.length,
     database: databaseDisasters.filter((d: ManagedDisaster) => {
       const y = d.createdAt ? new Date(d.createdAt).getFullYear() : NaN;
@@ -826,26 +851,29 @@ export default function LiveDisastersClient() {
   };
 
   const uniqueTypes = Array.from(new Set(allDisasters.map(d => d.type))).filter(Boolean).sort();
-  const uniqueCountries = Array.from(new Set(allDisasters.map(d => d.location?.country).filter(Boolean))).sort();
 
   const getTypeDisplayLabel = (type: string) => {
     if (type === 'cyclone') return 'Hurricane';
     if (type === 'wildfire') return 'Wildfires';
+    if (normalizeTypeForFilter(type) === 'tornado') return 'Tornado';
     return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
 
-  // Get states/provinces for the selected country dynamically from disaster data
-  const getStatesForCountry = (country: string): string[] => {
-    if (!country || country === 'all') return [];
+  const getStatesForRegion = (region: CountryBucket): string[] => {
+    if (!region || region === 'other') return [];
     return Array.from(new Set(
       allDisasters
-        .filter(d => disasterMatchesCountryFilter(d, country) && d.location?.state)
+        .filter(d => getDisasterCountryBucket(d) === region && d.location?.state)
         .map(d => d.location?.state)
         .filter(Boolean) as string[]
     )).sort();
   };
 
-  const availableStates = filterCountry !== 'all' ? getStatesForCountry(filterCountry) : [];
+  const singleRegionForState =
+    filterCountryRegions.length === 1 && ['usa', 'mexico', 'canada'].includes(filterCountryRegions[0])
+      ? (filterCountryRegions[0] as CountryBucket)
+      : null;
+  const availableStates = singleRegionForState ? getStatesForRegion(singleRegionForState) : [];
 
   // Auto-scroll to selected disaster in the list
   useEffect(() => {
@@ -857,12 +885,17 @@ export default function LiveDisastersClient() {
     }
   }, [selectedListKey]);
 
+  useEffect(() => {
+    if (filterCountryRegions.length !== 1 || !['usa', 'mexico', 'canada'].includes(filterCountryRegions[0])) {
+      setFilterState('all');
+    }
+  }, [filterCountryRegions]);
+
   const clearAllFilters = () => {
     setFilterType('all');
     setFilterSeverity('all');
-    setFilterCountry('all');
+    setFilterCountryRegions([]);
     setFilterState('all');
-    setFilterCountries([]);
     setFilterSource('all');
     setListSearchQuery('');
     const d = new Date();
@@ -876,9 +909,8 @@ export default function LiveDisastersClient() {
   const hasActiveFilters =
     filterType !== 'all' ||
     filterSeverity !== 'all' ||
-    filterCountry !== 'all' ||
+    filterCountryRegions.length > 0 ||
     filterState !== 'all' ||
-    filterCountries.length > 0 ||
     filterSource !== 'all' ||
     listSearchQuery.trim() !== '';
 
@@ -888,10 +920,13 @@ export default function LiveDisastersClient() {
         <LiveDisastersMappingLoader />
       ) : (
         <>
-      {/* Quick Stats - clickable filter cards (order: Hurricane, Floods, Wildfires, Snow Storm, Power Outage, Earthquakes, Volcanic Eruptions) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+      {/* Quick Stats — horizontal scroll; order ends with Power Outage */}
+      <div className="mb-6">
+        <p className="text-xs text-[var(--text-muted)] mb-2">Scroll sideways to see all event types</p>
+        <div className="overflow-x-auto pb-2 scroll-smooth [-ms-overflow-style:none] [scrollbar-width:thin]">
+          <div className="flex gap-3 min-w-min snap-x snap-mandatory">
         <Card
-          className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 shrink-0 w-[148px] snap-start ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'cyclone' ? 'all' : 'cyclone'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -902,7 +937,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 ${filterType === 'flood' ? 'ring-2 ring-purple-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 shrink-0 w-[148px] snap-start ${filterType === 'flood' ? 'ring-2 ring-purple-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'flood' ? 'all' : 'flood'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -913,7 +948,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-amber-500 cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30 ${filterType === 'wildfire' ? 'ring-2 ring-amber-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-amber-500 cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30 shrink-0 w-[148px] snap-start ${filterType === 'wildfire' ? 'ring-2 ring-amber-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'wildfire' ? 'all' : 'wildfire'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -924,7 +959,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 ${filterType === 'snow_storm' ? 'ring-2 ring-cyan-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 shrink-0 w-[148px] snap-start ${filterType === 'snow_storm' ? 'ring-2 ring-cyan-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'snow_storm' ? 'all' : 'snow_storm'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -935,18 +970,18 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-slate-500 cursor-pointer transition-all hover:ring-2 hover:ring-slate-400/30 ${filterType === 'power_outage' ? 'ring-2 ring-slate-400/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'power_outage' ? 'all' : 'power_outage'); setFilterSeverity('all'); }}
+          className={`p-3 border-l-4 border-l-violet-500 cursor-pointer transition-all hover:ring-2 hover:ring-violet-500/30 shrink-0 w-[148px] snap-start ${filterType === 'tornado' ? 'ring-2 ring-violet-500/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'tornado' ? 'all' : 'tornado'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Power Outage</p>
-            <BoltIcon className="w-5 h-5 text-slate-400" />
+            <p className="text-sm font-medium text-[var(--text-muted)]">Tornados</p>
+            <span className="text-lg leading-none" aria-hidden>🌪️</span>
           </div>
-          <p className="text-2xl font-bold text-slate-400 leading-tight">{stats.powerOutage}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">No Data Available</p>
+          <p className="text-2xl font-bold text-violet-400 leading-tight">{stats.tornados}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 shrink-0 w-[148px] snap-start ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'earthquake' ? 'all' : 'earthquake'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -957,7 +992,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 shrink-0 w-[148px] snap-start ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'volcanic' ? 'all' : 'volcanic'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -967,6 +1002,19 @@ export default function LiveDisastersClient() {
           <p className="text-2xl font-bold text-red-400 leading-tight">{stats.volcanic}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
+        <Card
+          className={`p-3 border-l-4 border-l-slate-500 cursor-pointer transition-all hover:ring-2 hover:ring-slate-400/30 shrink-0 w-[148px] snap-start ${filterType === 'power_outage' ? 'ring-2 ring-slate-400/40' : ''}`}
+          onClick={() => { setFilterType(prev => prev === 'power_outage' ? 'all' : 'power_outage'); setFilterSeverity('all'); }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Power Outage</p>
+            <BoltIcon className="w-5 h-5 text-slate-400" />
+          </div>
+          <p className="text-2xl font-bold text-slate-400 leading-tight">{stats.powerOutage}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">No Data Available</p>
+        </Card>
+          </div>
+        </div>
       </div>
       {/* Top filter row: all filters in ONE line with search taking more space */}
       <div className="mb-6 relative z-[30]">
@@ -1032,25 +1080,27 @@ export default function LiveDisastersClient() {
               </select>
             </div>
 
-            {/* Country Filter - Takes 1x width */}
-            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
-                Country
-              </label> */}
-              <select
-                value={filterCountry}
-                onChange={(e) => { setFilterCountry(e.target.value); setFilterState('all'); setSelectedDisaster(null); }}
-                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
-              >
-                <option value="all">All Countries</option>
-                {uniqueCountries.map(country => (
-                  <option key={country} value={country}>{country}</option>
-                ))}
-              </select>
+            {/* Countries — multi-select (USA, Mexico, Canada, All other countries) */}
+            <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+              <MultiSelect
+                label="Countries"
+                placeholder="All countries"
+                options={[
+                  { value: 'usa', label: 'USA' },
+                  { value: 'mexico', label: 'Mexico' },
+                  { value: 'canada', label: 'Canada' },
+                  { value: 'other', label: 'All other countries' },
+                ]}
+                value={filterCountryRegions}
+                onChange={(v) => {
+                  setFilterCountryRegions(v);
+                  setSelectedDisaster(null);
+                }}
+              />
             </div>
 
-            {/* State Filter - Takes 1x width (only shows when country is selected) */}
-            {filterCountry !== 'all' && availableStates.length > 0 && (
+            {/* State Filter — only when exactly one of USA / Mexico / Canada is selected */}
+            {singleRegionForState && availableStates.length > 0 && (
               <div className="flex flex-col gap-1.5 flex-1 min-w-0">
                 {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
                   State
@@ -1129,9 +1179,9 @@ export default function LiveDisastersClient() {
                     Severity: {filterSeverity}
                   </span>
                 )}
-                {filterCountry !== 'all' && (
+                {filterCountryRegions.length > 0 && (
                   <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                    Country: {filterCountry}
+                    Countries: {filterCountryRegions.map((r) => ({ usa: 'USA', mexico: 'Mexico', canada: 'Canada', other: 'All other countries' }[r] || r)).join(', ')}
                   </span>
                 )}
                 {filterState !== 'all' && (

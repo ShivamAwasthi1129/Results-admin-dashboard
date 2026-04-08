@@ -67,6 +67,11 @@ interface Order {
   id?: string;
   _id: string;
   stripe_session_id?: string;
+  /** Sales channel / provider (e.g. Stripe, Printify) when provided by API */
+  sales_provider?: string;
+  order_type?: string;
+  channel?: string;
+  metadata?: Record<string, unknown>;
   customer_email: string;
   amount_total?: number;
   amount_total_cents?: number;
@@ -177,6 +182,19 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
   const formatMoney = (value: number, currency = 'usd') =>
     new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase() }).format(value);
 
+  const getOrderTypeLabel = (o: Order) => {
+    const m = o.metadata;
+    return (
+      o.sales_provider ||
+      (typeof m?.sales_provider === 'string' ? m.sales_provider : undefined) ||
+      o.order_type ||
+      (typeof m?.order_type === 'string' ? m.order_type : undefined) ||
+      o.channel ||
+      (typeof m?.channel === 'string' ? m.channel : undefined) ||
+      'Sales provider'
+    );
+  };
+
   const formatAmount = (order: Order) => {
     const amount =
       order.amount_total != null
@@ -206,15 +224,28 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
     {
       key: 'email',
       label: 'Email',
-      width: '16%',
+      width: '14%',
       render: (o: Order) => (
         <span className="text-[var(--text-secondary)] text-sm truncate block">{o.customer_email}</span>
       ),
     },
     {
+      key: 'order_type',
+      label: 'Order type',
+      width: '12%',
+      render: (o: Order) => {
+        const sales = getOrderTypeLabel(o);
+        return (
+          <span className="text-sm text-[var(--text-secondary)] truncate block" title={String(sales)}>
+            {sales}
+          </span>
+        );
+      },
+    },
+    {
       key: 'amount',
       label: 'Amount',
-      width: '12%',
+      width: '10%',
       render: (o: Order) => (
         <span className="font-semibold text-[var(--text-primary)]">
           {formatAmount(o)}
@@ -280,7 +311,7 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
 
   return (
     <>
-      <Card padding="none" className="overflow-hidden">
+      <Card padding="none" className="overflow-visible">
         <div className="p-4 border-b border-[var(--border-color)] bg-[var(--bg-input)]">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
@@ -312,8 +343,11 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
           </div>
         </div>
 
-        <div className="overflow-x-auto overflow-y-visible w-full border border-[var(--border-color)] rounded-lg" style={{ scrollbarGutter: 'stable' }}>
-          <div className="min-w-[1000px]">
+        <div
+          className="overflow-x-scroll overflow-y-visible w-full border border-[var(--border-color)] rounded-lg pb-1"
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <div className="min-w-[1100px] min-h-0">
             <Table<Order>
               columns={columns}
               data={orders}
@@ -355,6 +389,10 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
                 {displayOrder.payment_status}
               </Badge>
             </div>
+            <p className="text-sm text-[var(--text-muted)]">
+              Order type / sales provider:{' '}
+              <span className="font-medium text-[var(--text-primary)]">{getOrderTypeLabel(displayOrder)}</span>
+            </p>
 
             {/* Customer + Payment breakdown side by side */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

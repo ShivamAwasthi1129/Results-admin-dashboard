@@ -19,8 +19,18 @@ function categoryToType(categories?: { id: string; title: string }[]): string {
   const id = (categories[0]?.id || '').toLowerCase();
   const title = (categories[0]?.title || '').toLowerCase();
   if (id.includes('wildfire') || title.includes('wildfire')) return 'wildfire';
-  if (id.includes('storm') || title.includes('storm')) return 'cyclone';
   if (id.includes('volcano') || title.includes('volcano')) return 'volcanic';
+  // NASA EONET severeStorms / tornadoes — must come before generic "storm" (hurricanes)
+  if (
+    id.includes('severestorm') ||
+    id.includes('severe_storm') ||
+    id.includes('tornado') ||
+    title.includes('tornado') ||
+    title.includes('severe')
+  ) {
+    return 'tornado';
+  }
+  if (id.includes('storm') || title.includes('storm')) return 'cyclone';
   return id || title || 'other';
 }
 

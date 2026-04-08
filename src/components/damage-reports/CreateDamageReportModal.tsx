@@ -16,6 +16,26 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline';
 
+const MAX_UPLOAD_MB = 5;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+
+/** Formats typed currency with thousands separators (USD). */
+function formatUsdInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d.]/g, '');
+  if (cleaned === '') return '';
+  const parts = cleaned.split('.');
+  const intRaw = (parts[0] || '').replace(/\D/g, '');
+  const decRaw = parts.length > 1 ? parts.slice(1).join('').replace(/\D/g, '').slice(0, 2) : '';
+  const withCommas = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (cleaned.endsWith('.') && decRaw === '') return `${withCommas}.`;
+  return decRaw.length > 0 ? `${withCommas}.${decRaw}` : withCommas;
+}
+
+function parseUsdToNumber(s: string): number {
+  const n = parseFloat(String(s).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
 interface CreateDamageReportModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -128,7 +148,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   const cache = useCustomersCache();
   const cachedCustomers = cache?.customers ?? [];
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<Array<{ url: string; file?: File }>>([]);
+  const [uploadedImages, setUploadedImages] = useState<Array<{ url: string; file?: File; mediaKind: 'image' | 'video' }>>([]);
   
   // Customer selection: show cached first, then replace with API response
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -303,25 +323,25 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       // Build funding sources array
       const fundingSources = [];
       if (formData.fundingSources.insurance) {
-        fundingSources.push({ source: 'insurance', amount: parseFloat(formData.fundingSources.insurance) });
+        fundingSources.push({ source: 'insurance', amount: parseUsdToNumber(formData.fundingSources.insurance) });
       }
       if (formData.fundingSources.fema) {
-        fundingSources.push({ source: 'fema', amount: parseFloat(formData.fundingSources.fema) });
+        fundingSources.push({ source: 'fema', amount: parseUsdToNumber(formData.fundingSources.fema) });
       }
       if (formData.fundingSources.floodInsurance) {
-        fundingSources.push({ source: 'flood_insurance', amount: parseFloat(formData.fundingSources.floodInsurance) });
+        fundingSources.push({ source: 'flood_insurance', amount: parseUsdToNumber(formData.fundingSources.floodInsurance) });
       }
       if (formData.fundingSources.nonProfit) {
-        fundingSources.push({ source: 'non_profit', amount: parseFloat(formData.fundingSources.nonProfit) });
+        fundingSources.push({ source: 'non_profit', amount: parseUsdToNumber(formData.fundingSources.nonProfit) });
       }
       if (formData.fundingSources.consolidatedNonProfit) {
-        fundingSources.push({ source: 'consolidated_non_profit', amount: parseFloat(formData.fundingSources.consolidatedNonProfit) });
+        fundingSources.push({ source: 'consolidated_non_profit', amount: parseUsdToNumber(formData.fundingSources.consolidatedNonProfit) });
       }
       if (formData.fundingSources.selfPay) {
-        fundingSources.push({ source: 'self_pay', amount: parseFloat(formData.fundingSources.selfPay) });
+        fundingSources.push({ source: 'self_pay', amount: parseUsdToNumber(formData.fundingSources.selfPay) });
       }
       if (formData.fundingSources.other) {
-        fundingSources.push({ source: 'other', amount: parseFloat(formData.fundingSources.other) });
+        fundingSources.push({ source: 'other', amount: parseUsdToNumber(formData.fundingSources.other) });
       }
 
       // Convert uploaded images to URLs
@@ -358,7 +378,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
         insuranceCoverage: formData.insuranceCoverage || undefined,
         description: formData.description,
         affectedAreas: formData.affectedAreas,
-        estimatedCost: parseFloat(formData.estimatedCost) || 0,
+        estimatedCost: parseUsdToNumber(formData.estimatedCost) || 0,
         fundingSources,
         images,
       };
@@ -416,9 +436,9 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   };
 
   // Funding: estimated cost and total from form (for live share and cap)
-  const estimatedCostNum = parseFloat(String(formData.estimatedCost).replace(/[^0-9.-]/g, '')) || 0;
+  const estimatedCostNum = parseUsdToNumber(formData.estimatedCost);
   const fundingKeys = ['insurance', 'fema', 'floodInsurance', 'nonProfit', 'consolidatedNonProfit', 'selfPay', 'other'] as const;
-  const getFundingAmount = (key: (typeof fundingKeys)[number]) => parseFloat(String(formData.fundingSources[key]).replace(/[^0-9.-]/g, '')) || 0;
+  const getFundingAmount = (key: (typeof fundingKeys)[number]) => parseUsdToNumber(formData.fundingSources[key]);
   const totalFunding = fundingKeys.reduce((sum, key) => sum + getFundingAmount(key), 0);
   const fundingExceedsEstimated = estimatedCostNum > 0 && totalFunding > estimatedCostNum;
   const remainingBudget = Math.max(0, estimatedCostNum - totalFunding);
@@ -429,19 +449,25 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   };
 
   const handleFundingChange = (key: (typeof fundingKeys)[number], value: string) => {
-    const num = parseFloat(value.replace(/[^0-9.-]/g, ''));
-    if (Number.isNaN(num) || value === '' || value === '-') {
+    if (value === '' || value === '-') {
       setFormData({
         ...formData,
-        fundingSources: { ...formData.fundingSources, [key]: value },
+        fundingSources: { ...formData.fundingSources, [key]: '' },
       });
       return;
     }
-    const maxAllowed = getMaxForFundingKey(key);
-    const capped = estimatedCostNum > 0 ? Math.min(num, maxAllowed) : num;
+    let formatted = formatUsdInput(value);
+    let num = parseUsdToNumber(formatted);
+    if (estimatedCostNum > 0) {
+      const maxAllowed = getMaxForFundingKey(key);
+      if (num > maxAllowed) {
+        num = maxAllowed;
+        formatted = formatUsdInput(maxAllowed.toFixed(2));
+      }
+    }
     setFormData({
       ...formData,
-      fundingSources: { ...formData.fundingSources, [key]: String(capped) },
+      fundingSources: { ...formData.fundingSources, [key]: formatted },
     });
   };
 
@@ -666,6 +692,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                 { value: 'tornado', label: 'Tornado' },
                 { value: 'storm', label: 'Storm' },
                 { value: 'hail', label: 'Hail' },
+                { value: 'drought', label: 'Drought' },
                 { value: 'other', label: 'Other' },
               ]}
               required
@@ -752,15 +779,17 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
             <div className="flex items-center gap-2 mb-2">
               <CurrencyDollarIcon className="w-5 h-5 text-[var(--text-muted)]" />
               <label className="block text-sm font-medium text-[var(--text-secondary)]">
-                Estimated Repair Cost
+                Estimated Repair Cost (USD)
               </label>
             </div>
             <Input
-              type="number"
+              type="text"
+              inputMode="decimal"
               placeholder="0.00"
-              min={0}
+              autoComplete="off"
+              icon={<span className="text-sm font-semibold">$</span>}
               value={formData.estimatedCost}
-              onChange={(e) => setFormData({ ...formData, estimatedCost: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, estimatedCost: formatUsdInput(e.target.value) })}
               required
             />
           </div>
@@ -804,10 +833,11 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                       )}
                     </div>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="0.00"
-                      min={0}
-                      max={estimatedCostNum > 0 ? getMaxForFundingKey(key) : undefined}
+                      autoComplete="off"
+                      icon={<span className="text-sm font-semibold">$</span>}
                       value={formData.fundingSources[key]}
                       onChange={(e) => handleFundingChange(key, e.target.value)}
                     />
@@ -818,16 +848,17 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
           </div>
         </div>
 
-        {/* Image Upload */}
+        {/* Image & video upload */}
         <div className="space-y-4">
           <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <PhotoIcon className="w-5 h-5" />
-            Image Upload
+            Image &amp; video upload
           </h3>
+          <p className="text-xs text-[var(--text-muted)]">Max {MAX_UPLOAD_MB} MB per file (images and videos).</p>
           <div className="border-2 border-dashed border-[var(--border-color)] rounded-lg p-6">
             <div className="text-center mb-4">
               <PhotoIcon className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-2" />
-              <p className="text-sm text-[var(--text-muted)] mb-2">Upload photos of the damage</p>
+              <p className="text-sm text-[var(--text-muted)] mb-2">Upload photos or videos of the damage</p>
               <label className="cursor-pointer inline-block">
                 <span className="px-4 py-2 bg-[var(--primary-600)] hover:bg-[var(--primary-700)] text-white rounded-xl text-sm font-medium transition-colors inline-flex items-center gap-2">
                   <PhotoIcon className="w-4 h-4" />
@@ -835,15 +866,20 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                 </span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   multiple
                   onChange={(e) => {
                     const files = Array.from(e.target.files || []);
                     files.forEach((file) => {
+                      if (file.size > MAX_UPLOAD_BYTES) {
+                        toast.error(`Each file must be ${MAX_UPLOAD_MB} MB or less.`);
+                        return;
+                      }
                       const reader = new FileReader();
                       reader.onloadend = () => {
                         const base64 = reader.result as string;
-                        setUploadedImages((prev) => [...prev, { url: base64, file }]);
+                        const mediaKind: 'image' | 'video' = file.type.startsWith('video/') ? 'video' : 'image';
+                        setUploadedImages((prev) => [...prev, { url: base64, file, mediaKind }]);
                       };
                       reader.readAsDataURL(file);
                     });
@@ -859,11 +895,20 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                 {uploadedImages.map((image, idx) => (
                   <div key={idx} className="relative aspect-video bg-[var(--bg-input)] rounded-lg overflow-hidden group">
+                    {image.mediaKind === 'video' ? (
+                      <video
+                        src={image.url}
+                        className="w-full h-full object-cover"
+                        controls
+                        playsInline
+                      />
+                    ) : (
                     <img
                       src={image.url}
                       alt={`Upload ${idx + 1}`}
                       className="w-full h-full object-cover"
                     />
+                    )}
                     <button
                       type="button"
                       onClick={() => {

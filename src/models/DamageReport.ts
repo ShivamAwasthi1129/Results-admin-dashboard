@@ -10,6 +10,7 @@ export type DamageType =
   | 'tornado' 
   | 'storm' 
   | 'hail' 
+  | 'drought'
   | 'other';
 
 export type Severity = 'minor' | 'moderate' | 'severe' | 'catastrophic';
@@ -432,7 +433,7 @@ const DamageReportSchema = new Schema<IDamageReport>(
     },
     damageType: {
       type: String,
-      enum: ['hurricane', 'flood', 'wind', 'fire', 'earthquake', 'tornado', 'storm', 'hail', 'other'],
+      enum: ['hurricane', 'flood', 'wind', 'fire', 'earthquake', 'tornado', 'storm', 'hail', 'drought', 'other'],
       required: true,
       index: true,
     },

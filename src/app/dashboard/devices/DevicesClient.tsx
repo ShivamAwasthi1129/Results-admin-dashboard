@@ -94,6 +94,40 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
     firmwareVersion: '2.5.0',
   });
 
+  const [userMgmtDetailByKey, setUserMgmtDetailByKey] = useState<Record<string, Record<string, unknown>>>({});
+  const [userMgmtLoadingKey, setUserMgmtLoadingKey] = useState<string | null>(null);
+
+  const fetchUserManagementMatch = async (key: string, searchName: string) => {
+    if (!token || !searchName.trim()) return;
+    if (userMgmtDetailByKey[key]) return;
+    setUserMgmtLoadingKey(key);
+    try {
+      const res = await fetch(`/api/admin/users?search=${encodeURIComponent(searchName.trim())}&limit=50`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      const users = (data?.data?.users ?? data?.users ?? []) as Array<Record<string, unknown>>;
+      const target = searchName.trim().toLowerCase();
+      const match =
+        users.find((u) => {
+          const full = String(u.fullName ?? '').trim().toLowerCase();
+          const first = String(u.firstName ?? '');
+          const last = String(u.lastName ?? '');
+          const combined = `${first} ${last}`.trim().toLowerCase();
+          return full === target || combined === target;
+        }) || users[0];
+      if (match) {
+        setUserMgmtDetailByKey((prev) => ({ ...prev, [key]: match }));
+      } else {
+        toast.error('No matching user found in User Management');
+      }
+    } catch {
+      toast.error('Failed to load user details');
+    } finally {
+      setUserMgmtLoadingKey(null);
+    }
+  };
+
   // Fetch devices from API
   const fetchDevices = async () => {
     try {
@@ -792,6 +826,8 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
           onClose={() => {
             setIsDetailModalOpen(false);
             setSelectedDevice(null);
+            setUserMgmtDetailByKey({});
+            setUserMgmtLoadingKey(null);
             if (mapRef.current) {
               mapRef.current.remove();
               mapRef.current = null;
@@ -908,9 +944,37 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
                     <div className="w-12 h-12 rounded-full bg-[var(--primary-500)] flex items-center justify-center text-white font-semibold">
                       {getInitials(selectedDevice.primaryOwner.name)}
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="font-semibold text-[var(--text-primary)]">{selectedDevice.primaryOwner.name}</p>
                       <p className="text-sm text-[var(--text-muted)]">{selectedDevice.primaryOwner.role}</p>
+                      <button
+                        type="button"
+                        onClick={() => void fetchUserManagementMatch('owner', selectedDevice.primaryOwner.name)}
+                        className="mt-2 text-sm text-[var(--primary-500)] hover:underline"
+                      >
+                        Show more info
+                      </button>
+                      {userMgmtLoadingKey === 'owner' && (
+                        <p className="text-xs text-[var(--text-muted)] mt-2">Loading…</p>
+                      )}
+                      {userMgmtDetailByKey.owner && (
+                        <div className="mt-3 pt-3 border-t border-[var(--border-color)] text-sm text-[var(--text-secondary)] space-y-1">
+                          <p>
+                            <span className="text-[var(--text-muted)]">Email: </span>
+                            {String(userMgmtDetailByKey.owner.email ?? '—')}
+                          </p>
+                          <p>
+                            <span className="text-[var(--text-muted)]">Phone: </span>
+                            {String(userMgmtDetailByKey.owner.phoneNumber ?? '—')}
+                          </p>
+                          {userMgmtDetailByKey.owner.address != null && (
+                            <p>
+                              <span className="text-[var(--text-muted)]">Address: </span>
+                              {String(userMgmtDetailByKey.owner.address ?? '')}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -925,19 +989,50 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
                   {selectedDevice.familyMembers.length === 0 ? (
                     <p className="text-sm text-[var(--text-muted)] text-center py-4">No family members added</p>
                   ) : (
-                    selectedDevice.familyMembers.map((member, memberIndex) => (
+                    selectedDevice.familyMembers.map((member, memberIndex) => {
+                      const mk = `member-${memberIndex}`;
+                      return (
                       <Card key={member.name ? `${member.name}-${memberIndex}` : `member-${memberIndex}`} className="p-4">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 font-semibold">
                             {getInitials(member.name)}
                           </div>
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <p className="font-semibold text-[var(--text-primary)]">{member.name}</p>
                             <p className="text-sm text-[var(--text-muted)]">{member.role}</p>
+                            <button
+                              type="button"
+                              onClick={() => void fetchUserManagementMatch(mk, member.name)}
+                              className="mt-2 text-sm text-[var(--primary-500)] hover:underline"
+                            >
+                              Show more info
+                            </button>
+                            {userMgmtLoadingKey === mk && (
+                              <p className="text-xs text-[var(--text-muted)] mt-2">Loading…</p>
+                            )}
+                            {userMgmtDetailByKey[mk] && (
+                              <div className="mt-3 pt-3 border-t border-[var(--border-color)] text-sm text-[var(--text-secondary)] space-y-1">
+                                <p>
+                                  <span className="text-[var(--text-muted)]">Email: </span>
+                                  {String(userMgmtDetailByKey[mk].email ?? '—')}
+                                </p>
+                                <p>
+                                  <span className="text-[var(--text-muted)]">Phone: </span>
+                                  {String(userMgmtDetailByKey[mk].phoneNumber ?? '—')}
+                                </p>
+                                {userMgmtDetailByKey[mk].address != null && (
+                                  <p>
+                                    <span className="text-[var(--text-muted)]">Address: </span>
+                                    {String(userMgmtDetailByKey[mk].address ?? '')}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </Card>
-                    ))
+                    );
+                  })
                   )}
                 </div>
               </div>

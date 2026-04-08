@@ -15,6 +15,7 @@ import {
   MagnifyingGlassIcon,
   PaperAirplaneIcon,
   UsersIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
 
 const EmailEditor = dynamic(() => import('react-email-editor'), { ssr: false });
@@ -116,6 +117,7 @@ export default function NewsletterClient() {
   const [allSelected, setAllSelected] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
   const emailEditorRef = useRef<EditorRef | null>(null);
+  const campaignImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const extractHtmlFromEditor = useCallback(async (): Promise<string> => {
     const editor = emailEditorRef.current?.editor;
@@ -188,6 +190,88 @@ export default function NewsletterClient() {
     };
     editor.loadDesign(safeDesign as unknown as object);
   }, []);
+
+  const loadEmptyEditor = useCallback(() => {
+    setSubject('New campaign');
+    setHtml('');
+    const editor = emailEditorRef.current?.editor;
+    if (!editor) {
+      toast.info('Editor is still loading — try again in a moment.');
+      return;
+    }
+    const emptyDesign = {
+      body: {
+        id: 'root',
+        rows: [
+          {
+            id: 'row-blank',
+            cells: [1],
+            columns: [
+              {
+                id: 'col-blank',
+                contents: [
+                  {
+                    id: 'text-blank',
+                    type: 'text',
+                    values: {
+                      containerPadding: '24px',
+                      text:
+                        '<p style="margin:0;color:#64748b;font-family:Arial,sans-serif">Empty canvas — add content from the toolbox or use <strong>Create new campaign</strong> to place an image.</p>',
+                    },
+                  },
+                ],
+                values: { backgroundColor: '', padding: '0px' },
+              },
+            ],
+            values: {
+              backgroundColor: '',
+              columnsBackgroundColor: '',
+              columnsBorderRadius: '0px',
+              columnsPadding: '0px',
+              hideDesktop: false,
+              hideMobile: false,
+              noStackMobile: false,
+              padding: '0px',
+            },
+          },
+        ],
+        values: {
+          backgroundColor: '#f3f4f6',
+          contentWidth: '680px',
+          contentAlign: 'center',
+          fontFamily: {
+            label: 'Arial',
+            value: 'arial,helvetica,sans-serif',
+          },
+          preheaderText: '',
+        },
+      },
+      counters: { u_row: 1, u_column: 1, u_content_text: 1 },
+      schemaVersion: 12,
+    };
+    editor.loadDesign(emptyDesign as unknown as object);
+    toast.success('Blank template ready — build your custom campaign.');
+  }, []);
+
+  const addImageToCanvas = useCallback(
+    (file: File) => {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please choose an image file');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const html = `<div style="font-family:Arial,sans-serif;padding:16px;text-align:center"><p style="margin:0 0 12px 0;color:#64748b;font-size:14px">Campaign image</p><img src="${dataUrl}" alt="" style="max-width:100%;height:auto;border-radius:12px;display:block;margin:0 auto" /></div>`;
+        setSubject((s) => s.trim() || 'New campaign');
+        setHtml(html);
+        loadTemplateIntoEditor(html);
+        toast.success('Image added to the editor canvas');
+      };
+      reader.readAsDataURL(file);
+    },
+    [loadTemplateIntoEditor]
+  );
 
   const backendBase = getBackendBase();
 
@@ -519,7 +603,7 @@ export default function NewsletterClient() {
 
         <div>
           <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Pre-made templates</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
             {NEWSLETTER_TEMPLATES.map((template) => (
               <button
                 key={template.id}
@@ -535,7 +619,43 @@ export default function NewsletterClient() {
                 </div>
               </button>
             ))}
+            <button
+              type="button"
+              onClick={loadEmptyEditor}
+              className="text-left p-0 rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--bg-card)] hover:shadow-md hover:border-violet-500/50 transition-all overflow-hidden"
+            >
+              <div className="h-1.5 bg-gradient-to-r from-slate-500 to-zinc-600" />
+              <div className="p-3">
+                <p className="font-semibold text-sm text-[var(--text-primary)]">Add new template</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">Open an empty editor to create a custom campaign from scratch.</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => campaignImageInputRef.current?.click()}
+              className="text-left p-0 rounded-xl border border-dashed border-[var(--primary-500)]/40 bg-[var(--bg-card)] hover:shadow-md hover:border-[var(--primary-500)] transition-all overflow-hidden"
+            >
+              <div className="h-1.5 bg-gradient-to-r from-rose-500 to-orange-500" />
+              <div className="p-3 flex gap-2 items-start">
+                <PhotoIcon className="w-5 h-5 text-[var(--primary-500)] shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-sm text-[var(--text-primary)]">Create new campaign</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">Upload an image — it is placed directly in the newsletter editor canvas.</p>
+                </div>
+              </div>
+            </button>
           </div>
+          <input
+            ref={campaignImageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) addImageToCanvas(f);
+              e.target.value = '';
+            }}
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

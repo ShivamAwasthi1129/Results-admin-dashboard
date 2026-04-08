@@ -147,6 +147,7 @@ const getDamageTypeIcon = (type: string) => {
     tornado: '🌪️',
     storm: '⛈️',
     hail: '❄️',
+    drought: '🌾',
     other: '⚠️',
   };
   return icons[type] || '⚠️';
@@ -550,6 +551,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                 { value: 'tornado', label: 'Tornado' },
                 { value: 'storm', label: 'Storm' },
                 { value: 'hail', label: 'Hail' },
+                { value: 'drought', label: 'Drought' },
                 { value: 'other', label: 'Other' },
               ]}
               className="h-[42px]"

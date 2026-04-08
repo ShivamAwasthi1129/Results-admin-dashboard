@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout';
 import { Card, Badge, Button, Modal, Input, Select, PhoneInput } from '@/components/ui';
+import AddressAutocompleteInput, { type ResolvedPlace } from '@/components/ui/AddressAutocompleteInput';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'react-toastify';
 import {
@@ -68,6 +69,7 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [customFacility, setCustomFacility] = useState('');
   const [showCustomFacility, setShowCustomFacility] = useState(false);
+  const [resolvedAddressCoords, setResolvedAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     addressLine1: '',
@@ -278,7 +280,7 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
             notes: formData.notes.trim() || '',
             type: formData.type,
             facilities: formData.facilities || [],
-            coordinates: selectedShelter.coordinates || { lat: 0, lng: 0 },
+            coordinates: resolvedAddressCoords || selectedShelter.coordinates || { lat: 0, lng: 0 },
           }),
         });
         const data = await response.json();
@@ -326,7 +328,7 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
             notes: formData.notes.trim(),
             type: formData.type,
             facilities: formData.facilities,
-            coordinates: { lat: 0, lng: 0 },
+            coordinates: resolvedAddressCoords || { lat: 0, lng: 0 },
           }),
         });
         const data = await response.json();
@@ -378,6 +380,7 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
     setFormErrors({});
     setCustomFacility('');
     setShowCustomFacility(false);
+    setResolvedAddressCoords(null);
     setIsEditing(false);
     setSelectedShelter(null);
   };
@@ -406,6 +409,11 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
       facilities: Array.isArray(shelter.facilities) ? shelter.facilities : [],
     });
     setFormErrors({}); // Clear any previous errors
+    setResolvedAddressCoords(
+      shelter.coordinates && typeof shelter.coordinates.lat === 'number'
+        ? { lat: shelter.coordinates.lat, lng: shelter.coordinates.lng }
+        : null
+    );
     setIsEditing(true);
     setIsModalOpen(true);
   };
@@ -931,13 +939,24 @@ export default function SheltersClient({ initialShelters }: SheltersClientProps)
                 error={formErrors.name}
                 required
               />
-              <Input
+              <AddressAutocompleteInput
                 label="Address Line 1 *"
-                placeholder="Street address, building number"
+                placeholder="Start typing for suggestions (Google Places)"
                 value={formData.addressLine1}
-                onChange={(e) => {
-                  setFormData(prev => ({ ...prev, addressLine1: e.target.value }));
+                onChange={(value) => {
+                  setFormData(prev => ({ ...prev, addressLine1: value }));
                   if (formErrors.addressLine1) setFormErrors(prev => ({ ...prev, addressLine1: '' }));
+                }}
+                onPlaceResolved={(place: ResolvedPlace) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    addressLine1: place.addressLine1 || prev.addressLine1,
+                    city: place.city || prev.city,
+                    state: place.state || prev.state,
+                    zipCode: place.zipCode || prev.zipCode,
+                    country: place.country || prev.country,
+                  }));
+                  setResolvedAddressCoords({ lat: place.lat, lng: place.lng });
                 }}
                 error={formErrors.addressLine1}
                 required

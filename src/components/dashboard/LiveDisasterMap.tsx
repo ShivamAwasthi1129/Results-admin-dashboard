@@ -53,6 +53,7 @@ const typeColors: Record<string, string> = {
   drought: '#f97316',
   landslide: '#78716c',
   snow_storm: '#06b6d4',
+  tornado: '#8b5cf6',
   power_outage: '#64748b',
   other: '#94a3b8',
 };
@@ -63,6 +64,7 @@ function normalizeMarkerType(type: string): string {
   if (t === 'floods') return 'flood';
   if (t === 'snow storm' || t === 'snowstorm') return 'snow_storm';
   if (t === 'volcanoes' || t === 'volcano') return 'volcanic';
+  if (t === 'tornado' || t === 'tornados' || t.includes('severe_storm') || t.includes('severestorm')) return 'tornado';
   return t || 'other';
 }
 
@@ -70,7 +72,7 @@ function normalizeMarkerType(type: string): string {
 function getMarkerSvg(type: string, color: string, size: number, isSelected: boolean, isHighlighted: boolean): string {
   const markerType = normalizeMarkerType(type);
   const stroke = isSelected ? 3 : 2;
-  const animClass = markerType === 'volcanic' ? 'marker-anim-eruption' : markerType === 'wildfire' ? 'marker-anim-flame' : markerType === 'earthquake' ? 'marker-anim-ripple' : markerType === 'iceberg' ? 'marker-anim-frost' : markerType === 'cyclone' ? 'marker-anim-spin' : '';
+  const animClass = markerType === 'volcanic' ? 'marker-anim-eruption' : markerType === 'wildfire' ? 'marker-anim-flame' : markerType === 'earthquake' ? 'marker-anim-ripple' : markerType === 'iceberg' ? 'marker-anim-frost' : markerType === 'cyclone' || markerType === 'tornado' ? 'marker-anim-spin' : '';
   const base = `<div class="disaster-marker-wrap ${animClass}" style="width:${size}px;height:${size}px;position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;">`;
   const ring = (isSelected || isHighlighted) ? `<div class="marker-ring" style="position:absolute;inset:-8px;border:2px solid ${color};border-radius:50%;opacity:0.6;animation:ripple-marker 1.5s infinite;"></div>` : '';
   let svg = '';
@@ -89,6 +91,9 @@ function getMarkerSvg(type: string, color: string, size: number, isSelected: boo
       break;
     case 'cyclone':
       svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><path fill="none" stroke="${color}" stroke-width="${stroke}" d="M16 4 Q24 8 24 16 Q24 24 16 28 Q8 24 8 16 Q8 8 16 4"/><path fill="${color}" d="M16 12v8l6-4-6-4z"/></svg>`;
+      break;
+    case 'tornado':
+      svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 8px ${color});"><path fill="${color}" d="M8 6h16v2H8zm2 4h12v2H10zm2 4h8v2h-8zm2 4h4v10h-4z"/><path fill="${color}" opacity="0.6" d="M6 26h20v2H6z"/></svg>`;
       break;
     case 'flood':
       svg = `<svg viewBox="0 0 32 32" width="${size - 8}" height="${size - 8}" style="filter:drop-shadow(0 0 6px ${color});"><path fill="${color}" d="M4 20h24v4H4z"/><path fill="${color}" opacity="0.8" d="M8 14h16v4H8z"/><path fill="${color}" opacity="0.6" d="M12 8h8v4h-8z"/></svg>`;

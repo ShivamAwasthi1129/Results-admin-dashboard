@@ -524,7 +524,15 @@ export default function PrintifyStockClient() {
       const list = data?.data?.shops ?? [];
       setShops(list);
       if (list.length > 0 && !selectedShopId) {
-        setSelectedShopId(String(list[0].id));
+        const envId = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_PRINTIFY_DEFAULT_SHOP_ID : '';
+        const byEnv = envId && list.some((s: PrintifyShop) => String(s.id) === String(envId));
+        const resultsStore = list.find((s: PrintifyShop) => /results/i.test(String(s.title || '')));
+        const pick = byEnv
+          ? String(envId)
+          : resultsStore
+            ? String(resultsStore.id)
+            : String(list[0].id);
+        setSelectedShopId(pick);
       }
     } catch (e) {
       setError('Failed to load Printify shops');
@@ -894,7 +902,7 @@ export default function PrintifyStockClient() {
 
   return (
     <DashboardLayout
-      title="Printify Stock"
+      title="Printify"
       subtitle={printifySubtitle}
       icon={<ArchiveBoxIcon className="w-7 h-7" />}
     >

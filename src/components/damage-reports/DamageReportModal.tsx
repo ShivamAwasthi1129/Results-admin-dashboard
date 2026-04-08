@@ -827,6 +827,7 @@ export default function DamageReportModal({ report, isOpen, onClose, onUpdate, v
                         { value: 'tornado', label: 'Tornado' },
                         { value: 'storm', label: 'Storm' },
                         { value: 'hail', label: 'Hail' },
+                        { value: 'drought', label: 'Drought' },
                         { value: 'other', label: 'Other' },
                       ]}
                     />
