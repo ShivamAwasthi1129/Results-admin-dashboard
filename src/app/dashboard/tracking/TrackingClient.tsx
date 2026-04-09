@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout';
 import { Card, Badge, Button, Input, Select, Modal } from '@/components/ui';
 import { toast } from 'react-toastify';
@@ -10,6 +10,10 @@ import {
   MagnifyingGlassIcon,
   ArrowPathIcon,
   EyeIcon,
+  EnvelopeIcon,
+  PhoneIcon,
+  CalendarDaysIcon,
+  IdentificationIcon,
 } from '@heroicons/react/24/outline';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/context/AuthContext';
@@ -49,6 +53,43 @@ interface Location {
   isActive: boolean;
 }
 
+/** Subset of app user from GET /api/admin/users (user management) */
+interface AppUserProfile {
+  id: string;
+  _id?: string;
+  fullName: string | null;
+  phoneNumber: string;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string;
+  pincode: string | null;
+  dateOfBirth?: string | null;
+  role?: string;
+  bloodGroup?: string | null;
+  createdAt?: string;
+  isActive?: boolean;
+  addresses?: Array<{
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    pincode: string;
+    isDefault?: boolean;
+  }>;
+}
+
+function formatProfileStreetAddress(u: AppUserProfile): string {
+  if (u.addresses?.length) {
+    const a = u.addresses.find((x) => x.isDefault) ?? u.addresses[0];
+    const parts = [a.address, a.city, a.state, a.pincode, a.country].filter(Boolean);
+    if (parts.length) return parts.join(', ');
+  }
+  const parts = [u.address, u.city, u.state, u.pincode, u.country].filter(Boolean);
+  return parts.length ? parts.join(', ') : '';
+}
+
 
 interface TrackingClientProps {
   token: string | null;
@@ -57,6 +98,12 @@ interface TrackingClientProps {
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('auth-token');
+}
+
+function getTrackingApiBase(): string {
+  const raw = process.env.NEXT_PUBLIC_DOMAIN_NAME;
+  if (!raw || typeof raw !== 'string') return '';
+  return raw.replace(/\/$/, '');
 }
 
 export default function TrackingClient({ token: tokenProp }: TrackingClientProps) {
@@ -72,6 +119,8 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyPagination, setHistoryPagination] = useState<{ page: number; limit: number; total: number; pages: number } | null>(null);
+  const [userProfile, setUserProfile] = useState<AppUserProfile | null>(null);
+  const [userProfileLoading, setUserProfileLoading] = useState(false);
 
   // Fetch all locations (always send auth token from localStorage/context in header)
   const fetchLocations = async () => {
@@ -83,16 +132,21 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
     }
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_DOMAIN_NAME}/api/tracking/location/all`,
-        {
-          headers: {
-            Authorization: `Bearer ${t}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        }
-      );
+      const base = getTrackingApiBase();
+      if (!base) {
+        toast.error('NEXT_PUBLIC_DOMAIN_NAME is not configured');
+        setLocations([]);
+        setIsLoading(false);
+        setIsInitialLoading(false);
+        return;
+      }
+      const response = await fetch(`${base}/api/tracking/location/all`, {
+        headers: {
+          Authorization: `Bearer ${t}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch locations' }));
         console.error('Failed to fetch locations:', response.status, errorData);
@@ -114,7 +168,17 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
             latitude: number;
             longitude: number;
             accuracy?: number;
-            user?: { id?: string; fullName?: string | null; phoneNumber?: string | null; email?: string | null; isActive?: boolean };
+            user?: {
+              id?: string;
+              fullName?: string | null;
+              phoneNumber?: string | null;
+              email?: string | null;
+              isActive?: boolean;
+              address?: string | null;
+              city?: string | null;
+              state?: string | null;
+              country?: string | null;
+            };
           }) => ({
             id: loc.user?.id ?? loc.userId,
             userId: loc.userId,
@@ -122,6 +186,10 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
             latitude: loc.latitude,
             longitude: loc.longitude,
             accuracy: loc.accuracy,
+            address: loc.user?.address ?? undefined,
+            city: loc.user?.city ?? undefined,
+            state: loc.user?.state ?? undefined,
+            country: loc.user?.country ?? undefined,
             lastUpdatedAt: new Date().toISOString(),
             isActive: loc.user?.isActive ?? true,
           }));
@@ -197,36 +265,120 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
     setLocationHistory([]);
     setHistoryError(null);
     setHistoryPagination(null);
+    setUserProfile(null);
+    setUserProfileLoading(false);
     setIsLocationModalOpen(true);
+  };
+
+  const fetchUserProfileForModal = async (userId: string) => {
+    const t = token ?? getAuthToken();
+    if (!t) return;
+    setUserProfileLoading(true);
+    setUserProfile(null);
+    try {
+      const headers: HeadersInit = {
+        Authorization: `Bearer ${t}`,
+        Accept: 'application/json',
+      };
+      const matchesId = (u: { id?: string; _id?: string }) =>
+        u.id === userId || u._id === userId;
+
+      const r1 = await fetch(`/api/admin/users?search=${encodeURIComponent(userId)}&limit=100`, {
+        headers,
+        credentials: 'include',
+      });
+      const j1 = await r1.json().catch(() => ({}));
+      if (r1.ok && j1.success && Array.isArray(j1.data?.users)) {
+        const found = j1.data.users.find(matchesId);
+        if (found) {
+          setUserProfile(found as AppUserProfile);
+          return;
+        }
+      }
+
+      const r2 = await fetch(`/api/admin/users?page=1&limit=500`, {
+        headers,
+        credentials: 'include',
+      });
+      const j2 = await r2.json().catch(() => ({}));
+      if (r2.ok && j2.success && Array.isArray(j2.data?.users)) {
+        const found = j2.data.users.find(matchesId);
+        if (found) setUserProfile(found as AppUserProfile);
+      }
+    } catch (e) {
+      console.error('fetchUserProfileForModal', e);
+    } finally {
+      setUserProfileLoading(false);
+    }
   };
 
   // Fetch location history when modal opens for the selected user
   const fetchLocationHistory = async (userId: string) => {
     const t = token ?? getAuthToken();
     if (!t) return;
+    const base = getTrackingApiBase();
+    if (!base) {
+      setHistoryError('NEXT_PUBLIC_DOMAIN_NAME is not configured (same base URL as Live Tracking list).');
+      return;
+    }
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const response = await fetch(`/api/tracking/location/history/${userId}?limit=500`, {
-        headers: {
-          Authorization: `Bearer ${t}`,
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-      const data = await response.json();
+      const response = await fetch(
+        `${base}/api/tracking/location/history/${encodeURIComponent(userId)}?limit=500`,
+        {
+          headers: {
+            Authorization: `Bearer ${t}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        }
+      );
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         setLocationHistory([]);
         setHistoryPagination(null);
-        setHistoryError(data.error || data.message || `Failed to load history: ${response.status}`);
+        setHistoryError(
+          data.error || data.message || `Failed to load history: ${response.status}`
+        );
         return;
       }
-      if (data.success && data.data?.history && Array.isArray(data.data.history)) {
-        setLocationHistory(data.data.history);
-        setHistoryPagination(data.data.pagination ?? null);
-      } else {
-        setLocationHistory([]);
-        setHistoryPagination(null);
+
+      let rawHistory: unknown[] = [];
+      if (data.success && data.data) {
+        const d = data.data;
+        if (Array.isArray(d.history)) rawHistory = d.history;
+        else if (Array.isArray(d.locations)) rawHistory = d.locations;
+      } else if (Array.isArray(data.history)) {
+        rawHistory = data.history;
+      }
+
+      const mapped: HistoryPoint[] = [];
+      rawHistory.forEach((item, i) => {
+        const p = item as Record<string, unknown>;
+        const lat = Number(p.latitude ?? p.lat);
+        const lng = Number(p.longitude ?? p.lng ?? p.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        const pt: HistoryPoint = {
+          id: String(p.id ?? p._id ?? `${i}-${lat}-${lng}`),
+          userId: String(p.userId ?? p.user_id ?? userId),
+          latitude: lat,
+          longitude: lng,
+          timestamp: String(
+            p.timestamp ?? p.createdAt ?? p.created_at ?? p.time ?? new Date().toISOString()
+          ),
+        };
+        if (p.accuracy != null && Number.isFinite(Number(p.accuracy))) {
+          pt.accuracy = Number(p.accuracy);
+        }
+        mapped.push(pt);
+      });
+
+      setLocationHistory(mapped);
+      setHistoryPagination(data.data?.pagination ?? data.pagination ?? null);
+
+      if (data.success === false && mapped.length === 0) {
+        setHistoryError(data.error || data.message || 'No tracking history returned');
       }
     } catch (err) {
       console.error('Fetch location history error:', err);
@@ -239,9 +391,10 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
   };
 
   useEffect(() => {
-    if (isLocationModalOpen && selectedLocation?.userId) {
-      fetchLocationHistory(selectedLocation.userId);
-    }
+    if (!isLocationModalOpen || !selectedLocation?.userId) return;
+    const uid = selectedLocation.userId;
+    fetchLocationHistory(uid);
+    fetchUserProfileForModal(uid);
   }, [isLocationModalOpen, selectedLocation?.userId]);
 
   const formatDate = (dateString: string) => {
@@ -253,6 +406,13 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
       minute: '2-digit',
     });
   };
+
+  const formatDateOnly = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
 
   // Ensure locations is always an array
   const safeLocations = Array.isArray(locations) ? locations : [];
@@ -434,6 +594,8 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
           setLocationHistory([]);
           setHistoryError(null);
           setHistoryPagination(null);
+          setUserProfile(null);
+          setUserProfileLoading(false);
         }}
         title="User Location Details"
         size="xl"
@@ -441,20 +603,44 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
         {selectedLocation && (
           <div className="space-y-6">
             {/* User Header */}
-            <div className="flex items-center gap-4 pb-4 border-b border-[var(--border-color)]">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white ${
-                selectedLocation.isActive ? 'bg-green-500' : 'bg-gray-500'
+            <div className="flex items-start gap-4 pb-4 border-b border-[var(--border-color)]">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white shrink-0 ${
+                (userProfile?.isActive ?? selectedLocation.isActive) ? 'bg-green-500' : 'bg-gray-500'
               }`}>
-                {selectedLocation.userName?.charAt(0)?.toUpperCase() || 'U'}
+                {(userProfile?.fullName || selectedLocation.userName)?.charAt(0)?.toUpperCase() || 'U'}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <h3 className="text-xl font-bold text-[var(--text-primary)] mb-1">
-                  {selectedLocation.userName || 'Unknown User'}
+                  {userProfile?.fullName?.trim() || selectedLocation.userName || 'Unknown User'}
                 </h3>
-                <p className="text-sm text-[var(--text-muted)] font-mono mb-2">{selectedLocation.userId}</p>
-                <Badge variant={selectedLocation.isActive ? 'success' : 'secondary'} size="sm">
-                  {selectedLocation.isActive ? 'Active' : 'Inactive'}
-                </Badge>
+                <p className="text-sm text-[var(--text-muted)] font-mono mb-2 break-all">{selectedLocation.userId}</p>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <Badge variant={selectedLocation.isActive ? 'success' : 'secondary'} size="sm">
+                    {selectedLocation.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                  {userProfile?.role && (
+                    <Badge variant="secondary" size="sm">{userProfile.role}</Badge>
+                  )}
+                </div>
+                {(userProfileLoading || userProfile?.email || userProfile?.phoneNumber) && (
+                  <div className="space-y-1.5 text-sm">
+                    {userProfileLoading && !userProfile?.email && !userProfile?.phoneNumber && (
+                      <p className="text-[var(--text-muted)]">Loading profile…</p>
+                    )}
+                    {userProfile?.email && (
+                      <p className="flex items-center gap-2 text-[var(--text-primary)]">
+                        <EnvelopeIcon className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
+                        <a href={`mailto:${userProfile.email}`} className="hover:underline truncate">{userProfile.email}</a>
+                      </p>
+                    )}
+                    {userProfile?.phoneNumber && (
+                      <p className="flex items-center gap-2 text-[var(--text-primary)]">
+                        <PhoneIcon className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
+                        <span className="font-mono">{userProfile.phoneNumber}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -499,37 +685,58 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
 
             {/* Location Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Address Section */}
+              {/* Address — prefer user management profile */}
               <div>
-                <p className="text-sm font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wide">Address</p>
+                <p className="text-sm font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wide flex items-center gap-2">
+                  <MapPinIcon className="w-4 h-4" />
+                  Address
+                </p>
                 <div className="bg-[var(--bg-input)] p-4 rounded-lg">
-                  <p className="text-[var(--text-primary)]">
-                    {selectedLocation.address || 'N/A'}
-                    {selectedLocation.city && (selectedLocation.address ? `, ${selectedLocation.city}` : selectedLocation.city)}
-                    {selectedLocation.state && (selectedLocation.city || selectedLocation.address ? `, ${selectedLocation.state}` : selectedLocation.state)}
-                    {selectedLocation.country && (selectedLocation.state || selectedLocation.city || selectedLocation.address ? `, ${selectedLocation.country}` : selectedLocation.country)}
-                  </p>
-                  {selectedLocation.city && (
-                    <div className="mt-2 text-xs text-[var(--text-muted)]">
-                      <span className="font-medium">City:</span> {selectedLocation.city}
-                    </div>
+                  {userProfileLoading && (
+                    <p className="text-sm text-[var(--text-muted)]">Loading address from user profile…</p>
                   )}
-                  {selectedLocation.state && (
-                    <div className="mt-1 text-xs text-[var(--text-muted)]">
-                      <span className="font-medium">State:</span> {selectedLocation.state}
-                    </div>
-                  )}
-                  {selectedLocation.country && (
-                    <div className="mt-1 text-xs text-[var(--text-muted)]">
-                      <span className="font-medium">Country:</span> {selectedLocation.country}
-                    </div>
-                  )}
+                  {!userProfileLoading && (() => {
+                    const fromProfile = userProfile ? formatProfileStreetAddress(userProfile) : '';
+                    const fromTracking = [
+                      selectedLocation.address,
+                      selectedLocation.city,
+                      selectedLocation.state,
+                      selectedLocation.country,
+                    ]
+                      .filter(Boolean)
+                      .join(', ');
+                    const line = fromProfile || fromTracking || 'No address on file';
+                    const city = userProfile?.city ?? selectedLocation.city;
+                    const state = userProfile?.state ?? selectedLocation.state;
+                    const country = userProfile?.country ?? selectedLocation.country;
+                    const pin = userProfile?.pincode;
+                    return (
+                      <>
+                        <p className="text-[var(--text-primary)] leading-relaxed">{line}</p>
+                        {(city || state || country || pin) && (
+                          <div className="mt-3 space-y-1 text-xs text-[var(--text-muted)] border-t border-[var(--border-color)] pt-3">
+                            {city && (
+                              <p><span className="font-medium text-[var(--text-secondary)]">City:</span> {city}</p>
+                            )}
+                            {state && (
+                              <p><span className="font-medium text-[var(--text-secondary)]">State:</span> {state}</p>
+                            )}
+                            {country && (
+                              <p><span className="font-medium text-[var(--text-secondary)]">Country:</span> {country}</p>
+                            )}
+                            {pin && (
+                              <p><span className="font-medium text-[var(--text-secondary)]">Postal code:</span> {pin}</p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
-              {/* Coordinates Section */}
               <div>
-                <p className="text-sm font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wide">Coordinates</p>
+                <p className="text-sm font-semibold text-[var(--text-muted)] mb-2 uppercase tracking-wide">Last known coordinates</p>
                 <div className="bg-[var(--bg-input)] p-4 rounded-lg">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -544,6 +751,39 @@ export default function TrackingClient({ token: tokenProp }: TrackingClientProps
                 </div>
               </div>
             </div>
+
+            {/* Profile details from user management */}
+            {userProfile && (userProfile.dateOfBirth || userProfile.bloodGroup || userProfile.createdAt) && (
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-muted)] mb-3 uppercase tracking-wide flex items-center gap-2">
+                  <IdentificationIcon className="w-4 h-4" />
+                  Profile
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {userProfile.dateOfBirth && (
+                    <div className="bg-[var(--bg-input)] p-3 rounded-lg flex items-start gap-2">
+                      <CalendarDaysIcon className="w-5 h-5 text-[var(--text-muted)] shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-[var(--text-muted)]">Date of birth</p>
+                        <p className="text-sm font-medium text-[var(--text-primary)]">{formatDateOnly(userProfile.dateOfBirth)}</p>
+                      </div>
+                    </div>
+                  )}
+                  {userProfile.bloodGroup && (
+                    <div className="bg-[var(--bg-input)] p-3 rounded-lg">
+                      <p className="text-xs text-[var(--text-muted)]">Blood group</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{userProfile.bloodGroup}</p>
+                    </div>
+                  )}
+                  {userProfile.createdAt && (
+                    <div className="bg-[var(--bg-input)] p-3 rounded-lg">
+                      <p className="text-xs text-[var(--text-muted)]">Member since</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{formatDateOnly(userProfile.createdAt)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Location Details Grid */}
             {(selectedLocation.accuracy || selectedLocation.speed || selectedLocation.heading || selectedLocation.altitude) && (

@@ -909,10 +909,11 @@ export default function LiveDisastersClient() {
   const hasActiveFilters =
     filterType !== 'all' ||
     filterSeverity !== 'all' ||
-    filterCountryRegions.length > 0 ||
     filterState !== 'all' ||
     filterSource !== 'all' ||
     listSearchQuery.trim() !== '';
+
+  const showClearFiltersButton = hasActiveFilters || filterCountryRegions.length > 0;
 
   return (
     <DashboardLayout title="Live Disasters" subtitle="Real-time global disaster monitoring" icon={<GlobeAltIcon className="w-7 h-7" />}>
@@ -922,7 +923,7 @@ export default function LiveDisastersClient() {
         <>
       {/* Quick Stats — horizontal scroll; order ends with Power Outage */}
       <div className="mb-6">
-        <p className="text-xs text-[var(--text-muted)] mb-2">Scroll sideways to see all event types</p>
+        {/* <p className="text-xs text-[var(--text-muted)] mb-2">Scroll sideways to see all event types</p> */}
         <div className="overflow-x-auto pb-2 scroll-smooth [-ms-overflow-style:none] [scrollbar-width:thin]">
           <div className="flex gap-3 min-w-min snap-x snap-mandatory">
         <Card
@@ -1017,9 +1018,9 @@ export default function LiveDisastersClient() {
         </div>
       </div>
       {/* Top filter row: all filters in ONE line with search taking more space */}
-      <div className="mb-6 relative z-[30]">
+      <div className="mb-6 relative z-[8000] isolate">
         <div className="p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20 backdrop-blur-sm">
-          <div className="flex items-end gap-3 w-full">
+          <div className="flex items-center gap-3 w-full">
             {/* Search Bar - Takes 2x width */}
             <div className="flex flex-col gap-1.5 flex-[2] min-w-0">
               {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
@@ -1083,7 +1084,7 @@ export default function LiveDisastersClient() {
             {/* Countries — multi-select (USA, Mexico, Canada, All other countries) */}
             <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
               <MultiSelect
-                label="Countries"
+                variant="filter"
                 placeholder="All countries"
                 options={[
                   { value: 'usa', label: 'USA' },
@@ -1145,7 +1146,7 @@ export default function LiveDisastersClient() {
             </div>
 
             {/* Clear Filters Button - Fixed width */}
-            {hasActiveFilters && (
+            {showClearFiltersButton && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-transparent uppercase tracking-wide">
                   Clear
@@ -1162,6 +1163,39 @@ export default function LiveDisastersClient() {
             )}
           </div>
 
+          {filterCountryRegions.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5 items-center">
+              <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide shrink-0">
+                Selected countries
+              </span>
+              {filterCountryRegions.map((r) => {
+                const regionLabel =
+                  ({ usa: 'USA', mexico: 'Mexico', canada: 'Canada', other: 'All other countries' } as const)[
+                    r as 'usa' | 'mexico' | 'canada' | 'other'
+                  ] ?? r;
+                return (
+                  <span
+                    key={r}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-500/15 text-purple-400 border border-purple-500/25 rounded-md text-xs font-medium"
+                  >
+                    {regionLabel}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterCountryRegions(filterCountryRegions.filter((x) => x !== r));
+                        setSelectedDisaster(null);
+                      }}
+                      className="p-0.5 rounded hover:bg-purple-500/20 text-purple-300"
+                      aria-label={`Remove ${regionLabel}`}
+                    >
+                      <XMarkIcon className="w-3 h-3" />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
           {/* Active Filters Display (Optional - below the main row) */}
           {hasActiveFilters && (
             <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
@@ -1177,11 +1211,6 @@ export default function LiveDisastersClient() {
                 {filterSeverity !== 'all' && (
                   <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
                     Severity: {filterSeverity}
-                  </span>
-                )}
-                {filterCountryRegions.length > 0 && (
-                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                    Countries: {filterCountryRegions.map((r) => ({ usa: 'USA', mexico: 'Mexico', canada: 'Canada', other: 'All other countries' }[r] || r)).join(', ')}
                   </span>
                 )}
                 {filterState !== 'all' && (
