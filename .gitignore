@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local homepage CMS file store (Next.js API)
+.homepage-cms/
