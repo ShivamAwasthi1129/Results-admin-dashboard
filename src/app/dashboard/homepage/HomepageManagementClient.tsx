@@ -5,9 +5,9 @@ import {
   ArrowDownIcon,
   ArrowPathIcon,
   ArrowUpIcon,
-  ClipboardDocumentIcon,
   DocumentDuplicateIcon,
   EyeIcon,
+  NewspaperIcon,
   PlusIcon,
   RocketLaunchIcon,
   TrashIcon,
@@ -35,6 +35,62 @@ interface SectionTypeRow {
   type: string;
   displayName: string;
   description: string;
+}
+
+interface NewsMediaArticle {
+  [key: string]: unknown;
+  article_id?: string;
+  title?: string;
+  description?: string | null;
+  link?: string;
+  image_url?: string | null;
+  pubDate?: string;
+  source_name?: string;
+  source_url?: string;
+  category?: string[];
+  country?: string[];
+  q?: string;
+}
+
+const NEWS_QUERY_OPTIONS = [
+  'wildfires',
+  'earthquake',
+  'hurricane',
+  'tornado',
+  'landslide',
+  'tsunami',
+  'heatwave',
+] as const;
+const NEWS_CACHE_KEY = 'homepage_news_media_cache_v1';
+const NEWS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+type NewsCacheRecord = {
+  fetchedAt: number;
+  articles: NewsMediaArticle[];
+};
+
+type NewsCacheMap = Record<string, NewsCacheRecord>;
+
+function readNewsCache(): NewsCacheMap {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(NEWS_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as NewsCacheMap;
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function writeNewsCache(next: NewsCacheMap): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore quota/storage errors
+  }
 }
 
 type JsonPrimitive = string | number | boolean | null;
@@ -67,6 +123,11 @@ export default function HomepageManagementClient() {
   const [versions, setVersions] = useState<
     { id: string; versionNumber: number; createdAt: string; changeNote: string | null; sectionCount: number }[]
   >([]);
+  const [newsOpen, setNewsOpen] = useState(false);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState<string | null>(null);
+  const [newsArticles, setNewsArticles] = useState<NewsMediaArticle[]>([]);
+  const [selectedNewsQuery, setSelectedNewsQuery] = useState<string>('wildfires');
   const selectedKeyRef = useRef<string | null>(null);
   selectedKeyRef.current = selectedKey;
 
@@ -366,10 +427,58 @@ export default function HomepageManagementClient() {
     }
   };
 
-  const copyPublicUrl = () => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    void navigator.clipboard.writeText(`${origin}/api/public/pages/home`);
-    toast.success('Public API URL copied');
+  const loadNewsAndMedia = async () => {
+    setNewsOpen(true);
+    await loadNewsByQuery('wildfires');
+  };
+
+  const loadNewsByQuery = async (query: string) => {
+    setSelectedNewsQuery(query);
+    setNewsError(null);
+    const cached = readNewsCache()[query];
+    const hasFreshCache = Boolean(cached && Date.now() - cached.fetchedAt < NEWS_CACHE_TTL_MS);
+
+    if (hasFreshCache && cached) {
+      setNewsArticles(cached.articles);
+      setNewsLoading(false);
+      return;
+    }
+
+    setNewsLoading(true);
+    try {
+      const res = await fetch(`/api/news-media?country=us&limit=12&q=${encodeURIComponent(query)}`, {
+        headers: authHeaders,
+        cache: 'no-store',
+      });
+      const json = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          selectedQuery?: string;
+          articles?: NewsMediaArticle[];
+        };
+      };
+      if (!res.ok || !json.success || !json.data) {
+        const msg = json.error || 'Unable to load news and media';
+        setNewsError(msg);
+        toast.error(msg);
+        return;
+      }
+      const nextArticles = Array.isArray(json.data.articles) ? json.data.articles : [];
+      setNewsArticles(nextArticles);
+      const cache = readNewsCache();
+      cache[query] = {
+        fetchedAt: Date.now(),
+        articles: nextArticles,
+      };
+      writeNewsCache(cache);
+    } catch (e) {
+      console.error(e);
+      setNewsError('Unable to load news and media');
+      toast.error('Unable to load news and media');
+    } finally {
+      setNewsLoading(false);
+    }
   };
 
   if (loading || !draft) {
@@ -641,9 +750,6 @@ export default function HomepageManagementClient() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" onClick={saveDraft} disabled={saving}>
-            {saving ? 'Saving…' : 'Save draft'}
-          </Button>
           <Button variant="secondary" onClick={() => setPreviewOpen(true)}>
             <EyeIcon className="w-4 h-4 mr-1.5" />
             Preview selected section
@@ -655,9 +761,9 @@ export default function HomepageManagementClient() {
           <Button variant="secondary" onClick={() => window.open('/api/public/pages/home', '_blank')}>
             Open published JSON
           </Button>
-          <Button variant="ghost" onClick={copyPublicUrl}>
-            <ClipboardDocumentIcon className="w-4 h-4 mr-1.5" />
-            Copy public URL
+          <Button variant="secondary" onClick={loadNewsAndMedia}>
+            <NewspaperIcon className="w-4 h-4 mr-1.5" />
+            News and Media
           </Button>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -920,6 +1026,117 @@ export default function HomepageManagementClient() {
           ))}
           {ordered.length === 0 && (
             <p className="text-[var(--text-muted)]">No sections available.</p>
+          )}
+        </div>
+      </Modal>
+
+      <Modal isOpen={newsOpen} onClose={() => setNewsOpen(false)} title="News and media" size="xl">
+        <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1">
+          {newsLoading ? (
+            <p className="text-sm text-[var(--text-muted)]">Loading latest updates...</p>
+          ) : newsError ? (
+            <p className="text-sm text-red-600">{newsError}</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {NEWS_QUERY_OPTIONS.map((query) => (
+                  <button
+                    key={query}
+                    type="button"
+                    onClick={() => {
+                      if (!newsLoading && query !== selectedNewsQuery) void loadNewsByQuery(query);
+                    }}
+                    disabled={newsLoading}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      selectedNewsQuery === query
+                        ? 'bg-[#991B1B] text-white border-[#991B1B]'
+                        : 'border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
+                    }`}
+                  >
+                    {query}
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-[var(--text-muted)]">
+                Showing: <span className="font-semibold text-[var(--text-primary)]">{selectedNewsQuery}</span> ({newsArticles.length} articles)
+              </div>
+              {newsArticles.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">No articles available for selected categories.</p>
+              ) : (
+                <div className="space-y-3">
+                  {newsArticles.map((item, index) => {
+                    const key = item.article_id || item.link || `${item.title || 'article'}-${index}`;
+                    const metadataEntries = Object.entries(item).filter(([field, value]) => {
+                      if (field.startsWith('ai_')) return false;
+                      if (['article_id', 'title', 'description', 'link', 'image_url', 'q'].includes(field)) return false;
+                      if (value == null) return false;
+                      if (typeof value === 'string' && !value.trim()) return false;
+                      if (Array.isArray(value) && value.length === 0) return false;
+                      return true;
+                    });
+                    return (
+                      <Card key={key} className="p-3">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                          <div className="md:col-span-3">
+                            {item.image_url ? (
+                              <img
+                                src={item.image_url}
+                                alt={item.title || 'news image'}
+                                className="w-full h-[110px] object-cover rounded-lg border border-[var(--border-color)]"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-full h-[110px] rounded-lg border border-dashed border-[var(--border-color)] flex items-center justify-center text-xs text-[var(--text-muted)]">
+                                No image available
+                              </div>
+                            )}
+                          </div>
+                          <div className="md:col-span-9 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                              <Badge variant="secondary">{item.q || 'general'}</Badge>
+                              <span>{item.source_name || 'Unknown source'}</span>
+                              {item.pubDate && <span>{new Date(item.pubDate).toLocaleString()}</span>}
+                            </div>
+                            <p className="font-medium text-[var(--text-primary)]">{item.title || 'Untitled'}</p>
+                            {item.description && (
+                              <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>
+                            )}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                              {metadataEntries.map(([field, value]) => {
+                                const normalized = Array.isArray(value)
+                                  ? value.join(', ')
+                                  : typeof value === 'object'
+                                    ? JSON.stringify(value)
+                                    : String(value);
+                                return (
+                                  <div
+                                    key={`${key}-${field}`}
+                                    className="rounded border border-[var(--border-color)] px-2 py-1 bg-[var(--bg-secondary)]"
+                                  >
+                                    <span className="font-semibold text-[var(--text-primary)]">{field}: </span>
+                                    <span className="text-[var(--text-muted)]">{normalized}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {item.link && (
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm text-blue-600 hover:underline break-all"
+                              >
+                                {item.link}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </Modal>
