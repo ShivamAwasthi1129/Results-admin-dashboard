@@ -73,7 +73,9 @@ interface DevicesClientProps {
 }
 
 export default function DevicesClient({ initialDevices }: DevicesClientProps) {
-  const { token } = useAuth();
+  const { token, hasAction } = useAuth();
+  const canDelete = hasAction('devices.delete');
+  const canUpdate = hasAction('devices.update');
   const [devices, setDevices] = useState<Device[]>(initialDevices);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(initialDevices.length === 0);
@@ -730,8 +732,8 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
                         ) : (
                           <div className="group/firmware">
                             <div 
-                              className="font-semibold text-[var(--text-primary)] cursor-pointer hover:text-[var(--primary-500)] transition-colors flex items-center gap-2"
-                              onClick={() => handleInlineEdit(device, 'firmwareVersion', device.firmwareVersion)}
+                              className={`font-semibold text-[var(--text-primary)] transition-colors flex items-center gap-2 ${canUpdate ? 'cursor-pointer hover:text-[var(--primary-500)]' : ''}`}
+                              onClick={() => canUpdate && handleInlineEdit(device, 'firmwareVersion', device.firmwareVersion)}
                               title="Click to edit"
                             >
                               <span>{device.firmwareVersion}</span>
@@ -771,8 +773,8 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
                         ) : (
                           <Badge 
                             variant={statusColor.variant}
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => handleInlineEdit(device, 'status', device.status)}
+                            className={`transition-opacity ${canUpdate ? 'cursor-pointer hover:opacity-80' : ''}`}
+                            onClick={() => canUpdate && handleInlineEdit(device, 'status', device.status)}
                             title="Click to edit"
                           >
                             {device.status}
@@ -792,22 +794,24 @@ export default function DevicesClient({ initialDevices }: DevicesClientProps) {
                           >
                             <EyeIcon className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (!device.id) {
-                                console.error('Device ID is missing:', device);
-                                toast.error('Device ID is missing. Cannot delete device.');
-                                return;
-                              }
-                              handleDelete(device.id);
-                            }}
-                            title="Delete Device"
-                            className="hover:bg-red-500/10 hover:text-red-500"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </Button>
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (!device.id) {
+                                  console.error('Device ID is missing:', device);
+                                  toast.error('Cannot delete: Device ID is missing');
+                                  return;
+                                }
+                                handleDelete(device.id);
+                              }}
+                              title="Delete Device"
+                              className="hover:bg-red-500/10 hover:text-red-500"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

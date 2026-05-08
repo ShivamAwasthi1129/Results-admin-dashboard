@@ -60,7 +60,7 @@ export function hasPermission(userRole: UserRole, requiredRoles: UserRole[]): bo
 }
 
 // Role hierarchy (higher index = more permissions)
-const roleHierarchy: UserRole[] = ['volunteer', 'service_provider', 'admin', 'super_admin'];
+const roleHierarchy: UserRole[] = ['member', 'MEMBER', 'volunteer', 'service_provider', 'admin', 'super_admin'];
 
 export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boolean {
   const userRoleIndex = roleHierarchy.indexOf(userRole);
@@ -71,7 +71,7 @@ export function hasMinimumRole(userRole: UserRole, minimumRole: UserRole): boole
 // Permission matrix
 export const permissions = {
   // Dashboard
-  viewDashboard: ['super_admin', 'admin', 'volunteer', 'service_provider'] as UserRole[],
+  viewDashboard: ['super_admin', 'admin', 'volunteer', 'service_provider', 'member', 'MEMBER'] as UserRole[],
   viewFullStats: ['super_admin', 'admin'] as UserRole[],
   
   // User Management

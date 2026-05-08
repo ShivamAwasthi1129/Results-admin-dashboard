@@ -5,6 +5,7 @@ import { DashboardLayout } from '@/components/layout';
 import { Card, Button, Input, Badge, Modal, Select, Avatar } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { useAuth } from '@/context/AuthContext';
+import { listRoles, type RbacRole } from '@/lib/rbac-client';
 import { toast } from 'react-toastify';
 import {
   UsersIcon,
@@ -71,7 +72,7 @@ interface UsersClientProps {
 }
 
 export default function UsersClient({ initialUsers }: UsersClientProps) {
-  const { token, hasPermission } = useAuth();
+  const { token, hasPermission, hasAction } = useAuth();
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(initialUsers.length === 0);
@@ -83,11 +84,11 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    email: '', 
-    phone: '', 
-    password: '', 
+    email: '',
+    phone: '',
+    password: '',
     confirmPassword: '',
-    role: 'admin', 
+    role: 'admin',
     status: 'active',
     profilePhoto: '',
     street: '',
@@ -111,7 +112,11 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [rbacRoles, setRbacRoles] = useState<RbacRole[]>([]);
 
+  const canCreateUsers = hasAction('users.create');
+  const canUpdateUsers = hasAction('users.update');
+  const canDeleteUsers = hasAction('users.delete');
   const canManageUsers = hasPermission(['super_admin', 'admin']);
 
   // Password strength: 0-4 (length, uppercase, lowercase, number, special)
@@ -166,6 +171,19 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
     }
   }, []);
 
+  useEffect(() => {
+    const run = async () => {
+      if (!token) return;
+      try {
+        const res = await listRoles(token, 1, 200);
+        setRbacRoles((res.data?.roles || []).filter((r) => r.isActive !== false));
+      } catch {
+        // fall back to static options below
+      }
+    };
+    void run();
+  }, [token]);
+
   // Fetch users when search or filter changes (debounced)
   useEffect(() => {
     if (token && !isInitialLoading) {
@@ -191,7 +209,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate password match for new users
     if (!selectedUser) {
       if (formData.password !== formData.confirmPassword) {
@@ -203,11 +221,11 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
         return;
       }
     }
-    
+
     try {
       const url = selectedUser ? `/api/ops-users?id=${selectedUser.id || selectedUser._id}` : '/api/ops-users';
       const method = selectedUser ? 'PUT' : 'POST';
-      
+
       const requestBody = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -304,29 +322,29 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
       firstName = nameParts[0] || '';
       lastName = nameParts.slice(1).join(' ') || '';
     }
-    
+
     setFormData({
       firstName,
       lastName,
-      email: user.email, 
+      email: user.email,
       phone: user.phone || '',
-      password: '', 
+      password: '',
       confirmPassword: '',
-      role: user.role, 
+      role: user.role,
       status: user.status,
       profilePhoto: user.profilePhoto || '',
-      street: user.address?.street || '', 
-      apartment: user.address?.apartment || '', 
-      city: user.address?.city || '', 
-      state: user.address?.state || '', 
-      zipCode: user.address?.zipCode || '', 
-      dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '', 
+      street: user.address?.street || '',
+      apartment: user.address?.apartment || '',
+      city: user.address?.city || '',
+      state: user.address?.state || '',
+      zipCode: user.address?.zipCode || '',
+      dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
       gender: user.gender || '',
       emergencyFirstName: user.emergencyContact?.firstName || '',
       emergencyLastName: user.emergencyContact?.lastName || '',
       emergencyPhone: user.emergencyContact?.phone || '',
       emergencyRelation: user.emergencyContact?.relation || '',
-      ssnNumber: user.ssnNumber || '', 
+      ssnNumber: user.ssnNumber || '',
       bloodGroup: user.bloodGroup || '',
       driversLicenseNumber: user.driversLicense?.number || '',
       driversLicenseState: user.driversLicense?.state || '',
@@ -356,6 +374,8 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
     volunteer: { color: 'text-[var(--success)]', bg: 'bg-[var(--success)]/20', icon: <UserGroupIcon className="w-4 h-4" /> },
     service_provider: { color: 'text-[var(--warning)]', bg: 'bg-[var(--warning)]/20', icon: <WrenchScrewdriverIcon className="w-4 h-4" /> }
   };
+
+  const defaultRoleStyle = { color: 'text-[var(--text-secondary)]', bg: 'bg-[var(--bg-secondary)]', icon: <IdentificationIcon className="w-4 h-4" /> };
 
   return (
     <DashboardLayout title="Users" subtitle="Manage all users in the system" icon={<UsersIcon className="w-7 h-7" />}>
@@ -387,44 +407,49 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
       {/* Filters & Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-center">
 
-{/* Search */}
-<div className="w-full">
-  <Input
-    placeholder="Search users by name or email..."
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-  />
-</div>
+        {/* Search */}
+        <div className="w-full">
+          <Input
+            placeholder="Search users by name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+          />
+        </div>
 
-{/* Role Filter */}
-<div className="w-full">
-  <Select
-    value={roleFilter}
-    onChange={(val) => setRoleFilter(val)}
-    options={[
-      { value: 'all', label: 'All Roles' },
-      { value: 'super_admin', label: 'Super Admin' },
-      { value: 'admin', label: 'Admin' },
-    ]}
-  />
-</div>
+        {/* Role Filter */}
+        <div className="w-full">
+          <Select
+            value={roleFilter}
+            onChange={(val) => setRoleFilter(val)}
+            options={[
+              { value: 'all', label: 'All Roles' },
+              ...(rbacRoles.length > 0 
+                ? rbacRoles.map(r => ({ value: r.name, label: r.displayName || r.name }))
+                : [
+                    { value: 'super_admin', label: 'Super Admin' },
+                    { value: 'admin', label: 'Admin' },
+                  ]
+              )
+            ]}
+          />
+        </div>
 
-{/* Add User */}
-{canManageUsers && (
-  <div className="w-full">
-    <Button 
-      onClick={() => { setSelectedUser(null); resetForm(); setShowModal(true); }} 
-      leftIcon={<PlusIcon className="w-4 h-4" />} 
-      variant="gradient"
-      className="w-full"
-    >
-      Add User
-    </Button>
-  </div>
-)}
+        {/* Add User */}
+        {canCreateUsers && (
+          <div className="w-full">
+            <Button
+              onClick={() => { setSelectedUser(null); resetForm(); setShowModal(true); }}
+              leftIcon={<PlusIcon className="w-4 h-4" />}
+              variant="gradient"
+              className="w-full"
+            >
+              Add User
+            </Button>
+          </div>
+        )}
 
-</div>
+      </div>
 
       {/* Users Table */}
       <Card padding="none">
@@ -479,10 +504,15 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                       </div>
                     </td>
                     <td className="px-6 py-5">
-                      <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${roleConfig[user.role]?.bg} ${roleConfig[user.role]?.color}`}>
-                        {roleConfig[user.role]?.icon}
-                        <span className="capitalize">{user.role.replace('_', ' ')}</span>
-                      </span>
+                      {(() => {
+                        const config = roleConfig[user.role] || defaultRoleStyle;
+                        return (
+                          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${config.bg} ${config.color}`}>
+                            {config.icon}
+                            <span className="capitalize">{user.role.replace('_', ' ')}</span>
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-5">
                       <Badge variant={user.status === 'active' ? 'success' : 'secondary'} dot>
@@ -493,26 +523,26 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-5">
-                      {canManageUsers && (
-                        <div className="flex items-center justify-end gap-2">
-                          <button 
-                            onClick={() => openEditModal(user)} 
+                      <div className="flex items-center justify-end gap-2">
+                        {canUpdateUsers && (
+                          <button
+                            onClick={() => openEditModal(user)}
                             className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--info)] hover:bg-[var(--info)]/10 transition-colors"
                             title="Edit User"
                           >
                             <PencilIcon className="w-4 h-4" />
                           </button>
-                          {user.role !== 'super_admin' && (
-                            <button 
-                              onClick={() => { setSelectedUser(user); setShowDeleteModal(true); }} 
-                              className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors"
-                              title="Delete User"
-                            >
-                              <TrashIcon className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      )}
+                        )}
+                        {canDeleteUsers && user.role !== 'super_admin' && (
+                          <button
+                            onClick={() => { setSelectedUser(user); setShowDeleteModal(true); }}
+                            className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger)]/10 transition-colors"
+                            title="Delete User"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -533,9 +563,9 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
             <div className="flex items-center gap-6">
               <div className="relative">
                 {photoPreview ? (
-                  <img 
-                    src={photoPreview} 
-                    alt="Profile preview" 
+                  <img
+                    src={photoPreview}
+                    alt="Profile preview"
                     className="w-24 h-24 rounded-full object-cover border-4 border-[var(--border-color)]"
                   />
                 ) : (
@@ -549,9 +579,9 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                   <span className="px-4 py-2 bg-[var(--primary-500)] hover:bg-[var(--primary-600)] text-white rounded-xl text-sm font-medium transition-colors">
                     Upload Photo
                   </span>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
+                  <input
+                    type="file"
+                    accept="image/*"
                     onChange={handlePhotoChange}
                     className="hidden"
                   />
@@ -567,56 +597,56 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
               <UsersIcon className="w-5 h-5" /> Basic Information
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Input 
-                label="First Name *" 
-                value={formData.firstName} 
-                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} 
+              <Input
+                label="First Name *"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                 icon={<UsersIcon className="w-5 h-5" />}
                 placeholder="John"
-                required 
+                required
               />
-              <Input 
-                label="Last Name *" 
-                value={formData.lastName} 
-                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} 
+              <Input
+                label="Last Name *"
+                value={formData.lastName}
+                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                 icon={<UsersIcon className="w-5 h-5" />}
                 placeholder="Smith"
-                required 
+                required
               />
-              <Input 
-                label="Email *" 
-                type="email" 
-                value={formData.email} 
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
+              <Input
+                label="Email *"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 icon={<EnvelopeIcon className="w-5 h-5" />}
                 placeholder="john.smith@example.com"
-                required 
+                required
                 disabled={!!selectedUser}
               />
-              <PhoneInput 
-                label="Phone" 
-                value={formData.phone} 
-                onChange={(val) => setFormData({ ...formData, phone: val || '' })} 
+              <PhoneInput
+                label="Phone"
+                value={formData.phone}
+                onChange={(val) => setFormData({ ...formData, phone: val || '' })}
                 placeholder="(555) 123-4567"
               />
-              <Input 
-                label="Date of Birth" 
-                type="date" 
-                value={formData.dateOfBirth} 
-                onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })} 
+              <Input
+                label="Date of Birth"
+                type="date"
+                value={formData.dateOfBirth}
+                onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
                 icon={<CalendarDaysIcon className="w-5 h-5" />}
               />
-              <Select 
-                label="Gender" 
-                value={formData.gender} 
-                onChange={(val) => setFormData({ ...formData, gender: val })} 
-                options={GENDER_OPTIONS} 
+              <Select
+                label="Gender"
+                value={formData.gender}
+                onChange={(val) => setFormData({ ...formData, gender: val })}
+                options={GENDER_OPTIONS}
               />
-              <Select 
-                label="Blood Group" 
-                value={formData.bloodGroup} 
-                onChange={(val) => setFormData({ ...formData, bloodGroup: val })} 
-                options={BLOOD_GROUPS} 
+              <Select
+                label="Blood Group"
+                value={formData.bloodGroup}
+                onChange={(val) => setFormData({ ...formData, bloodGroup: val })}
+                options={BLOOD_GROUPS}
               />
             </div>
           </div>
@@ -628,36 +658,36 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
-                <Input 
-                  label="Street Address" 
-                  value={formData.street} 
-                  onChange={(e) => setFormData({ ...formData, street: e.target.value })} 
+                <Input
+                  label="Street Address"
+                  value={formData.street}
+                  onChange={(e) => setFormData({ ...formData, street: e.target.value })}
                   icon={<MapPinIcon className="w-5 h-5" />}
                   placeholder="123 Main Street"
                 />
               </div>
-              <Input 
-                label="Apt / Suite / Unit" 
-                value={formData.apartment} 
-                onChange={(e) => setFormData({ ...formData, apartment: e.target.value })} 
+              <Input
+                label="Apt / Suite / Unit"
+                value={formData.apartment}
+                onChange={(e) => setFormData({ ...formData, apartment: e.target.value })}
                 placeholder="Apt 4B"
               />
-              <Input 
-                label="City" 
-                value={formData.city} 
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })} 
+              <Input
+                label="City"
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                 placeholder="New York"
               />
-              <Select 
-                label="State" 
-                value={formData.state} 
-                onChange={(val) => setFormData({ ...formData, state: val })} 
-                options={[{ value: '', label: 'Select State' }, ...US_STATES]} 
+              <Select
+                label="State"
+                value={formData.state}
+                onChange={(val) => setFormData({ ...formData, state: val })}
+                options={[{ value: '', label: 'Select State' }, ...US_STATES]}
               />
-              <Input 
-                label="ZIP Code" 
-                value={formData.zipCode} 
-                onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })} 
+              <Input
+                label="ZIP Code"
+                value={formData.zipCode}
+                onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
                 placeholder="10001"
               />
             </div>
@@ -669,30 +699,30 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
               <PhoneIcon className="w-5 h-5" /> Emergency Contact
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Input 
-                label="First Name" 
-                value={formData.emergencyFirstName} 
-                onChange={(e) => setFormData({ ...formData, emergencyFirstName: e.target.value })} 
+              <Input
+                label="First Name"
+                value={formData.emergencyFirstName}
+                onChange={(e) => setFormData({ ...formData, emergencyFirstName: e.target.value })}
                 icon={<UsersIcon className="w-5 h-5" />}
                 placeholder="Jane"
               />
-              <Input 
-                label="Last Name" 
-                value={formData.emergencyLastName} 
-                onChange={(e) => setFormData({ ...formData, emergencyLastName: e.target.value })} 
+              <Input
+                label="Last Name"
+                value={formData.emergencyLastName}
+                onChange={(e) => setFormData({ ...formData, emergencyLastName: e.target.value })}
                 icon={<UsersIcon className="w-5 h-5" />}
                 placeholder="Smith"
               />
-              <PhoneInput 
-                label="Phone" 
-                value={formData.emergencyPhone} 
-                onChange={(val) => setFormData({ ...formData, emergencyPhone: val || '' })} 
+              <PhoneInput
+                label="Phone"
+                value={formData.emergencyPhone}
+                onChange={(val) => setFormData({ ...formData, emergencyPhone: val || '' })}
                 placeholder="(555) 987-6543"
               />
-              <Select 
-                label="Relation" 
-                value={formData.emergencyRelation} 
-                onChange={(val) => setFormData({ ...formData, emergencyRelation: val })} 
+              <Select
+                label="Relation"
+                value={formData.emergencyRelation}
+                onChange={(val) => setFormData({ ...formData, emergencyRelation: val })}
                 options={RELATION_OPTIONS}
               />
             </div>
@@ -734,20 +764,24 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
               <ShieldCheckIcon className="w-5 h-5" /> Account Settings
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Select 
-                label="Role" 
-                value={formData.role} 
-                onChange={(val) => setFormData({ ...formData, role: val })} 
-                options={[
-                  { value: 'admin', label: 'Admin' },
-                  { value: 'super_admin', label: 'Super Admin' },
-                ]} 
+              <Select
+                label="Role"
+                value={formData.role}
+                onChange={(val) => setFormData({ ...formData, role: val })}
+                options={
+                  rbacRoles.length
+                    ? rbacRoles.map((r) => ({ value: r.name, label: r.displayName || r.name }))
+                    : [
+                      { value: 'admin', label: 'Admin' },
+                      { value: 'super_admin', label: 'Super Admin' },
+                    ]
+                }
               />
-              <Select 
-                label="Status" 
-                value={formData.status} 
-                onChange={(val) => setFormData({ ...formData, status: val })} 
-                options={USER_STATUS} 
+              <Select
+                label="Status"
+                value={formData.status}
+                onChange={(val) => setFormData({ ...formData, status: val })}
+                options={USER_STATUS}
               />
               {!selectedUser && (
                 <>

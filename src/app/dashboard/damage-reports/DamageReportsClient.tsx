@@ -193,7 +193,10 @@ const getSeverityColor = (severity: string) => {
 };
 
 export default function DamageReportsClient({ initialReports }: DamageReportsClientProps) {
-  const { token } = useAuth();
+  const { token, hasAction } = useAuth();
+
+  const canCreate = hasAction('damageReports.create');
+  const canDelete = hasAction('damageReports.delete');
   const [reports, setReports] = useState<DamageReport[]>(initialReports);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -574,13 +577,15 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
             />
           </div>
 
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            leftIcon={<PlusIcon className="w-5 h-5" />}
-            className="h-[42px] shrink-0 bg-[#991B1B] hover:bg-[#7F1D1D] text-white shadow-md px-4"
-          >
-            Create Report
-          </Button>
+          {canCreate && (
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              leftIcon={<PlusIcon className="w-5 h-5" />}
+              className="h-[42px] shrink-0 bg-[#991B1B] hover:bg-[#7F1D1D] text-white shadow-md px-4"
+            >
+              Create Report
+            </Button>
+          )}
 
           <div className="relative shrink-0" ref={editColumnsDropdownRef}>
             <Button
@@ -746,7 +751,7 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                           {firstReport ? getReportCellValue(firstReport, colId) : '—'}
                         </td>
                       ))}
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -755,6 +760,17 @@ export default function DamageReportsClient({ initialReports }: DamageReportsCli
                         >
                           View
                         </Button>
+                        {canDelete && firstReport && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(firstReport.id); }}
+                            className="text-red-500 hover:text-red-600"
+                            title="Delete"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
 

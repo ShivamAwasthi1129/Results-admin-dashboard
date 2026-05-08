@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import { UserRole } from '@/types';
 import {
   HomeIcon,
   UsersIcon,
@@ -49,64 +50,86 @@ interface NavItem {
   name: string;
   href?: string;
   icon: React.ComponentType<{ className?: string }>;
-  roles: readonly ('super_admin' | 'admin' | 'volunteer' | 'service_provider')[];
+  roles: readonly UserRole[];
+  action?: string;
   badge?: string;
   children?: NavItem[];
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
   const pathname = usePathname();
-  const { user, logout, hasPermission } = useAuth();
+  const { user, logout, hasPermission, hasAction, actionKeys } = useAuth();
   const { theme } = useTheme();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const isDark = theme === 'dark';
 
   const navigation: NavItem[] = [
-    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const },
-    // { name: 'Weather', href: '/dashboard/weather', icon: CloudIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const, badge: 'LIVE' },
-   
-    { name: 'Live Disasters', href: '/dashboard/live-disasters', icon: GlobeAltIcon, roles: ['super_admin', 'admin'] as const, badge: 'LIVE' },
-    { name: 'Live Tracking', href: '/dashboard/tracking', icon: MapPinIcon, roles: ['super_admin', 'admin'] as const, badge: 'LIVE' },
+    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider', 'member'] as const, action: 'dashboard.stats' },
+    
+    { name: 'Live Disasters', href: '/dashboard/live-disasters', icon: GlobeAltIcon, roles: ['super_admin', 'admin'] as const, action: 'disasters.list', badge: 'LIVE' },
+    { name: 'Live Tracking', href: '/dashboard/tracking', icon: MapPinIcon, roles: ['super_admin', 'admin'] as const, action: 'tracking.list', badge: 'LIVE' },
     { 
       name: 'Alert Management', 
       icon: ShieldExclamationIcon, 
       roles: ['super_admin', 'admin'] as const,
       children: [
-        { name: 'Emergencies', href: '/dashboard/emergencies', icon: ExclamationTriangleIcon, roles: ['super_admin', 'admin'] as const },
-        { name: 'SOS Alerts', href: '/dashboard/sos', icon: BellAlertIcon, roles: ['super_admin', 'admin'] as const, badge: 'NEW' },
+        { name: 'Emergencies', href: '/dashboard/emergencies', icon: ExclamationTriangleIcon, roles: ['super_admin', 'admin'] as const, action: 'emergencies.list' },
+        { name: 'SOS Alerts', href: '/dashboard/sos', icon: BellAlertIcon, roles: ['super_admin', 'admin'] as const, action: 'sos.list', badge: 'NEW' },
       ]
     },
-    { name: 'Housing & Relief', href: '/dashboard/shelters', icon: HomeModernIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
-    { name: 'Device Management', href: '/dashboard/devices', icon: DevicePhoneMobileIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Incident Management', href: '/dashboard/incidents', icon: ClipboardDocumentListIcon, roles: ['super_admin', 'admin', 'volunteer'] as const },
-    { name: 'Damage Reports', href: '/dashboard/damage-reports', icon: DocumentTextIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Broadcast', href: '/dashboard/broadcast', icon: MegaphoneIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Newsletter', href: '/dashboard/newsletter', icon: EnvelopeIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Home page management', href: '/dashboard/homepage', icon: Squares2X2Icon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Adjusters', href: '/dashboard/adjusters', icon: ClipboardDocumentCheckIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Printify', href: '/dashboard/printify-stock', icon: ArchiveBoxIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCartIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Volunteers', href: '/dashboard/volunteers', icon: UserGroupIcon, roles: ['super_admin', 'admin'] as const },
-    { name: 'Vendor & Alliance Partners', href: '/dashboard/services', icon: WrenchScrewdriverIcon, roles: ['super_admin', 'admin', 'service_provider'] as const },
-    { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const },
+    { name: 'Housing & Relief', href: '/dashboard/shelters', icon: HomeModernIcon, roles: ['super_admin', 'admin', 'volunteer'] as const, action: 'shelters.list' },
+    { name: 'Device Management', href: '/dashboard/devices', icon: DevicePhoneMobileIcon, roles: ['super_admin', 'admin'] as const, action: 'devices.list' },
+    { name: 'Incident Management', href: '/dashboard/incidents', icon: ClipboardDocumentListIcon, roles: ['super_admin', 'admin', 'volunteer'] as const, action: 'incidents.list' },
+    { name: 'Damage Reports', href: '/dashboard/damage-reports', icon: DocumentTextIcon, roles: ['super_admin', 'admin'] as const, action: 'damageReports.list' },
+    { name: 'Broadcast', href: '/dashboard/broadcast', icon: MegaphoneIcon, roles: ['super_admin', 'admin'] as const, action: 'broadcast.list' },
+    { name: 'Newsletter', href: '/dashboard/newsletter', icon: EnvelopeIcon, roles: ['super_admin', 'admin'] as const, action: 'newsletter.list' },
+    { name: 'Home page management', href: '/dashboard/homepage', icon: Squares2X2Icon, roles: ['super_admin', 'admin'] as const, action: 'homepage.list' },
+    { name: 'Adjusters', href: '/dashboard/adjusters', icon: ClipboardDocumentCheckIcon, roles: ['super_admin', 'admin'] as const, action: 'adjusters.list' },
+    { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const, action: 'resources.list' },
+    { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const, action: 'merchandise.list' },
+    { name: 'Printify', href: '/dashboard/printify-stock', icon: ArchiveBoxIcon, roles: ['super_admin', 'admin'] as const, action: 'printify.list' },
+    { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCartIcon, roles: ['super_admin', 'admin'] as const, action: 'orders.list' },
+    { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const, action: 'reports.list' },
+    { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const, action: 'users.list' },
+    { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const, action: 'userManagement.list' },
+    {
+      name: 'Access Control',
+      icon: ShieldExclamationIcon,
+      roles: ['super_admin', 'admin'] as const,
+      children: [
+        { name: 'Roles', href: '/dashboard/access-control/roles', icon: ShieldExclamationIcon, roles: ['super_admin', 'admin'] as const, action: 'roles.list' },
+        { name: 'Actions Directory', href: '/dashboard/access-control/actions', icon: ClipboardDocumentListIcon, roles: ['super_admin', 'admin'] as const, action: 'actions.list' },
+      ],
+    },
+    { name: 'Volunteers', href: '/dashboard/volunteers', icon: UserGroupIcon, roles: ['super_admin', 'admin'] as const, action: 'volunteers.list' },
+    { name: 'Vendor & Alliance Partners', href: '/dashboard/services', icon: WrenchScrewdriverIcon, roles: ['super_admin', 'admin', 'service_provider'] as const, action: 'services.list' },
+    { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: ['super_admin', 'admin', 'volunteer', 'service_provider'] as const, action: 'settings.list' },
   ];
 
-  // Filter navigation based on permissions
+  // Filter navigation based on permissions and actions
   const filterNavigation = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
-      if (!hasPermission(item.roles)) return false;
+      // 1. Super Admins see everything
+      const isSuper = user?.roleName === 'SUPER_ADMIN' || user?.role === 'SUPER_ADMIN';
+      if (isSuper) return true;
+
+      // 2. If item has a specific action, check if user has ANY action for that module
+      if (item.action) {
+        const modulePrefix = item.action.split('.')[0];
+        const hasAnyModuleAction = actionKeys.some(key => key.startsWith(`${modulePrefix}.`) || key === modulePrefix);
+        if (hasAnyModuleAction) return true;
+        if (hasAction(item.action)) return true;
+      }
+      
+      // 3. If item has children, check if any child is accessible
       if (item.children) {
         const filteredChildren = filterNavigation(item.children);
-        if (filteredChildren.length === 0) return false;
-        return { ...item, children: filteredChildren };
+        return filteredChildren.length > 0;
       }
-      return true;
+      
+      // 4. Fallback for items without actions or children (check role)
+      return hasPermission(item.roles);
     }).map(item => {
       if (item.children) {
         return { ...item, children: filterNavigation(item.children) };

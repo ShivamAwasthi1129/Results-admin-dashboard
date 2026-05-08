@@ -58,7 +58,8 @@ function getBackendBase(): string {
 }
 
 export default function BroadcastClient() {
-  const { token } = useAuth();
+  const { token, hasAction } = useAuth();
+  const canCreate = hasAction('broadcast.create');
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [isLoading, setIsLoading] = useState(true);
@@ -324,9 +325,11 @@ export default function BroadcastClient() {
           <Button variant="secondary" onClick={() => fetchList(pagination.page)} leftIcon={<ArrowPathIcon className="w-5 h-5" />}>
             Refresh
           </Button>
-          <Button className="flex-shrink-0" variant="primary" onClick={() => setCreateOpen(true)} leftIcon={<PlusIcon className="w-5 h-5 " />}>
-            Create Broadcast
-          </Button>
+          {canCreate && (
+            <Button className="flex-shrink-0" variant="primary" onClick={() => setCreateOpen(true)} leftIcon={<PlusIcon className="w-5 h-5 " />}>
+              Create Broadcast
+            </Button>
+          )}
         </div>
 
         <Table

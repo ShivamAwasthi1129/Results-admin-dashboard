@@ -120,7 +120,7 @@ const getStatusColor = (status: string) => {
 };
 
 export default function AdjustersClient({ initialAdjusters }: AdjustersClientProps) {
-  const { token } = useAuth();
+  const { token, hasAction } = useAuth();
   const [adjusters, setAdjusters] = useState<Adjuster[]>(initialAdjusters);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,6 +136,10 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
   const [loadingReportId, setLoadingReportId] = useState<string | null>(null);
   const [assignedReportDetails, setAssignedReportDetails] = useState<Record<string, any>>({});
   const [loadingReportDetails, setLoadingReportDetails] = useState(false);
+
+  const canCreate = hasAction('adjusters.create');
+  const canUpdate = hasAction('adjusters.update');
+  const canDelete = hasAction('adjusters.delete');
 
   // Form state for create/edit
   const [formData, setFormData] = useState({
@@ -653,13 +657,15 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
                   Seed
                 </Button>
               )}
-              <Button
-                onClick={() => { resetForm(); setStatesDropdownOpen(false); setShowCreateModal(true); }}
-                leftIcon={<PlusIcon className="w-5 h-5" />}
-                className="bg-[#991B1B] hover:bg-[#7F1D1D] text-white whitespace-nowrap"
-              >
-                Add Adjuster
-              </Button>
+              {canCreate && (
+                <Button
+                  onClick={() => { resetForm(); setStatesDropdownOpen(false); setShowCreateModal(true); }}
+                  leftIcon={<PlusIcon className="w-5 h-5" />}
+                  className="bg-[#991B1B] hover:bg-[#7F1D1D] text-white whitespace-nowrap"
+                >
+                  Add Adjuster
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -737,15 +743,19 @@ export default function AdjustersClient({ initialAdjusters }: AdjustersClientPro
               </td>
               <td className="px-3 py-2.5 whitespace-nowrap">
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openViewModal(a); }} title="View">
-                    <EyeIcon className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEditModal(a); }} title="Edit">
-                    <PencilIcon className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(a.id || a._id || ''); }} className="text-red-500 hover:text-red-600" title="Delete">
-                    <TrashIcon className="w-4 h-4" />
-                  </Button>
+                  <button onClick={(e) => { e.stopPropagation(); openViewModal(a); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="View">
+                    <EyeIcon className="w-4 h-4 text-gray-500" />
+                  </button>
+                  {canUpdate && (
+                    <button onClick={(e) => { e.stopPropagation(); openEditModal(a); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Edit">
+                      <PencilIcon className="w-4 h-4 text-blue-500" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(a.id || a._id || ''); }} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Delete">
+                      <TrashIcon className="w-4 h-4 text-red-500" />
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>

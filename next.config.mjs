@@ -39,6 +39,7 @@ const nextConfig = {
       { source: '/api/volunteer-teams/:path*', destination: `${backend}/api/admin/volunteer-teams/:path*` },
       { source: '/api/products/:path*', destination: `${backend}/api/products/:path*` },
       { source: '/api/orders/:path*', destination: `${backend}/api/admin/orders/:path*` },
+      { source: '/api/admin/rbac/:path*', destination: `${backend}/api/admin/rbac/:path*` },
       { source: '/api/services/:path*', destination: `${backend}/api/admin/services/:path*` },
       { source: '/api/category-documents/:path*', destination: `${backend}/api/admin/services/:path*` },
       { source: '/api/reports/:path*', destination: `${backend}/api/admin/reports/:path*` },

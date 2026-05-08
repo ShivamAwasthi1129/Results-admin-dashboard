@@ -8,6 +8,7 @@ import { Card, Badge, Button, Input, Select, Modal } from '@/components/ui';
 import { PhoneInput } from '@/components/ui/PhoneInput';
 import { toast } from 'react-toastify';
 import { useAuth } from '@/context/AuthContext';
+import { listRoles, type RbacRole } from '@/lib/rbac-client';
 import {
   UsersIcon,
   MagnifyingGlassIcon,
@@ -172,6 +173,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [isSubmittingAddUser, setIsSubmittingAddUser] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [rbacRoles, setRbacRoles] = useState<RbacRole[]>([]);
   const [addUserForm, setAddUserForm] = useState({
     phoneNumber: '',
     email: '',
@@ -292,6 +294,19 @@ export default function UserManagementClient({ initialData }: UserManagementClie
       setCustomersCache((initialData.data?.users || []).map(mapUserToCachedCustomer));
     }
     fetchUserLocations();
+  }, [token]);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!token) return;
+      try {
+        const res = await listRoles(token, 1, 200);
+        setRbacRoles((res.data?.roles || []).filter((r) => r.isActive !== false));
+      } catch {
+        // fall back to static role list below
+      }
+    };
+    void run();
   }, [token]);
 
   // Open Add New User modal when redirected from Create Damage Report with ?addUser=1
@@ -516,6 +531,14 @@ export default function UserManagementClient({ initialData }: UserManagementClie
   };
 
   const uniqueRoles = Array.from(new Set(users.map((u) => u.role))).sort();
+  const roleOptions = rbacRoles.length
+    ? rbacRoles.map((r) => ({ value: r.id, label: r.displayName || r.name }))
+    : [
+      { value: 'MEMBER', label: 'Member' },
+      { value: 'ADMIN', label: 'Admin' },
+      { value: 'SUPER_ADMIN', label: 'Super Admin' },
+      { value: 'GUEST', label: 'Guest' },
+    ];
 
   return (
     <DashboardLayout title="User Management" subtitle="Manage all users from external system" icon={<IdentificationIcon className="w-7 h-7" />}>
@@ -608,8 +631,8 @@ export default function UserManagementClient({ initialData }: UserManagementClie
             <button
               onClick={() => setViewMode('table')}
               className={`flex-1 p-2 transition-colors ${viewMode === 'table'
-                  ? 'bg-[var(--primary-500)] text-white'
-                  : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+                ? 'bg-[var(--primary-500)] text-white'
+                : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
                 }`}
               title="Table View"
             >
@@ -619,8 +642,8 @@ export default function UserManagementClient({ initialData }: UserManagementClie
             <button
               onClick={() => setViewMode('grid')}
               className={`flex-1 p-2 transition-colors ${viewMode === 'grid'
-                  ? 'bg-[var(--primary-500)] text-white'
-                  : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+                ? 'bg-[var(--primary-500)] text-white'
+                : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
                 }`}
               title="Grid View"
             >
@@ -630,8 +653,8 @@ export default function UserManagementClient({ initialData }: UserManagementClie
             <button
               onClick={() => setViewMode('map')}
               className={`flex-1 p-2 transition-colors ${viewMode === 'map'
-                  ? 'bg-[var(--primary-500)] text-white'
-                  : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
+                ? 'bg-[var(--primary-500)] text-white'
+                : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)]'
                 }`}
               title="Map View"
             >
@@ -1726,12 +1749,7 @@ export default function UserManagementClient({ initialData }: UserManagementClie
               label="Role"
               value={addUserForm.role}
               onChange={(v) => setAddUserForm((f) => ({ ...f, role: v }))}
-              options={[
-                { value: 'MEMBER', label: 'Member' },
-                { value: 'ADMIN', label: 'Admin' },
-                { value: 'SUPER_ADMIN', label: 'Super Admin' },
-                { value: 'GUEST', label: 'Guest' },
-              ]}
+              options={roleOptions}
             />
             <Select
               label="Gender"

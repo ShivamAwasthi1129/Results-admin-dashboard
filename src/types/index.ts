@@ -1,5 +1,5 @@
 // User Roles
-export type UserRole = 'super_admin' | 'admin' | 'volunteer' | 'service_provider';
+export type UserRole = 'super_admin' | 'admin' | 'volunteer' | 'service_provider' | 'member' | 'MEMBER';
 
 // User Status
 export type UserStatus = 'active' | 'inactive' | 'suspended' | 'pending';
