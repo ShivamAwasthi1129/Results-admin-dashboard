@@ -84,15 +84,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Damage Reports', href: '/dashboard/damage-reports', icon: DocumentTextIcon, roles: ['super_admin', 'admin'] as const, action: 'damageReports.list' },
     { name: 'Broadcast', href: '/dashboard/broadcast', icon: MegaphoneIcon, roles: ['super_admin', 'admin'] as const, action: 'broadcast.list' },
     { name: 'Newsletter', href: '/dashboard/newsletter', icon: EnvelopeIcon, roles: ['super_admin', 'admin'] as const, action: 'newsletter.list' },
-    { name: 'Home page management', href: '/dashboard/homepage', icon: Squares2X2Icon, roles: ['super_admin', 'admin'] as const, action: 'homepage.list' },
+    { name: 'Home page management', href: '/dashboard/homepage', icon: Squares2X2Icon, roles: ['super_admin', 'admin'] as const, action: 'landingContent.list' },
     { name: 'Adjusters', href: '/dashboard/adjusters', icon: ClipboardDocumentCheckIcon, roles: ['super_admin', 'admin'] as const, action: 'adjusters.list' },
     { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const, action: 'resources.list' },
-    { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const, action: 'merchandise.list' },
+    { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const, action: 'products.list' },
     { name: 'Printify', href: '/dashboard/printify-stock', icon: ArchiveBoxIcon, roles: ['super_admin', 'admin'] as const, action: 'printify.list' },
     { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCartIcon, roles: ['super_admin', 'admin'] as const, action: 'orders.list' },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const, action: 'reports.list' },
-    { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const, action: 'users.list' },
-    { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const, action: 'userManagement.list' },
+    { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const, action: 'opsUsers.list' },
+    { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const, action: 'usersMgmt.list' },
     {
       name: 'Access Control',
       icon: ShieldExclamationIcon,
@@ -117,9 +117,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
       // 2. If item has a specific action, check if user has ANY action for that module
       if (item.action) {
         const modulePrefix = item.action.split('.')[0];
-        const hasAnyModuleAction = actionKeys.some(key => key.startsWith(`${modulePrefix}.`) || key === modulePrefix);
+        const hasAnyModuleAction = actionKeys.some(key => 
+          key === '*' || 
+          key === modulePrefix || 
+          key.startsWith(`${modulePrefix}.`) || 
+          key === item.action
+        );
+        
         if (hasAnyModuleAction) return true;
-        if (hasAction(item.action)) return true;
+        // If it has an action but user doesn't have it, don't fall back to role
+        return false;
       }
       
       // 3. If item has children, check if any child is accessible
@@ -128,7 +135,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         return filteredChildren.length > 0;
       }
       
-      // 4. Fallback for items without actions or children (check role)
+      // 4. Fallback for items without actions (check role)
       return hasPermission(item.roles);
     }).map(item => {
       if (item.children) {

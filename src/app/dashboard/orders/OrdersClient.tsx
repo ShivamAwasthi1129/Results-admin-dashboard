@@ -97,7 +97,8 @@ const paymentStatusVariant: Record<string, 'success' | 'warning' | 'danger' | 's
 };
 
 export default function OrdersClient({ initialOrders }: OrdersClientProps) {
-  const { token } = useAuth();
+  const { token, hasAction } = useAuth();
+  const canRead = hasAction('orders.read');
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -292,7 +293,7 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
       key: 'actions',
       label: 'Actions',
       width: '8%',
-      render: (o: Order) => (
+      render: (o: Order) => canRead ? (
         <Button
           variant="secondary"
           size="sm"
@@ -305,7 +306,7 @@ export default function OrdersClient({ initialOrders }: OrdersClientProps) {
           <EyeIcon className="w-4 h-4" />
           View
         </Button>
-      ),
+      ) : null,
     },
   ];
 

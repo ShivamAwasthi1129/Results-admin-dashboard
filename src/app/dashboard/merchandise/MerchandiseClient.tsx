@@ -137,7 +137,11 @@ interface Vendor {
 }
 
 export default function ProductsClient({ initialProducts }: ProductsClientProps) {
-  const { token } = useAuth();
+  const { token, hasAction } = useAuth();
+  const canCreate = hasAction('products.create');
+  const canUpdate = hasAction('products.update');
+  const canDelete = hasAction('products.delete');
+  const canRead = hasAction('products.read');
   const { getCachedData, updateCache } = useDataCache();
   
   // Check cache first, then use initialProducts
@@ -829,14 +833,16 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
           />
         </div>
         <div className="w-full">
-          <Button
-            variant="gradient"
-            onClick={() => setShowAddModal(true)}
-            className="w-full"
-            leftIcon={<PlusIcon className="w-5 h-5" />}
-          >
-            Add Product
-          </Button>
+          {canCreate && (
+            <Button
+              variant="gradient"
+              onClick={() => setShowAddModal(true)}
+              className="w-full"
+              leftIcon={<PlusIcon className="w-5 h-5" />}
+            >
+              Add Product
+            </Button>
+          )}
         </div>
       </div>
 
@@ -869,7 +875,7 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
               ? 'Try adjusting your filters'
               : 'Get started by adding your first product'}
           </p>
-          {!searchQuery && categoryFilter === 'all' && statusFilter === 'all' && (
+          {!searchQuery && categoryFilter === 'all' && statusFilter === 'all' && canCreate && (
             <Button variant="gradient" onClick={() => setShowAddModal(true)} leftIcon={<PlusIcon className="w-5 h-5" />}>
               Add Product
             </Button>
@@ -991,30 +997,36 @@ export default function ProductsClient({ initialProducts }: ProductsClientProps)
                 label: 'Actions',
                 render: (product: Product) => (
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedProductForDetail(product);
-                        setShowDetailModal(true);
-                      }}
-                      className="p-2 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
-                      title="View Details"
-                    >
-                      <EyeIcon className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEditProduct(product)}
-                      className="p-2 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
-                      title="Edit"
-                    >
-                      <PencilIcon className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteProduct(product.id || product._id || '')}
-                      className="p-2 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
-                      title="Delete"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
+                    {canRead && (
+                      <button
+                        onClick={() => {
+                          setSelectedProductForDetail(product);
+                          setShowDetailModal(true);
+                        }}
+                        className="p-2 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                        title="View Details"
+                      >
+                        <EyeIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canUpdate && (
+                      <button
+                        onClick={() => handleEditProduct(product)}
+                        className="p-2 rounded-lg text-blue-400 hover:bg-blue-400/10 transition-colors"
+                        title="Edit"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => handleDeleteProduct(product.id || product._id || '')}
+                        className="p-2 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                        title="Delete"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 ),
               },

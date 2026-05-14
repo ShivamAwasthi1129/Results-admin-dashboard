@@ -94,8 +94,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isSuperAdmin(nextUser)) {
           setActionKeys(['*']);
         } else {
-          const actions = (data as any).data?.actions || (data as any).actions || nextUser.actionKeys || (nextUser as any).actions || [];
-          setActionKeys(actions);
+          let actions = (data as any).data?.actions || (data as any).actions || nextUser.actionKeys || (nextUser as any).actions;
+          
+          if (!actions || actions.length === 0) {
+            const storedActions = localStorage.getItem('auth-actions');
+            if (storedActions) {
+              try {
+                actions = JSON.parse(storedActions);
+              } catch (e) {
+                actions = [];
+              }
+            }
+          }
+          
+          setActionKeys(actions || []);
         }
       } else {
         localStorage.removeItem('auth-token');
@@ -139,6 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(nextToken);
         setActionKeys(nextActions);
         localStorage.setItem('auth-token', nextToken);
+        localStorage.setItem('auth-actions', JSON.stringify(nextActions));
         return { success: true };
       } else {
         return { success: false, error: data.error };
@@ -156,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Logout error:', error);
     } finally {
       localStorage.removeItem('auth-token');
+      localStorage.removeItem('auth-actions');
       setUser(null);
       setToken(null);
       setActionKeys([]);

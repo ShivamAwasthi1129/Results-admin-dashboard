@@ -5,8 +5,8 @@ import HomepageManagementClient from './HomepageManagementClient';
 export default function HomepageManagementPage() {
   return (
     <DashboardLayout
-      title="Home page management"
-      subtitle="Edit homepage sections, publish versions, and expose content to the marketing site API"
+      title="Home Page Management"
+      subtitle="Manage landing page content — edit sections, upload media, and publish changes via the CMS API"
       icon={<Squares2X2Icon className="w-7 h-7" />}
     >
       <HomepageManagementClient />

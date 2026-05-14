@@ -1,42 +1,33 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDownIcon,
   ArrowPathIcon,
-  ArrowUpIcon,
-  DocumentDuplicateIcon,
+  CheckCircleIcon,
+  CloudArrowUpIcon,
+  CommandLineIcon,
   EyeIcon,
   NewspaperIcon,
-  PlusIcon,
-  RocketLaunchIcon,
-  TrashIcon,
+  PencilSquareIcon,
+  ServerStackIcon,
+  SparklesIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { Badge, Button, Card, Input, Modal } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
-import { buildNewSection } from '@/lib/homepage-cms/section-registry';
-import type { HomePageDocument, HomeSection } from '@/lib/homepage-cms/types';
 import { toast } from 'react-toastify';
+import {
+  fetchSectionsList,
+  fetchSectionDetail,
+  saveSectionFull,
+  seedLandingContent,
+  uploadMedia,
+} from '@/lib/landing-cms/api';
+import type { SectionMeta, SectionDetail } from '@/lib/landing-cms/types';
+import { SECTION_LABELS, SECTION_COLORS } from '@/lib/landing-cms/types';
+import JsonFieldEditor from '@/lib/landing-cms/JsonFieldEditor';
 
-interface CmsHomeResponse {
-  success: boolean;
-  data?: {
-    draft: HomePageDocument;
-    published: HomePageDocument | null;
-    publishedVersion: number;
-    publishedAt: string | null;
-    hasUnpublishedChanges: boolean;
-  };
-  error?: string;
-  details?: string[];
-}
-
-interface SectionTypeRow {
-  type: string;
-  displayName: string;
-  description: string;
-}
-
+/* ─── News & Media (kept from old code) ─── */
 interface NewsMediaArticle {
   [key: string]: unknown;
   article_id?: string;
@@ -53,83 +44,54 @@ interface NewsMediaArticle {
 }
 
 const NEWS_QUERY_OPTIONS = [
-  'wildfires',
-  'earthquake',
-  'hurricane',
-  'tornado',
-  'landslide',
-  'tsunami',
-  'heatwave',
+  'wildfires', 'earthquake', 'hurricane', 'tornado', 'landslide', 'tsunami', 'heatwave',
 ] as const;
 const NEWS_CACHE_KEY = 'homepage_news_media_cache_v1';
 const NEWS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-type NewsCacheRecord = {
-  fetchedAt: number;
-  articles: NewsMediaArticle[];
-};
-
+type NewsCacheRecord = { fetchedAt: number; articles: NewsMediaArticle[] };
 type NewsCacheMap = Record<string, NewsCacheRecord>;
 
 function readNewsCache(): NewsCacheMap {
   if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem(NEWS_CACHE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as NewsCacheMap;
-    if (!parsed || typeof parsed !== 'object') return {};
-    return parsed;
-  } catch {
-    return {};
-  }
+  try { const raw = window.localStorage.getItem(NEWS_CACHE_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
 }
-
 function writeNewsCache(next: NewsCacheMap): void {
   if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(next));
-  } catch {
-    // ignore quota/storage errors
-  }
+  try { window.localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
 }
 
-type JsonPrimitive = string | number | boolean | null;
-type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-
-function sortSections(sections: HomeSection[]): HomeSection[] {
-  return [...sections].sort((a, b) => a.order - b.order);
-}
-
-function renumberOrders(sections: HomeSection[]): HomeSection[] {
-  const sorted = sortSections(sections);
-  return sorted.map((s, i) => ({ ...s, order: i + 1 }));
-}
-
+/* ─── Main Component ─── */
 export default function HomepageManagementClient() {
   const { token } = useAuth();
+
+  // Section list state
   const [loading, setLoading] = useState(true);
+  const [homeSections, setHomeSections] = useState<SectionMeta[]>([]);
+  const [selectedSection, setSelectedSection] = useState<{page: string, section: string} | null>(null);
+
+  // Section detail state
+  const [sectionLoading, setSectionLoading] = useState(false);
+  const [sectionDetail, setSectionDetail] = useState<SectionDetail | null>(null);
+  const [editedContent, setEditedContent] = useState<Record<string, unknown> | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Save / Seed state
   const [saving, setSaving] = useState(false);
-  const [publishing, setPublishing] = useState(false);
-  const [draft, setDraft] = useState<HomePageDocument | null>(null);
-  const [publishedVersion, setPublishedVersion] = useState(0);
-  const [publishedAt, setPublishedAt] = useState<string | null>(null);
-  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(true);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [changeNote, setChangeNote] = useState('');
-  const [sectionTypes, setSectionTypes] = useState<SectionTypeRow[]>([]);
-  const [addOpen, setAddOpen] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+
+  // Upload state
+  const [uploading, setUploading] = useState(false);
+
+  // Preview
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [allPreviewOpen, setAllPreviewOpen] = useState(false);
-  const [versions, setVersions] = useState<
-    { id: string; versionNumber: number; createdAt: string; changeNote: string | null; sectionCount: number }[]
-  >([]);
+
+  // News & Media state (preserved from old code)
   const [newsOpen, setNewsOpen] = useState(false);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState<string | null>(null);
   const [newsArticles, setNewsArticles] = useState<NewsMediaArticle[]>([]);
   const [selectedNewsQuery, setSelectedNewsQuery] = useState<string>('wildfires');
-  const selectedKeyRef = useRef<string | null>(null);
-  selectedKeyRef.current = selectedKey;
+  const [targetNewsIndex, setTargetNewsIndex] = useState<number | null>(null);
 
   const authHeaders = useMemo(() => {
     const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
@@ -137,170 +99,79 @@ export default function HomepageManagementClient() {
     return h;
   }, [token]);
 
-  const loadAll = useCallback(async () => {
+  /* ─── Load sections list ─── */
+  const loadSections = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     try {
-      const [homeRes, typesRes, verRes] = await Promise.all([
-        fetch('/api/cms/homepage', { headers: authHeaders, cache: 'no-store' }),
-        fetch('/api/cms/section-types', { headers: authHeaders, cache: 'no-store' }),
-        fetch('/api/cms/homepage/versions', { headers: authHeaders, cache: 'no-store' }),
-      ]);
-      const homeJson = (await homeRes.json()) as CmsHomeResponse;
-      if (!homeRes.ok || !homeJson.success || !homeJson.data) {
-        toast.error(homeJson.error || 'Failed to load homepage CMS');
-        return;
+      const res = await fetchSectionsList(token);
+      if (res.success && res.data?.pages) {
+        // Flatten all sections from all pages
+        const allSections: SectionMeta[] = [];
+        Object.entries(res.data.pages).forEach(([page, sections]) => {
+          allSections.push(...sections.map(s => ({ ...s, page })));
+        });
+        
+        setHomeSections(allSections);
+        if (!selectedSection && allSections.length > 0) {
+          const first = allSections[0];
+          setSelectedSection({ page: first.page, section: first.section });
+        }
+      } else {
+        setHomeSections([]);
       }
-      const d = homeJson.data.draft;
-      setPublishedVersion(homeJson.data.publishedVersion);
-      setPublishedAt(homeJson.data.publishedAt);
-      setHasUnpublishedChanges(homeJson.data.hasUnpublishedChanges);
-
-      const typesJson = (await typesRes.json()) as { success?: boolean; data?: { sectionTypes: SectionTypeRow[] } };
-      if (typesRes.ok && typesJson.data?.sectionTypes) {
-        setSectionTypes(typesJson.data.sectionTypes);
-      }
-
-      const verJson = (await verRes.json()) as {
-        success?: boolean;
-        data?: { versions: typeof versions };
-      };
-      if (verRes.ok && verJson.data?.versions) {
-        setVersions(verJson.data.versions);
-      }
-
-      const prev = selectedKeyRef.current;
-      const nextKey =
-        prev && d.page.sections.some((s) => s.sectionKey === prev)
-          ? prev
-          : (d.page.sections[0]?.sectionKey ?? null);
-      setDraft(d);
-      setSelectedKey(nextKey);
     } catch (e) {
       console.error(e);
-      toast.error('Failed to load homepage CMS');
+      toast.error('Failed to load sections list');
     } finally {
       setLoading(false);
     }
-  }, [token, authHeaders]);
+  }, [token, selectedSection]);
+
+  useEffect(() => { loadSections(); }, [loadSections]);
+
+  /* ─── Load section detail ─── */
+  const loadSectionDetail = useCallback(async (page: string, sectionKey: string) => {
+    if (!token) return;
+    setSectionLoading(true);
+    try {
+      const res = await fetchSectionDetail(page, sectionKey, token);
+      if (res.success && res.data) {
+        setSectionDetail(res.data);
+        setEditedContent(JSON.parse(JSON.stringify(res.data.content)));
+        setIsDirty(false);
+      } else {
+        setSectionDetail(null);
+        setEditedContent(null);
+        toast.error('Section not found');
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to load section');
+    } finally {
+      setSectionLoading(false);
+    }
+  }, [token]);
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    if (selectedSection) loadSectionDetail(selectedSection.page, selectedSection.section);
+  }, [selectedSection, loadSectionDetail]);
 
-  const selectSection = (key: string) => {
-    if (!draft) return;
-    setSelectedKey(key);
-  };
-
-  const selected = useMemo(() => {
-    if (!draft || !selectedKey) return null;
-    return draft.page.sections.find((s) => s.sectionKey === selectedKey) ?? null;
-  }, [draft, selectedKey]);
-
-  const updateDraftSections = (sections: HomeSection[]) => {
-    if (!draft) return;
-    setDraft({
-      ...draft,
-      page: { ...draft.page, sections: renumberOrders(sections) },
-    });
-    setHasUnpublishedChanges(true);
-  };
-
-  const updateSectionMeta = (key: string, patch: Partial<HomeSection>) => {
-    if (!draft) return;
-    const next = draft.page.sections.map((x) => (x.sectionKey === key ? { ...x, ...patch } : x));
-    updateDraftSections(next);
-  };
-
-  const updateSectionData = (key: string, data: Record<string, unknown>) => {
-    updateSectionMeta(key, { data });
-  };
-
-  const getAtPath = (value: JsonValue, path: (string | number)[]): JsonValue => {
-    let cur: JsonValue = value;
-    for (const part of path) {
-      if (Array.isArray(cur) && typeof part === 'number') {
-        cur = cur[part] as JsonValue;
-      } else if (cur && typeof cur === 'object' && !Array.isArray(cur) && typeof part === 'string') {
-        cur = (cur as Record<string, JsonValue>)[part];
-      } else {
-        return null;
-      }
-    }
-    return cur;
-  };
-
-  const setAtPath = (value: JsonValue, path: (string | number)[], nextValue: JsonValue): JsonValue => {
-    if (path.length === 0) return nextValue;
-    const [head, ...rest] = path;
-    if (Array.isArray(value) && typeof head === 'number') {
-      const arr = [...value];
-      arr[head] = setAtPath(arr[head] as JsonValue, rest, nextValue);
-      return arr;
-    }
-    if (value && typeof value === 'object' && !Array.isArray(value) && typeof head === 'string') {
-      const obj = { ...(value as Record<string, JsonValue>) };
-      obj[head] = setAtPath(obj[head] as JsonValue, rest, nextValue);
-      return obj;
-    }
-    return value;
-  };
-
-  const removeAtPath = (value: JsonValue, path: (string | number)[]): JsonValue => {
-    if (path.length === 0) return value;
-    const [head, ...rest] = path;
-    if (rest.length === 0) {
-      if (Array.isArray(value) && typeof head === 'number') {
-        const arr = [...value];
-        arr.splice(head, 1);
-        return arr;
-      }
-      if (value && typeof value === 'object' && !Array.isArray(value) && typeof head === 'string') {
-        const obj = { ...(value as Record<string, JsonValue>) };
-        delete obj[head];
-        return obj;
-      }
-      return value;
-    }
-    if (Array.isArray(value) && typeof head === 'number') {
-      const arr = [...value];
-      arr[head] = removeAtPath(arr[head] as JsonValue, rest);
-      return arr;
-    }
-    if (value && typeof value === 'object' && !Array.isArray(value) && typeof head === 'string') {
-      const obj = { ...(value as Record<string, JsonValue>) };
-      obj[head] = removeAtPath(obj[head] as JsonValue, rest);
-      return obj;
-    }
-    return value;
-  };
-
-  const appendAtPath = (value: JsonValue, path: (string | number)[], item: JsonValue): JsonValue => {
-    const target = getAtPath(value, path);
-    if (!Array.isArray(target)) return value;
-    const updated = [...target, item];
-    return setAtPath(value, path, updated);
-  };
-
-  const saveDraft = async () => {
-    if (!draft || !token) return;
+  /* ─── Save section ─── */
+  const handleSave = async () => {
+    if (!selectedSection || !editedContent || !token) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/cms/homepage', {
-        method: 'PUT',
-        headers: authHeaders,
-        body: JSON.stringify(draft),
-      });
-      const json = (await res.json()) as CmsHomeResponse;
-      if (!res.ok || !json.success || !json.data) {
-        toast.error(json.error || 'Save failed');
-        if (json.details?.length) json.details.forEach((d) => toast.error(d));
-        return;
+      const sortOrder = sectionDetail?.sortOrder ?? 0;
+      const res = await saveSectionFull(selectedSection.page, selectedSection.section, editedContent, sortOrder, token);
+      if (res.success) {
+        toast.success(res.message || 'Section saved!');
+        setSectionDetail(res.data);
+        setEditedContent(JSON.parse(JSON.stringify(res.data.content)));
+        setIsDirty(false);
+      } else {
+        toast.error('Save failed');
       }
-      setDraft(json.data.draft);
-      setHasUnpublishedChanges(json.data.hasUnpublishedChanges);
-      toast.success('Draft saved');
     } catch (e) {
       console.error(e);
       toast.error('Save failed');
@@ -309,124 +180,56 @@ export default function HomepageManagementClient() {
     }
   };
 
-  const publish = async () => {
+  /* ─── Seed data ─── */
+  const handleSeed = async () => {
     if (!token) return;
-    setPublishing(true);
+    if (!confirm('This will seed/overwrite all landing content with defaults from the JSON file. Continue?')) return;
+    setSeeding(true);
     try {
-      const res = await fetch('/api/cms/homepage/publish', {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ changeNote: changeNote.trim() || undefined }),
-      });
-      const json = (await res.json()) as {
-        success?: boolean;
-        error?: string;
-        details?: string[];
-        data?: { publishedVersion: number; publishedAt: string | null; hasUnpublishedChanges: boolean };
-      };
-      if (!res.ok || !json.success) {
-        toast.error(json.error || 'Publish failed');
-        json.details?.forEach((d) => toast.error(d));
-        return;
+      const res = await seedLandingContent(token);
+      if (res.success) {
+        toast.success(res.message || 'Seeding complete!');
+        await loadSections();
+      } else {
+        toast.error(res.message || 'Seeding failed');
       }
-      if (json.data) {
-        setPublishedVersion(json.data.publishedVersion);
-        setPublishedAt(json.data.publishedAt);
-        setHasUnpublishedChanges(json.data.hasUnpublishedChanges);
-      }
-      setChangeNote('');
-      toast.success('Published');
-      await loadAll();
     } catch (e) {
       console.error(e);
-      toast.error('Publish failed');
+      toast.error('Seeding failed');
     } finally {
-      setPublishing(false);
+      setSeeding(false);
     }
   };
 
-  const move = (key: string, dir: -1 | 1) => {
-    if (!draft) return;
-    const sorted = sortSections(draft.page.sections);
-    const idx = sorted.findIndex((s) => s.sectionKey === key);
-    if (idx < 0) return;
-    const j = idx + dir;
-    if (j < 0 || j >= sorted.length) return;
-    const copy = [...sorted];
-    [copy[idx], copy[j]] = [copy[j], copy[idx]];
-    updateDraftSections(copy);
-  };
-
-  const toggleEnabled = (key: string) => {
-    if (!draft) return;
-    const next = draft.page.sections.map((s) =>
-      s.sectionKey === key ? { ...s, enabled: !s.enabled } : s
-    );
-    updateDraftSections(next);
-  };
-
-  const duplicateSection = (key: string) => {
-    if (!draft) return;
-    const s = draft.page.sections.find((x) => x.sectionKey === key);
-    if (!s) return;
-    const copy: HomeSection = {
-      ...s,
-      sectionKey: `${s.sectionKey}_copy_${Date.now().toString(36)}`,
-      label: `${s.label || s.sectionKey} (copy)`,
-      order: draft.page.sections.length + 1,
-      data: JSON.parse(JSON.stringify(s.data)) as Record<string, unknown>,
-    };
-    const merged = [...draft.page.sections, copy];
-    updateDraftSections(merged);
-    setSelectedKey(copy.sectionKey);
-    toast.success('Duplicate added — reorder and save draft');
-  };
-
-  const deleteSection = (key: string) => {
-    if (!draft) return;
-    if (!confirm('Delete this section from the draft?')) return;
-    const next = draft.page.sections.filter((s) => s.sectionKey !== key);
-    updateDraftSections(next);
-    setSelectedKey(renumberOrders(next)[0]?.sectionKey ?? null);
-  };
-
-  const addSection = (type: string) => {
-    if (!draft) return;
-    const template = draft.page.sections.find((s) => s.type === type);
-    const maxOrder = Math.max(0, ...draft.page.sections.map((s) => s.order));
-    const created = buildNewSection(type, maxOrder + 1, template);
-    const merged = [...draft.page.sections, created];
-    updateDraftSections(merged);
-    setSelectedKey(created.sectionKey);
-    setAddOpen(false);
-    toast.success('Section added — edit and save draft');
-  };
-
-  const rollback = async (versionId: string) => {
-    if (!token || !confirm('Restore this version into your draft? Current draft edits will be replaced.')) return;
+  /* ─── Upload media ─── */
+  const handleUpload = async (file: File, fieldKey?: string) => {
+    if (!selectedSection || !token) return;
+    setUploading(true);
     try {
-      const res = await fetch('/api/cms/homepage/rollback', {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ versionId }),
-      });
-      const json = (await res.json()) as { success?: boolean; error?: string; data?: { draft: HomePageDocument } };
-      if (!res.ok || !json.success || !json.data) {
-        toast.error(json.error || 'Rollback failed');
-        return;
+      const res = await uploadMedia(file, selectedSection.page, selectedSection.section, token, undefined, fieldKey);
+      if (res.success) {
+        toast.success('Media uploaded! URL copied to clipboard.');
+        navigator.clipboard.writeText(res.data.url).catch(() => {});
+        return res.data.url;
+      } else {
+        toast.error('Upload failed');
       }
-      setDraft(json.data.draft);
-      setHasUnpublishedChanges(true);
-      const k = json.data.draft.page.sections[0]?.sectionKey ?? null;
-      setSelectedKey(k);
-      toast.success('Draft restored from version');
-      await loadAll();
     } catch (e) {
       console.error(e);
-      toast.error('Rollback failed');
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
     }
+    return null;
   };
 
+  /* ─── Content change handler ─── */
+  const handleContentChange = (newContent: unknown) => {
+    setEditedContent(newContent as Record<string, unknown>);
+    setIsDirty(true);
+  };
+
+  /* ─── News & Media (preserved) ─── */
   const loadNewsAndMedia = async () => {
     setNewsOpen(true);
     await loadNewsByQuery('wildfires');
@@ -436,598 +239,284 @@ export default function HomepageManagementClient() {
     setSelectedNewsQuery(query);
     setNewsError(null);
     const cached = readNewsCache()[query];
-    const hasFreshCache = Boolean(cached && Date.now() - cached.fetchedAt < NEWS_CACHE_TTL_MS);
-
-    if (hasFreshCache && cached) {
+    if (cached && Date.now() - cached.fetchedAt < NEWS_CACHE_TTL_MS) {
       setNewsArticles(cached.articles);
       setNewsLoading(false);
       return;
     }
-
     setNewsLoading(true);
     try {
       const res = await fetch(`/api/news-media?country=us&limit=12&q=${encodeURIComponent(query)}`, {
-        headers: authHeaders,
-        cache: 'no-store',
+        headers: authHeaders, cache: 'no-store',
       });
-      const json = (await res.json()) as {
-        success?: boolean;
-        error?: string;
-        data?: {
-          selectedQuery?: string;
-          articles?: NewsMediaArticle[];
-        };
-      };
+      const json = await res.json();
       if (!res.ok || !json.success || !json.data) {
-        const msg = json.error || 'Unable to load news and media';
-        setNewsError(msg);
-        toast.error(msg);
+        setNewsError(json.error || 'Unable to load news');
         return;
       }
-      const nextArticles = Array.isArray(json.data.articles) ? json.data.articles : [];
-      setNewsArticles(nextArticles);
+      const articles = Array.isArray(json.data.articles) ? json.data.articles : [];
+      setNewsArticles(articles);
       const cache = readNewsCache();
-      cache[query] = {
-        fetchedAt: Date.now(),
-        articles: nextArticles,
-      };
+      cache[query] = { fetchedAt: Date.now(), articles };
       writeNewsCache(cache);
-    } catch (e) {
-      console.error(e);
-      setNewsError('Unable to load news and media');
-      toast.error('Unable to load news and media');
+    } catch {
+      setNewsError('Unable to load news');
     } finally {
       setNewsLoading(false);
     }
   };
 
-  if (loading || !draft) {
+  /* ─── Render ─── */
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[320px] text-[var(--text-muted)]">
-        Loading homepage builder…
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="w-12 h-12 border-4 border-[#991B1B] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[var(--text-muted)] animate-pulse">Loading CMS sections…</p>
       </div>
     );
   }
 
-  const ordered = sortSections(draft.page.sections);
-  const selectedData = (selected?.data || {}) as Record<string, JsonValue>;
-
-  const updateSelectedDataByPath = (path: (string | number)[], val: JsonValue) => {
-    if (!selected) return;
-    const base = selectedData as unknown as JsonValue;
-    const nextRoot = setAtPath(base, path, val);
-    updateSectionData(selected.sectionKey, nextRoot as Record<string, unknown>);
-  };
-
-  const removeSelectedDataByPath = (path: (string | number)[]) => {
-    if (!selected) return;
-    const base = selectedData as unknown as JsonValue;
-    const nextRoot = removeAtPath(base, path);
-    updateSectionData(selected.sectionKey, nextRoot as Record<string, unknown>);
-  };
-
-  const appendSelectedDataByPath = (path: (string | number)[], item: JsonValue) => {
-    if (!selected) return;
-    const base = selectedData as unknown as JsonValue;
-    const nextRoot = appendAtPath(base, path, item);
-    updateSectionData(selected.sectionKey, nextRoot as Record<string, unknown>);
-  };
-
-  const addObjectField = (path: (string | number)[]) => {
-    if (!selected) return;
-    const root = selectedData as unknown as JsonValue;
-    const target = getAtPath(root, path);
-    if (!target || typeof target !== 'object' || Array.isArray(target)) return;
-    const obj = { ...(target as Record<string, JsonValue>) };
-    let i = 1;
-    let key = `newField${i}`;
-    while (key in obj) {
-      i += 1;
-      key = `newField${i}`;
-    }
-    obj[key] = '';
-    updateSelectedDataByPath(path, obj);
-  };
-
-  const renderInputForPrimitive = (value: JsonPrimitive, path: (string | number)[], label: string) => {
-    if (typeof value === 'boolean') {
-      return (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={value}
-            onChange={(e) => updateSelectedDataByPath(path, e.target.checked)}
-          />
-          <span>{label}</span>
-        </label>
-      );
-    }
-
-    if (typeof value === 'number') {
-      return (
-        <Input
-          label={label}
-          type="number"
-          value={String(value)}
-          onChange={(e) => updateSelectedDataByPath(path, Number(e.target.value || 0))}
-        />
-      );
-    }
-
-    const str = value ?? '';
-    const multiline = typeof str === 'string' && str.length > 90;
-    if (multiline) {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{label}</label>
-          <textarea
-            className="input-field min-h-[90px]"
-            value={String(str)}
-            onChange={(e) => updateSelectedDataByPath(path, e.target.value)}
-          />
-        </div>
-      );
-    }
-    return (
-      <Input
-        label={label}
-        value={String(str)}
-        onChange={(e) => updateSelectedDataByPath(path, e.target.value)}
-      />
-    );
-  };
-
-  const renderEditor = (value: JsonValue, path: (string | number)[] = [], title?: string): React.ReactNode => {
-    const label = title ?? String(path[path.length - 1] ?? 'Root');
-    if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      return <div>{renderInputForPrimitive(value, path, label)}</div>;
-    }
-
-    if (Array.isArray(value)) {
-      return (
-        <Card className="p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="font-medium text-sm">{label} (list)</p>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => appendSelectedDataByPath(path, '')}
-            >
-              <PlusIcon className="w-4 h-4 mr-1" />
-              Add item
-            </Button>
-          </div>
-          {value.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">No items yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {value.map((item, index) => (
-                <div key={`${path.join('.')}.${index}`} className="rounded-lg border border-[var(--border-color)] p-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-[var(--text-muted)]">Item {index + 1}</span>
-                    <button
-                      type="button"
-                      className="text-xs text-red-600"
-                      onClick={() => removeSelectedDataByPath([...path, index])}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  {renderEditor(item, [...path, index], `Item ${index + 1}`)}
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      );
-    }
-
-    const entries = Object.entries(value);
-    return (
-      <Card className="p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="font-medium text-sm">{label}</p>
-          <Button variant="ghost" size="sm" onClick={() => addObjectField(path)}>
-            <PlusIcon className="w-4 h-4 mr-1" />
-            Add field
-          </Button>
-        </div>
-        {entries.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No fields yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {entries.map(([k, v]) => (
-              <div key={`${path.join('.')}.${k}`} className="rounded-lg border border-[var(--border-color)] p-2">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold">{k}</span>
-                  {path.length > 0 && (
-                    <button
-                      type="button"
-                      className="text-xs text-red-600"
-                      onClick={() => removeSelectedDataByPath([...path, k])}
-                    >
-                      Remove field
-                    </button>
-                  )}
-                </div>
-                {renderEditor(v, [...path, k], k)}
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-    );
-  };
-
-  const textFrom = (obj: Record<string, unknown>, keys: string[], fallback = '—'): string => {
-    for (const k of keys) {
-      const v = obj[k];
-      if (typeof v === 'string' && v.trim()) return v;
-    }
-    return fallback;
-  };
-
-  const mediaUrlFrom = (obj: Record<string, unknown>, key: string, fallback = 'configured'): string => {
-    const v = obj[key];
-    if (typeof v === 'string' && v.trim()) return v;
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      const url = (v as Record<string, unknown>).url;
-      if (typeof url === 'string' && url.trim()) return url;
-    }
-    return fallback;
-  };
-
-  const SectionPreview = ({ section }: { section: HomeSection }) => {
-    const d = section.data as Record<string, unknown>;
-    const title = section.label || section.sectionKey;
-    const type = section.type;
-    const headingLines = Array.isArray(d.headingLines) ? d.headingLines.filter((x) => typeof x === 'string') as string[] : [];
-    const items = Array.isArray(d.items) ? d.items : [];
-    const cards = Array.isArray(d.cards) ? d.cards : [];
-    const bulletPoints = Array.isArray(d.bulletPoints) ? d.bulletPoints : [];
-
-    return (
-      <Card className="p-4 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="font-semibold">{title}</p>
-            <p className="text-xs text-[var(--text-muted)]">{type}</p>
-          </div>
-          <Badge variant={section.enabled ? 'success' : 'warning'} size="sm">
-            {section.enabled ? 'Enabled' : 'Disabled'}
-          </Badge>
-        </div>
-
-        {type === 'hero' && (
-          <>
-            <p className="text-sm font-medium">{headingLines.join(' ') || textFrom(d, ['heading', 'title'])}</p>
-            <p className="text-sm text-[var(--text-muted)]">{textFrom(d, ['description', 'subheading'])}</p>
-            <p className="text-xs text-[var(--text-muted)]">Video: {mediaUrlFrom(d, 'backgroundVideo', textFrom(d, ['videoUrl'], 'configured'))}</p>
-          </>
-        )}
-
-        {type === 'impact_stats' && (
-          <>
-            <p className="text-sm font-medium">{textFrom(d, ['titleHighlight', 'titlePrefix'])}</p>
-            <p className="text-sm text-[var(--text-muted)]">{textFrom(d, ['subtitle'])}</p>
-            <p className="text-xs text-[var(--text-muted)]">{cards.length} stat card(s)</p>
-          </>
-        )}
-
-        {type === 'lifeline_features_grid' && (
-          <>
-            <p className="text-sm font-medium">{textFrom(d, ['titleHighlight', 'titlePrefix', 'title'])}</p>
-            <p className="text-sm text-[var(--text-muted)]">{textFrom(d, ['subtitle'])}</p>
-            <p className="text-xs text-[var(--text-muted)]">{items.length} feature item(s)</p>
-          </>
-        )}
-
-        {type === 'live_impact_updates' && (
-          <>
-            <p className="text-sm font-medium">{textFrom(d, ['titleHighlight', 'titlePrefix', 'title'])}</p>
-            <p className="text-xs text-[var(--text-muted)]">{items.length} update item(s)</p>
-          </>
-        )}
-
-        {type === 'community_cta' && (
-          <>
-            <p className="text-sm font-medium">{textFrom(d, ['title', 'badgeText'])}</p>
-            <p className="text-sm text-[var(--text-muted)]">{textFrom(d, ['description'])}</p>
-            <p className="text-xs text-[var(--text-muted)]">{bulletPoints.length} bullet point(s)</p>
-          </>
-        )}
-
-        {!['hero', 'impact_stats', 'lifeline_features_grid', 'live_impact_updates', 'community_cta'].includes(type) && (
-          <p className="text-sm text-[var(--text-muted)]">
-            GUI preview for this section is generic. Content updates are still fully editable in the form.
-          </p>
-        )}
-      </Card>
-    );
-  };
+  const isEmpty = homeSections.length === 0;
 
   return (
     <div className="space-y-6">
+      {/* ─── Top Bar ─── */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" onClick={() => setPreviewOpen(true)}>
-            <EyeIcon className="w-4 h-4 mr-1.5" />
-            Preview selected section
-          </Button>
-          <Button variant="secondary" onClick={() => setAllPreviewOpen(true)}>
-            <EyeIcon className="w-4 h-4 mr-1.5" />
-            Preview all sections
-          </Button>
-          <Button variant="secondary" onClick={() => window.open('/api/public/pages/home', '_blank')}>
-            Open published JSON
-          </Button>
-          <Button variant="secondary" onClick={loadNewsAndMedia}>
-            <NewspaperIcon className="w-4 h-4 mr-1.5" />
-            News and Media
-          </Button>
+          {/* Top bar buttons removed for clean UI */}
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[200px]">
-            <label className="text-xs text-[var(--text-muted)] block mb-1">Publish note (optional)</label>
-            <Input value={changeNote} onChange={(e) => setChangeNote(e.target.value)} placeholder="e.g. Hero copy update" />
-          </div>
-          <Button variant="primary" onClick={publish} disabled={publishing} className="!bg-emerald-700 hover:!bg-emerald-800">
-            <RocketLaunchIcon className="w-4 h-4 mr-1.5" />
-            {publishing ? 'Publishing…' : 'Publish'}
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2 text-sm text-[var(--text-muted)]">
-        <span>
-          Published version:{' '}
-          <strong className="text-[var(--text-primary)]">{publishedVersion || '—'}</strong>
-        </span>
-        <span className="hidden sm:inline">·</span>
-        <span>
-          Last publish:{' '}
-          <strong className="text-[var(--text-primary)]">
-            {publishedAt ? new Date(publishedAt).toLocaleString() : 'never'}
-          </strong>
-        </span>
-        {hasUnpublishedChanges && (
-          <Badge variant="warning" className="ml-0 sm:ml-2">
-            Unpublished changes
-          </Badge>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <Card className="xl:col-span-5 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-[var(--text-primary)]">Sections</h3>
-            <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
-              <PlusIcon className="w-4 h-4 mr-1" />
-              Add section
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Removed Seed button */}
+          {isDirty && (
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={saving}
+              className="!bg-emerald-600 hover:!bg-emerald-700 animate-pulse-once"
+            >
+              <CloudArrowUpIcon className="w-4 h-4 mr-1.5" />
+              {saving ? 'Saving…' : 'Save Section'}
             </Button>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Empty State ─── */}
+      {isEmpty && (
+        <Card className="p-8 text-center space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-500/20 to-red-500/20 flex items-center justify-center">
+            <SparklesIcon className="w-8 h-8 text-amber-500" />
           </div>
-          <p className="text-xs text-[var(--text-muted)]">
-            Reorder with arrows. Disabled sections stay in the draft but are omitted from the public API after publish.
+          <h3 className="text-xl font-bold text-[var(--text-primary)]">No Content Found</h3>
+          <p className="text-[var(--text-muted)] max-w-md mx-auto">
+            The CMS has no landing content yet. Click &quot;Seed Default Data&quot; to populate
+            all sections from the content structure JSON file.
           </p>
-          <ul className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
-            {ordered.map((s) => {
-              const active = s.sectionKey === selectedKey;
-              return (
-                <li
-                  key={s.sectionKey}
-                  className={`rounded-xl border p-3 cursor-pointer transition-colors ${
-                    active
-                      ? 'border-[#991B1B] bg-red-50/50 dark:bg-red-950/20'
-                      : 'border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
-                  }`}
-                  onClick={() => selectSection(s.sectionKey)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm text-[var(--text-primary)] truncate">
-                          {s.label || s.sectionKey}
-                        </span>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {s.type}
-                        </Badge>
-                        {!s.enabled && (
-                          <Badge variant="warning" className="text-[10px]">
-                            off
-                          </Badge>
+          <Button variant="primary" onClick={handleSeed} disabled={seeding} className="!bg-amber-600 hover:!bg-amber-700">
+            <ServerStackIcon className="w-4 h-4 mr-1.5" />
+            {seeding ? 'Seeding…' : 'Seed Default Data Now'}
+          </Button>
+        </Card>
+      )}
+
+      {/* ─── Main Layout ─── */}
+      {!isEmpty && (
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {/* Sidebar */}
+          <div className="xl:col-span-4 2xl:col-span-3">
+            <Card className="p-4 space-y-3 sticky top-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                  <PencilSquareIcon className="w-5 h-5" />
+                  Home Sections
+                </h3>
+                <Badge variant="secondary">{homeSections.length}</Badge>
+              </div>
+              <ul className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+                {Object.entries(
+                  homeSections.reduce((acc, s) => {
+                    if (!acc[s.page]) acc[s.page] = [];
+                    acc[s.page].push(s);
+                    return acc;
+                  }, {} as Record<string, SectionMeta[]>)
+                ).map(([page, sections]) => (
+                  <li key={page} className="space-y-2">
+                    <h4 className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider px-3 flex items-center gap-2">
+                      <div className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
+                      {page} Page
+                    </h4>
+                    <ul className="space-y-1">
+                      {sections.map((s) => {
+                        const active = selectedSection?.page === s.page && s.section === selectedSection?.section;
+                        const label = SECTION_LABELS[s.section] || s.section;
+                        const color = SECTION_COLORS[s.section] || '#6B7280';
+                        return (
+                          <li key={`${s.page}-${s.section}`}>
+                            <button
+                              type="button"
+                              className={`w-full text-left rounded-xl px-3 py-2 transition-all duration-200 border ${
+                                active
+                                  ? 'border-[#991B1B] bg-[#991B1B]/5 shadow-sm shadow-[#991B1B]/10 dark:bg-[#991B1B]/10'
+                                  : 'border-transparent hover:border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
+                              }`}
+                              onClick={() => setSelectedSection({ page: s.page, section: s.section })}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: active ? '#991B1B' : color }}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-sm font-medium truncate ${active ? 'text-[#991B1B]' : 'text-[var(--text-primary)]'}`}>
+                                    {label}
+                                  </p>
+                                </div>
+                                {active && (
+                                  <CheckCircleIcon className="w-4 h-4 text-[#991B1B] shrink-0" />
+                                )}
+                              </div>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+
+          {/* Editor */}
+          <div className="xl:col-span-8 2xl:col-span-9">
+            <Card className="p-5 space-y-5">
+              {sectionLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-8 h-8 border-3 border-[#991B1B] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : sectionDetail && editedContent ? (
+                <>
+                  {/* Section Header */}
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        {SECTION_LABELS[sectionDetail.section] || sectionDetail.section}
+                        {isDirty && (
+                          <Badge variant="warning" className="text-[10px]">unsaved</Badge>
                         )}
-                      </div>
-                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">order {s.order}</p>
+                      </h3>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">
+                        Page: <strong>{sectionDetail.page}</strong> · Section: <strong>{sectionDetail.section}</strong> · Sort: {sectionDetail.sortOrder}
+                      </p>
                     </div>
-                    <div className="flex flex-col gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          className="p-1 rounded border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]"
-                          onClick={() => move(s.sectionKey, -1)}
-                          aria-label="Move up"
-                        >
-                          <ArrowUpIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          className="p-1 rounded border border-[var(--border-color)] hover:bg-[var(--bg-secondary)]"
-                          onClick={() => move(s.sectionKey, 1)}
-                          aria-label="Move down"
-                        >
-                          <ArrowDownIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="flex gap-1 flex-wrap justify-end">
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-0.5 rounded bg-[var(--bg-secondary)]"
-                          onClick={() => toggleEnabled(s.sectionKey)}
-                        >
-                          {s.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-0.5 rounded bg-[var(--bg-secondary)]"
-                          onClick={() => duplicateSection(s.sectionKey)}
-                        >
-                          <DocumentDuplicateIcon className="w-3.5 h-3.5 inline" />
-                        </button>
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-0.5 rounded text-red-600"
-                          onClick={() => deleteSection(s.sectionKey)}
-                        >
-                          <TrashIcon className="w-3.5 h-3.5 inline" />
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      {/* Upload button */}
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) await handleUpload(file);
+                            e.target.value = '';
+                          }}
+                        />
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-[var(--border-color)] hover:bg-[var(--bg-secondary)] transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                          <CloudArrowUpIcon className="w-4 h-4" />
+                          {uploading ? 'Uploading…' : 'Upload Media'}
+                        </span>
+                      </label>
+                      <Button
+                        variant="primary"
+                        onClick={handleSave}
+                        disabled={saving || !isDirty}
+                        className="!bg-emerald-600 hover:!bg-emerald-700"
+                      >
+                        <CheckCircleIcon className="w-4 h-4 mr-1.5" />
+                        {saving ? 'Saving…' : 'Save'}
+                      </Button>
                     </div>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
 
-        <Card className="xl:col-span-7 p-4 space-y-4">
-          <h3 className="font-semibold text-[var(--text-primary)]">Page & selected section</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Page title"
-              value={draft.page.title}
-              onChange={(e) => {
-                setDraft({ ...draft, page: { ...draft.page, title: e.target.value } });
-                setHasUnpublishedChanges(true);
-              }}
-            />
-            <Input
-              label="Slug"
-              value={draft.page.slug}
-              onChange={(e) => {
-                setDraft({ ...draft, page: { ...draft.page, slug: e.target.value } });
-                setHasUnpublishedChanges(true);
-              }}
-            />
+                  {/* Content Editor */}
+                  <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-3">
+                    {sectionDetail.section === 'liveImpactUpdates' && editedContent?.items ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                          <p className="text-sm font-medium text-amber-800">Live Impact Updates Manager</p>
+                          <Button variant="secondary" size="sm" onClick={() => {
+                            const items = [...(editedContent.items as any[])];
+                            items.unshift({
+                              date: '', time: '', image: '', title: '', country: '', paragraph: '', sourceLink: ''
+                            });
+                            handleContentChange({ ...editedContent, items });
+                          }}>
+                            Add New Update
+                          </Button>
+                        </div>
+                        {(editedContent.items as any[]).map((item, idx) => (
+                          <Card key={idx} className="p-4 space-y-3 border-l-4 border-l-[#991B1B]">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold uppercase text-[var(--text-muted)]">Update #{idx + 1}</span>
+                              <div className="flex items-center gap-2">
+                                <Button variant="secondary" size="sm" onClick={() => {
+                                  setTargetNewsIndex(idx);
+                                  loadNewsAndMedia();
+                                }}>
+                                  <SparklesIcon className="w-3.5 h-3.5 mr-1" /> Fetch from News
+                                </Button>
+                                <Button variant="secondary" size="sm" className="text-red-600" onClick={() => {
+                                  const items = [...(editedContent.items as any[])];
+                                  items.splice(idx, 1);
+                                  handleContentChange({ ...editedContent, items });
+                                }}>
+                                  Remove
+                                </Button>
+                              </div>
+                            </div>
+                            <JsonFieldEditor
+                              data={item}
+                              onChange={(val) => {
+                                const items = [...(editedContent.items as any[])];
+                                items[idx] = val;
+                                handleContentChange({ ...editedContent, items });
+                              }}
+                              label={`Update ${idx + 1}`}
+                              depth={1}
+                            />
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <JsonFieldEditor
+                        data={editedContent}
+                        onChange={handleContentChange}
+                        label={`${sectionDetail.section} content`}
+                        depth={0}
+                      />
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12 text-[var(--text-muted)]">
+                  <PencilSquareIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p>Select a section from the sidebar to begin editing.</p>
+                </div>
+              )}
+            </Card>
           </div>
-
-          {selected ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label="Section key (stable id)"
-                  value={selected.sectionKey}
-                  onChange={(e) => {
-                    const v = e.target.value.trim();
-                    if (!v) return;
-                    const oldKey = selected.sectionKey;
-                    const keyExists = draft.page.sections.some((x) => x.sectionKey === v && x.sectionKey !== oldKey);
-                    if (keyExists) {
-                      toast.error('sectionKey must be unique');
-                      return;
-                    }
-                    const next = draft.page.sections.map((x) =>
-                      x.sectionKey === oldKey ? { ...x, sectionKey: v } : x
-                    );
-                    setSelectedKey(v);
-                    updateDraftSections(next);
-                  }}
-                />
-                <Input
-                  label="Admin label"
-                  value={selected.label ?? ''}
-                  onChange={(e) => {
-                    updateSectionMeta(selected.sectionKey, { label: e.target.value });
-                  }}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[var(--text-muted)] block mb-2">Content editor (GUI)</label>
-                <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
-                  {renderEditor(selectedData as unknown as JsonValue, [], 'Section data')}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-[var(--text-muted)] block mb-2">Live preview</label>
-                <SectionPreview section={selected} />
-              </div>
-            </>
-          ) : (
-            <p className="text-[var(--text-muted)]">Select a section to edit.</p>
-          )}
-        </Card>
-      </div>
-
-      <Card className="p-4">
-        <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
-          <h3 className="font-semibold text-[var(--text-primary)]">Version history</h3>
-          <Button variant="ghost" size="sm" onClick={() => loadAll()}>
-            <ArrowPathIcon className="w-4 h-4 mr-1" />
-            Refresh
-          </Button>
         </div>
-        {versions.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No publishes yet. Publishing creates a snapshot you can restore.</p>
+      )}
+
+      {/* ─── Preview Modal ─── */}
+      <Modal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} title="Section JSON Preview" size="xl">
+        {editedContent ? (
+          <pre className="bg-[var(--bg-secondary)] p-4 rounded-xl text-xs overflow-auto max-h-[70vh] font-mono text-[var(--text-secondary)]">
+            {JSON.stringify(editedContent, null, 2)}
+          </pre>
         ) : (
-          <ul className="divide-y divide-[var(--border-color)]">
-            {versions.map((v) => (
-              <li key={v.id} className="py-2 flex flex-wrap items-center justify-between gap-2 text-sm">
-                <div>
-                  <span className="font-medium text-[var(--text-primary)]">v{v.versionNumber}</span>
-                  <span className="text-[var(--text-muted)] mx-2">
-                    {new Date(v.createdAt).toLocaleString()}
-                  </span>
-                  <span className="text-[var(--text-muted)]">({v.sectionCount} sections)</span>
-                  {v.changeNote && (
-                    <span className="block text-xs text-[var(--text-muted)] mt-0.5">{v.changeNote}</span>
-                  )}
-                </div>
-                <Button variant="secondary" size="sm" onClick={() => rollback(v.id)}>
-                  Restore to draft
-                </Button>
-              </li>
-            ))}
-          </ul>
+          <p className="text-[var(--text-muted)]">No content to preview.</p>
         )}
-      </Card>
-
-      <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="Add section" size="lg">
-        <p className="text-sm text-[var(--text-muted)] mb-3">
-          New sections are appended with default data for that type. Edit JSON on the right, then save draft.
-        </p>
-        <ul className="space-y-2 max-h-[360px] overflow-y-auto">
-          {sectionTypes.map((t) => (
-            <li key={t.type}>
-              <button
-                type="button"
-                className="w-full text-left rounded-lg border border-[var(--border-color)] p-3 hover:bg-[var(--bg-secondary)] transition-colors"
-                onClick={() => addSection(t.type)}
-              >
-                <span className="font-medium text-[var(--text-primary)]">{t.displayName}</span>
-                <span className="text-xs text-[var(--text-muted)] block">{t.type}</span>
-                <span className="text-xs text-[var(--text-muted)]">{t.description}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Modal>
-
-      <Modal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} title="Draft preview (JSON)" size="xl">
-        {selected ? (
-          <SectionPreview section={selected} />
-        ) : (
-          <p className="text-[var(--text-muted)]">Select a section first.</p>
-        )}
-      </Modal>
-
-      <Modal isOpen={allPreviewOpen} onClose={() => setAllPreviewOpen(false)} title="All section previews" size="xl">
-        <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
-          {ordered.map((s) => (
-            <SectionPreview key={s.sectionKey} section={s} />
-          ))}
-          {ordered.length === 0 && (
-            <p className="text-[var(--text-muted)]">No sections available.</p>
-          )}
-        </div>
       </Modal>
 
       <Modal isOpen={newsOpen} onClose={() => setNewsOpen(false)} title="News and media" size="xl">
@@ -1043,9 +532,7 @@ export default function HomepageManagementClient() {
                   <button
                     key={query}
                     type="button"
-                    onClick={() => {
-                      if (!newsLoading && query !== selectedNewsQuery) void loadNewsByQuery(query);
-                    }}
+                    onClick={() => { if (!newsLoading && query !== selectedNewsQuery) void loadNewsByQuery(query); }}
                     disabled={newsLoading}
                     className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                       selectedNewsQuery === query
@@ -1074,64 +561,83 @@ export default function HomepageManagementClient() {
                       if (Array.isArray(value) && value.length === 0) return false;
                       return true;
                     });
+                    
                     return (
-                      <Card key={key} className="p-3">
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                          <div className="md:col-span-3">
-                            {item.image_url ? (
-                              <img
-                                src={item.image_url}
-                                alt={item.title || 'news image'}
-                                className="w-full h-[110px] object-cover rounded-lg border border-[var(--border-color)]"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-full h-[110px] rounded-lg border border-dashed border-[var(--border-color)] flex items-center justify-center text-xs text-[var(--text-muted)]">
-                                No image available
-                              </div>
-                            )}
-                          </div>
-                          <div className="md:col-span-9 space-y-2">
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
-                              <Badge variant="secondary">{item.q || 'general'}</Badge>
-                              <span>{item.source_name || 'Unknown source'}</span>
-                              {item.pubDate && <span>{new Date(item.pubDate).toLocaleString()}</span>}
+                      <div key={key} className="relative group">
+                        <Card className="p-3 transition-all hover:ring-2 hover:ring-[#991B1B]/50">
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                            <div className="md:col-span-3">
+                              {item.image_url ? (
+                                <img 
+                                  src={item.image_url} 
+                                  alt={item.title || 'news image'}
+                                  className="w-full h-[110px] object-cover rounded-lg border border-[var(--border-color)]" 
+                                  loading="lazy" 
+                                />
+                              ) : (
+                                <div className="w-full h-[110px] rounded-lg border border-dashed border-[var(--border-color)] flex items-center justify-center text-xs text-[var(--text-muted)]">
+                                  No image available
+                                </div>
+                              )}
                             </div>
-                            <p className="font-medium text-[var(--text-primary)]">{item.title || 'Untitled'}</p>
-                            {item.description && (
-                              <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>
-                            )}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                              {metadataEntries.map(([field, value]) => {
-                                const normalized = Array.isArray(value)
-                                  ? value.join(', ')
-                                  : typeof value === 'object'
-                                    ? JSON.stringify(value)
-                                    : String(value);
-                                return (
-                                  <div
-                                    key={`${key}-${field}`}
-                                    className="rounded border border-[var(--border-color)] px-2 py-1 bg-[var(--bg-secondary)]"
+                            <div className="md:col-span-9 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                                  <Badge variant="secondary">{item.q || 'general'}</Badge>
+                                  <span>{item.source_name || 'Unknown source'}</span>
+                                  {item.pubDate && <span>{new Date(item.pubDate).toLocaleString()}</span>}
+                                </div>
+                                {targetNewsIndex !== null && (
+                                  <Button 
+                                    variant="primary" 
+                                    size="sm" 
+                                    className="!bg-[#991B1B] !text-white h-7 px-3"
+                                    onClick={() => {
+                                      const dateObj = item.pubDate ? new Date(item.pubDate) : new Date();
+                                      const mappedUpdate = {
+                                        date: dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+                                        time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                                        image: item.image_url || '',
+                                        title: item.title || '',
+                                        country: Array.isArray(item.country) ? item.country[0] : (item.country || 'USA'),
+                                        paragraph: item.description || '',
+                                        sourceLink: item.link || ''
+                                      };
+                                      
+                                      const items = [...(editedContent?.items as any[])];
+                                      items[targetNewsIndex] = mappedUpdate;
+                                      handleContentChange({ ...editedContent, items });
+                                      setTargetNewsIndex(null);
+                                      setNewsOpen(false);
+                                      toast.success('News published to update #' + (targetNewsIndex + 1));
+                                    }}
                                   >
-                                    <span className="font-semibold text-[var(--text-primary)]">{field}: </span>
-                                    <span className="text-[var(--text-muted)]">{normalized}</span>
-                                  </div>
-                                );
-                              })}
+                                    Select to Publish
+                                  </Button>
+                                )}
+                              </div>
+                              <p className="font-medium text-[var(--text-primary)]">{item.title || 'Untitled'}</p>
+                              {item.description && <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                {metadataEntries.map(([field, value]) => {
+                                  const normalized = Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value);
+                                  return (
+                                    <div key={`${key}-${field}`} className="rounded border border-[var(--border-color)] px-2 py-1 bg-[var(--bg-secondary)]">
+                                      <span className="font-semibold text-[var(--text-primary)]">{field}: </span>
+                                      <span className="text-[var(--text-muted)]">{normalized}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {item.link && (
+                                <a href={item.link} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline break-all">
+                                  {item.link}
+                                </a>
+                              )}
                             </div>
-                            {item.link && (
-                              <a
-                                href={item.link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm text-blue-600 hover:underline break-all"
-                              >
-                                {item.link}
-                              </a>
-                            )}
                           </div>
-                        </div>
-                      </Card>
+                        </Card>
+                      </div>
                     );
                   })}
                 </div>

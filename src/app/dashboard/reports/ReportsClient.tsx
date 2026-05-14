@@ -82,7 +82,8 @@ interface ReportsClientProps {
 }
 
 export default function ReportsClient({}: ReportsClientProps) {
-  const { token } = useAuth();
+  const { token, hasAction } = useAuth();
+  const canGenerate = hasAction('reports.generate');
   const [activeTab, setActiveTab] = useState<'reports' | 'analytics'>('reports');
   const [reportType, setReportType] = useState('summary');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -497,12 +498,16 @@ export default function ReportsClient({}: ReportsClientProps) {
                 <Button variant="secondary" onClick={fetchReport} leftIcon={<ArrowPathIcon className="w-4 h-4" />}>
                   Refresh
                 </Button>
-                <Button variant="gradient" onClick={() => generateReport('PDF')} leftIcon={<DocumentTextIcon className="w-4 h-4" />}>
-                  Generate PDF
-                </Button>
-                <Button variant="primary" onClick={() => generateReport('Excel')} leftIcon={<TableCellsIcon className="w-4 h-4" />}>
-                  Generate Excel
-                </Button>
+                {canGenerate && (
+                  <>
+                    <Button variant="gradient" onClick={() => generateReport('PDF')} leftIcon={<DocumentTextIcon className="w-4 h-4" />}>
+                      Generate PDF
+                    </Button>
+                    <Button variant="primary" onClick={() => generateReport('Excel')} leftIcon={<TableCellsIcon className="w-4 h-4" />}>
+                      Generate Excel
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </Card>
