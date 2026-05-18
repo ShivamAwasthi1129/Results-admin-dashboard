@@ -174,6 +174,7 @@ export default function LiveDisastersClient() {
   const [selectedDisaster, setSelectedDisaster] = useState<any | null>(null);
   const [expandedListDisasterId, setExpandedListDisasterId] = useState<string | null>(null);
   const [selectedListKey, setSelectedListKey] = useState<string | null>(null);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterSeverity, setFilterSeverity] = useState('all');
   /** Multi-select: usa | mexico | canada | other. Empty = all countries. */
@@ -800,8 +801,42 @@ export default function LiveDisastersClient() {
     if (filterType !== 'all' && normalizeTypeForFilter(d.type) !== normalizeTypeForFilter(filterType)) return false;
     if (filterSeverity !== 'all' && d.severity !== filterSeverity) return false;
     if (filterCountryRegions.length > 0 && !filterCountryRegions.includes(getDisasterCountryBucket(d))) return false;
-    if (filterState !== 'all' && d.location?.state !== filterState) return false;
+    if (filterState !== 'all') {
+      const fs = filterState.toLowerCase();
+      const state = (d.location?.state || '').toLowerCase();
+      const title = (d.title || '').toLowerCase();
+      const desc = (d.description || '').toLowerCase();
+      
+      const stateMatches = state && (state === fs || state.includes(fs));
+      const titleMatches = title.includes(fs);
+      const descMatches = desc.includes(fs);
+      
+      if (!stateMatches && !titleMatches && !descMatches) {
+        return false;
+      }
+    }
     if (filterSource === 'database' && d.source !== 'database') return false;
+
+    if (globalSearchQuery.trim()) {
+      const q = globalSearchQuery.toLowerCase();
+      const title = (d.title || '').toLowerCase();
+      const desc = (d.description || '').toLowerCase();
+      const country = (d.location?.country || '').toLowerCase();
+      const state = (d.location?.state || '').toLowerCase();
+      const type = (d.type || '').toLowerCase();
+      const category = (d.category || '').toLowerCase();
+      if (!(
+        title.includes(q) ||
+        desc.includes(q) ||
+        country.includes(q) ||
+        state.includes(q) ||
+        type.includes(q) ||
+        category.includes(q)
+      )) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -827,27 +862,20 @@ export default function LiveDisastersClient() {
     : filteredDisasters;
 
   const currentYear = new Date().getFullYear();
-  const disastersForCountryStats =
-    filterCountryRegions.length === 0
-      ? allDisasters
-      : allDisasters.filter((d) => filterCountryRegions.includes(getDisasterCountryBucket(d)));
 
   const stats = {
-    total: disastersForCountryStats.length,
-    volcanic: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'volcanic').length,
-    iceberg: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'iceberg').length,
-    wildfires: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'wildfire').length,
-    earthquakes: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'earthquake').length,
-    storms: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'cyclone').length,
-    flood: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'flood').length,
-    snowStorm: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'snow_storm').length,
-    tornados: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'tornado').length,
-    powerOutage: disastersForCountryStats.filter(d => normalizeTypeForFilter(d.type) === 'power_outage').length,
-    live: liveDisasters.length,
-    database: databaseDisasters.filter((d: ManagedDisaster) => {
-      const y = d.createdAt ? new Date(d.createdAt).getFullYear() : NaN;
-      return !isNaN(y) && y === currentYear;
-    }).length,
+    total: filteredDisasters.length,
+    volcanic: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'volcanic').length,
+    iceberg: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'iceberg').length,
+    wildfires: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'wildfire').length,
+    earthquakes: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'earthquake').length,
+    storms: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'cyclone').length,
+    flood: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'flood').length,
+    snowStorm: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'snow_storm').length,
+    tornados: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'tornado').length,
+    powerOutage: filteredDisasters.filter(d => normalizeTypeForFilter(d.type) === 'power_outage').length,
+    live: filteredDisasters.filter(d => d.isLive).length,
+    database: filteredDisasters.filter((d) => d.source === 'database').length,
   };
 
   const uniqueTypes = Array.from(new Set(allDisasters.map(d => d.type))).filter(Boolean).sort();
@@ -861,6 +889,7 @@ export default function LiveDisastersClient() {
 
   const getStatesForRegion = (region: CountryBucket): string[] => {
     if (!region || region === 'other') return [];
+    if (region === 'usa') return [...USA_STATES].sort();
     return Array.from(new Set(
       allDisasters
         .filter(d => getDisasterCountryBucket(d) === region && d.location?.state)
@@ -897,6 +926,7 @@ export default function LiveDisastersClient() {
     setFilterCountryRegions([]);
     setFilterState('all');
     setFilterSource('all');
+    setGlobalSearchQuery('');
     setListSearchQuery('');
     const d = new Date();
     setFilterToDate(d.toISOString().slice(0, 10));
@@ -911,6 +941,7 @@ export default function LiveDisastersClient() {
     filterSeverity !== 'all' ||
     filterState !== 'all' ||
     filterSource !== 'all' ||
+    globalSearchQuery.trim() !== '' ||
     listSearchQuery.trim() !== '';
 
   const showClearFiltersButton = hasActiveFilters || filterCountryRegions.length > 0;
@@ -921,13 +952,11 @@ export default function LiveDisastersClient() {
         <LiveDisastersMappingLoader />
       ) : (
         <>
-      {/* Quick Stats — horizontal scroll; order ends with Power Outage */}
+      {/* Quick Stats */}
       <div className="mb-6">
-        {/* <p className="text-xs text-[var(--text-muted)] mb-2">Scroll sideways to see all event types</p> */}
-        <div className="overflow-x-auto pb-2 scroll-smooth [-ms-overflow-style:none] [scrollbar-width:thin]">
-          <div className="flex gap-3 min-w-min snap-x snap-mandatory">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <Card
-          className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 shrink-0 w-[148px] snap-start ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 w-full ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'cyclone' ? 'all' : 'cyclone'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -938,7 +967,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 shrink-0 w-[148px] snap-start ${filterType === 'flood' ? 'ring-2 ring-purple-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 w-full ${filterType === 'flood' ? 'ring-2 ring-purple-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'flood' ? 'all' : 'flood'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -949,7 +978,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-amber-500 cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30 shrink-0 w-[148px] snap-start ${filterType === 'wildfire' ? 'ring-2 ring-amber-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-amber-500 cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30 w-full ${filterType === 'wildfire' ? 'ring-2 ring-amber-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'wildfire' ? 'all' : 'wildfire'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -960,7 +989,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 shrink-0 w-[148px] snap-start ${filterType === 'snow_storm' ? 'ring-2 ring-cyan-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 w-full ${filterType === 'snow_storm' ? 'ring-2 ring-cyan-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'snow_storm' ? 'all' : 'snow_storm'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -971,7 +1000,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-violet-500 cursor-pointer transition-all hover:ring-2 hover:ring-violet-500/30 shrink-0 w-[148px] snap-start ${filterType === 'tornado' ? 'ring-2 ring-violet-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-violet-500 cursor-pointer transition-all hover:ring-2 hover:ring-violet-500/30 w-full ${filterType === 'tornado' ? 'ring-2 ring-violet-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'tornado' ? 'all' : 'tornado'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -982,7 +1011,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 shrink-0 w-[148px] snap-start ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 w-full ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'earthquake' ? 'all' : 'earthquake'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -993,7 +1022,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 shrink-0 w-[148px] snap-start ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
+          className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 w-full ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'volcanic' ? 'all' : 'volcanic'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -1004,7 +1033,7 @@ export default function LiveDisastersClient() {
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
         </Card>
         <Card
-          className={`p-3 border-l-4 border-l-slate-500 cursor-pointer transition-all hover:ring-2 hover:ring-slate-400/30 shrink-0 w-[148px] snap-start ${filterType === 'power_outage' ? 'ring-2 ring-slate-400/40' : ''}`}
+          className={`p-3 border-l-4 border-l-slate-500 cursor-pointer transition-all hover:ring-2 hover:ring-slate-400/30 w-full ${filterType === 'power_outage' ? 'ring-2 ring-slate-400/40' : ''}`}
           onClick={() => { setFilterType(prev => prev === 'power_outage' ? 'all' : 'power_outage'); setFilterSeverity('all'); }}
         >
           <div className="flex items-center justify-between mb-1">
@@ -1014,30 +1043,29 @@ export default function LiveDisastersClient() {
           <p className="text-2xl font-bold text-slate-400 leading-tight">{stats.powerOutage}</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">No Data Available</p>
         </Card>
-          </div>
         </div>
       </div>
       {/* Top filter row: all filters in ONE line with search taking more space */}
       <div className="mb-6 relative z-[8000] isolate">
         <div className="p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20 backdrop-blur-sm">
-          <div className="flex items-center gap-3 w-full">
-            {/* Search Bar - Takes 2x width */}
-            <div className="flex flex-col gap-1.5 flex-[2] min-w-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 w-full items-end">
+            {/* Search Bar - Takes 2 cols on xl */}
+            <div className="flex flex-col gap-1.5 xl:col-span-2">
               {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
                 Search
               </label> */}
-              <div className="relative">
+              <div className="relative h-[42px]">
                 <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
                 <Input
                   type="text"
-                  placeholder="Search disasters..."
-                  value={listSearchQuery}
-                  onChange={(e) => setListSearchQuery(e.target.value)}
-                  className="pl-12 pr-10 py-2.5 text-sm w-full bg-[var(--bg-card)] border-purple-500/30 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg shadow-sm transition-all duration-200"
+                  placeholder="Search globally..."
+                  value={globalSearchQuery}
+                  onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                  className="pl-12 pr-10 py-0 h-full text-sm w-full bg-[var(--bg-card)] border-purple-500/30 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg shadow-sm transition-all duration-200"
                 />
-                {listSearchQuery && (
+                {globalSearchQuery && (
                   <button
-                    onClick={() => setListSearchQuery('')}
+                    onClick={() => setGlobalSearchQuery('')}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-purple-500/10 rounded-md transition-colors"
                   >
                     <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
@@ -1046,15 +1074,15 @@ export default function LiveDisastersClient() {
               </div>
             </div>
 
-            {/* Type Filter - Takes 1x width */}
-            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+            {/* Type Filter */}
+            <div className="flex flex-col gap-1.5">
               {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
                 Type
               </label> */}
               <select
                 value={filterType}
                 onChange={(e) => { setFilterType(e.target.value); setSelectedDisaster(null); }}
-                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
               >
                 <option value="all">All Types</option>
                 {uniqueTypes.map(type => (
@@ -1063,15 +1091,15 @@ export default function LiveDisastersClient() {
               </select>
             </div>
 
-            {/* Severity Filter - Takes 1x width */}
-            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+            {/* Severity Filter */}
+            <div className="flex flex-col gap-1.5">
               {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
                 Severity
               </label> */}
               <select
                 value={filterSeverity}
                 onChange={(e) => { setFilterSeverity(e.target.value); setSelectedDisaster(null); }}
-                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
               >
                 <option value="all">All Severity</option>
                 <option value="low">Low</option>
@@ -1082,7 +1110,7 @@ export default function LiveDisastersClient() {
             </div>
 
             {/* Countries — multi-select (USA, Mexico, Canada, All other countries) */}
-            <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+            <div className="flex flex-col gap-1.5 h-[42px] z-10">
               <MultiSelect
                 variant="filter"
                 placeholder="All countries"
@@ -1102,14 +1130,14 @@ export default function LiveDisastersClient() {
 
             {/* State Filter — only when exactly one of USA / Mexico / Canada is selected */}
             {singleRegionForState && availableStates.length > 0 && (
-              <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+              <div className="flex flex-col gap-1.5">
                 {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
                   State
                 </label> */}
                 <select
                   value={filterState}
                   onChange={(e) => { setFilterState(e.target.value); setSelectedDisaster(null); }}
-                  className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                  className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
                 >
                   <option value="all">All States</option>
                   {availableStates.map(state => (
@@ -1119,8 +1147,8 @@ export default function LiveDisastersClient() {
               </div>
             )}
 
-            {/* From Date - Takes 1x width */}
-            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+            {/* From Date */}
+            <div className="flex flex-col gap-1.5">
               {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
                 From Date
               </label> */}
@@ -1128,12 +1156,12 @@ export default function LiveDisastersClient() {
                 type="date"
                 value={filterFromDate}
                 onChange={(e) => setFilterFromDate(e.target.value)}
-                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
               />
             </div>
 
-            {/* To Date - Takes 1x width */}
-            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+            {/* To Date */}
+            <div className="flex flex-col gap-1.5">
               {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
                 To Date
               </label> */}
@@ -1141,96 +1169,94 @@ export default function LiveDisastersClient() {
                 type="date"
                 value={filterToDate}
                 onChange={(e) => setFilterToDate(e.target.value)}
-                className="px-3 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
               />
             </div>
 
-            {/* Clear Filters Button - Fixed width */}
+            {/* Clear Filters Button - Equal Height */}
             {showClearFiltersButton && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-transparent uppercase tracking-wide">
-                  Clear
-                </label>
                 <button
                   type="button"
                   onClick={clearAllFilters}
-                  className="px-4 py-2.5 text-sm font-medium text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 whitespace-nowrap"
+                  className="px-4 h-[42px] text-sm font-medium text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 whitespace-nowrap w-full"
                 >
                   <XMarkIcon className="w-4 h-4" />
                   Clear
                 </button>
               </div>
             )}
-          </div>
+            {/* Active Filters and Selected Countries (Next to Clear Button) */}
+            {(hasActiveFilters || filterCountryRegions.length > 0) && (
+              <div className="col-span-full xl:col-span-7 flex flex-wrap gap-2 items-center">
+                {filterCountryRegions.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 items-center mr-2">
+                    <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide shrink-0">
+                      Countries:
+                    </span>
+                    {filterCountryRegions.map((r) => {
+                      const regionLabel =
+                        ({ usa: 'USA', mexico: 'Mexico', canada: 'Canada', other: 'All other countries' } as const)[
+                          r as 'usa' | 'mexico' | 'canada' | 'other'
+                        ] ?? r;
+                      return (
+                        <span
+                          key={r}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-500/15 text-purple-400 border border-purple-500/25 rounded-md text-xs font-medium"
+                        >
+                          {regionLabel}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFilterCountryRegions(filterCountryRegions.filter((x) => x !== r));
+                              setSelectedDisaster(null);
+                            }}
+                            className="p-0.5 rounded hover:bg-purple-500/20 text-purple-300"
+                            aria-label={`Remove ${regionLabel}`}
+                          >
+                            <XMarkIcon className="w-3 h-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
 
-          {filterCountryRegions.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5 items-center">
-              <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide shrink-0">
-                Selected countries
-              </span>
-              {filterCountryRegions.map((r) => {
-                const regionLabel =
-                  ({ usa: 'USA', mexico: 'Mexico', canada: 'Canada', other: 'All other countries' } as const)[
-                    r as 'usa' | 'mexico' | 'canada' | 'other'
-                  ] ?? r;
-                return (
-                  <span
-                    key={r}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-500/15 text-purple-400 border border-purple-500/25 rounded-md text-xs font-medium"
-                  >
-                    {regionLabel}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFilterCountryRegions(filterCountryRegions.filter((x) => x !== r));
-                        setSelectedDisaster(null);
-                      }}
-                      className="p-0.5 rounded hover:bg-purple-500/20 text-purple-300"
-                      aria-label={`Remove ${regionLabel}`}
-                    >
-                      <XMarkIcon className="w-3 h-3" />
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Active Filters Display (Optional - below the main row) */}
-          {hasActiveFilters && (
-            <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
-                  Active Filters:
-                </span>
-                {filterType !== 'all' && (
-                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                    Type: {filterType}
-                  </span>
-                )}
-                {filterSeverity !== 'all' && (
-                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                    Severity: {filterSeverity}
-                  </span>
-                )}
-                {filterState !== 'all' && (
-                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                    State: {filterState}
-                  </span>
-                )}
-                {filterFromDate && (
-                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                    From: {filterFromDate}
-                  </span>
-                )}
-                {filterToDate && (
-                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                    To: {filterToDate}
-                  </span>
+                {hasActiveFilters && (
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                      Active:
+                    </span>
+                    {filterType !== 'all' && (
+                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                        Type: {filterType}
+                      </span>
+                    )}
+                    {filterSeverity !== 'all' && (
+                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                        Severity: {filterSeverity}
+                      </span>
+                    )}
+                    {filterState !== 'all' && (
+                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                        State: {filterState}
+                      </span>
+                    )}
+                    {filterFromDate && (
+                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                        From: {filterFromDate}
+                      </span>
+                    )}
+                    {filterToDate && (
+                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                        To: {filterToDate}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -1293,7 +1319,7 @@ export default function LiveDisastersClient() {
             <div className="p-3 border-b border-[var(--border-color)] bg-[var(--bg-input)] shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--text-muted)]">
-                  Showing <span className="font-semibold text-[var(--text-primary)]">{listFilteredDisasters.length}</span> of <span className="font-semibold text-[var(--text-primary)]">{allDisasters.length}</span> events
+                  Showing <span className="font-semibold text-[var(--text-primary)]">{listFilteredDisasters.length}</span> of <span className="font-semibold text-[var(--text-primary)]">{filteredDisasters.length}</span> events
                 </p>
                 {selectedDisaster && (
                   <button
@@ -1302,6 +1328,24 @@ export default function LiveDisastersClient() {
                   >
                     <XMarkIcon className="w-3 h-3" />
                     Deselect
+                  </button>
+                )}
+              </div>
+              <div className="mt-3 relative">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
+                <Input
+                  type="text"
+                  placeholder="Search in list..."
+                  value={listSearchQuery}
+                  onChange={(e) => setListSearchQuery(e.target.value)}
+                  className="pl-9 pr-8 py-2 text-xs w-full bg-[var(--bg-card)] border-purple-500/30 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20 rounded-md shadow-sm transition-all duration-200"
+                />
+                {listSearchQuery && (
+                  <button
+                    onClick={() => setListSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-purple-500/10 rounded-md transition-colors"
+                  >
+                    <XMarkIcon className="w-3 h-3 text-[var(--text-muted)]" />
                   </button>
                 )}
               </div>
