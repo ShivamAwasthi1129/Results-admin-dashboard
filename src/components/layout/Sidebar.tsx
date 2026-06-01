@@ -91,7 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Printify', href: '/dashboard/printify-stock', icon: ArchiveBoxIcon, roles: ['super_admin', 'admin'] as const, action: 'printify.list' },
     { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCartIcon, roles: ['super_admin', 'admin'] as const, action: 'orders.list' },
     { name: 'Reports & Analytics', href: '/dashboard/reports', icon: DocumentChartBarIcon, roles: ['super_admin', 'admin'] as const, action: 'reports.list' },
-    { name: 'OPS Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const, action: 'opsUsers.list' },
+    { name: 'Internal Users', href: '/dashboard/users', icon: UsersIcon, roles: ['super_admin', 'admin'] as const, action: 'opsUsers.list' },
     { name: 'User Management', href: '/dashboard/user-management', icon: IdentificationIcon, roles: ['super_admin', 'admin'] as const, action: 'usersMgmt.list' },
     {
       name: 'Access Control',

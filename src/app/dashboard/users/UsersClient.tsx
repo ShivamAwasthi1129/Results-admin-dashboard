@@ -267,6 +267,22 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
       });
       const data = await response.json();
       if (data.success) {
+        if (!selectedUser) {
+          try {
+            await fetch('/api/send-welcome-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: `${formData.firstName} ${formData.lastName}`.trim(),
+                email: formData.email,
+                tempPassword: formData.password,
+              }),
+            });
+          } catch (emailError) {
+            console.error('Failed to send welcome email', emailError);
+            toast.warn('User created but failed to send welcome email');
+          }
+        }
         toast.success(selectedUser ? 'User updated!' : 'User created!');
         setShowModal(false);
         setSelectedUser(null);
