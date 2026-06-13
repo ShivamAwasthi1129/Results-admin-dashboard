@@ -202,8 +202,8 @@ export default function HomepageManagementClient() {
   };
 
   /* ─── Upload media ─── */
-  const handleUpload = async (file: File, fieldKey?: string) => {
-    if (!selectedSection || !token) return;
+  const handleUpload = async (file: File, fieldKey?: string): Promise<string | null> => {
+    if (!selectedSection || !token) return null;
     setUploading(true);
     try {
       const res = await uploadMedia(file, selectedSection.page, selectedSection.section, token, undefined, fieldKey);
