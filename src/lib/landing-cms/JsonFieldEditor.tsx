@@ -8,6 +8,7 @@ interface JsonEditorProps {
   onChange: (data: unknown) => void;
   label?: string;
   depth?: number;
+  onUpload?: (file: File) => Promise<string | null>;
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -15,8 +16,9 @@ function isObject(v: unknown): v is Record<string, unknown> {
 }
 
 /** Collapsible, recursive JSON editor for arbitrary content */
-export default function JsonFieldEditor({ data, onChange, label = 'Content', depth = 0 }: JsonEditorProps) {
+export default function JsonFieldEditor({ data, onChange, label = 'Content', depth = 0, onUpload }: JsonEditorProps) {
   const [collapsed, setCollapsed] = useState(depth > 1);
+  const [uploading, setUploading] = useState(false);
 
   if (data === null || data === undefined) {
     return (
@@ -57,8 +59,10 @@ export default function JsonFieldEditor({ data, onChange, label = 'Content', dep
   }
 
   if (typeof data === 'string') {
-    const isLong = data.length > 80;
+    const isMediaField = !!label.toLowerCase().match(/(image|url|icon|logo|banner|video|link|src|href|path|avatar|file|background|thumbnail|pic|picture|photo|poster|media|graphic|illustration|cover)/i);
+    const isLong = data.length > 80 && !isMediaField;
     const isUrl = data.startsWith('http') || data.startsWith('/');
+    
     return (
       <div>
         <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">{label}</label>
@@ -70,13 +74,30 @@ export default function JsonFieldEditor({ data, onChange, label = 'Content', dep
           />
         ) : (
           <div className="relative">
-            <input
-              className="input-field text-sm"
-              value={data}
-              onChange={(e) => onChange(e.target.value)}
-            />
-            {isUrl && data.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i) && (
-              <img src={data} alt="" className="mt-1 h-12 rounded border border-[var(--border-color)] object-cover" />
+            <div className="flex items-center gap-2">
+              <input
+                className="input-field text-sm flex-1"
+                value={data}
+                onChange={(e) => onChange(e.target.value)}
+              />
+              {onUpload && isMediaField && (
+                <label className={`cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] hover:bg-[var(--border-color)] transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input type="file" className="hidden" accept="image/*,video/*" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setUploading(true);
+                      const url = await onUpload(file);
+                      setUploading(false);
+                      if (url) onChange(url);
+                    }
+                    e.target.value = '';
+                  }} />
+                  {uploading ? 'Uploading...' : 'Upload File'}
+                </label>
+              )}
+            </div>
+            {isUrl && (data.match(/\.(jpg|jpeg|png|webp|gif|svg)/i) || isMediaField) && (
+              <img src={data} alt="" className="mt-1 h-12 rounded border border-[var(--border-color)] object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             )}
           </div>
         )}
@@ -131,7 +152,7 @@ export default function JsonFieldEditor({ data, onChange, label = 'Content', dep
                   const next = [...data];
                   next[i] = v;
                   onChange(next);
-                }} label={`Item ${i + 1}`} depth={depth + 1} />
+                }} label={`Item ${i + 1}`} depth={depth + 1} onUpload={onUpload} />
               </div>
             ))}
           </div>
@@ -163,6 +184,7 @@ export default function JsonFieldEditor({ data, onChange, label = 'Content', dep
                 onChange={(v) => onChange({ ...data, [key]: v })}
                 label={key}
                 depth={depth + 1}
+                onUpload={onUpload}
               />
             ))}
           </div>

@@ -67,7 +67,7 @@ export default function HomepageManagementClient() {
   // Section list state
   const [loading, setLoading] = useState(true);
   const [homeSections, setHomeSections] = useState<SectionMeta[]>([]);
-  const [selectedSection, setSelectedSection] = useState<{page: string, section: string} | null>(null);
+  const [selectedSection, setSelectedSection] = useState<{ page: string, section: string } | null>(null);
 
   // Section detail state
   const [sectionLoading, setSectionLoading] = useState(false);
@@ -111,7 +111,7 @@ export default function HomepageManagementClient() {
         Object.entries(res.data.pages).forEach(([page, sections]) => {
           allSections.push(...sections.map(s => ({ ...s, page })));
         });
-        
+
         setHomeSections(allSections);
         if (!selectedSection && allSections.length > 0) {
           const first = allSections[0];
@@ -209,7 +209,7 @@ export default function HomepageManagementClient() {
       const res = await uploadMedia(file, selectedSection.page, selectedSection.section, token, undefined, fieldKey);
       if (res.success) {
         toast.success('Media uploaded! URL copied to clipboard.');
-        navigator.clipboard.writeText(res.data.url).catch(() => {});
+        navigator.clipboard.writeText(res.data.url).catch(() => { });
         return res.data.url;
       } else {
         toast.error('Upload failed');
@@ -354,11 +354,10 @@ export default function HomepageManagementClient() {
                           <li key={`${s.page}-${s.section}`}>
                             <button
                               type="button"
-                              className={`w-full text-left rounded-xl px-3 py-2 transition-all duration-200 border ${
-                                active
+                              className={`w-full text-left rounded-xl px-3 py-2 transition-all duration-200 border ${active
                                   ? 'border-[#991B1B] bg-[#991B1B]/5 shadow-sm shadow-[#991B1B]/10 dark:bg-[#991B1B]/10'
                                   : 'border-transparent hover:border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
-                              }`}
+                                }`}
                               onClick={() => setSelectedSection({ page: s.page, section: s.section })}
                             >
                               <div className="flex items-center gap-2.5">
@@ -409,23 +408,6 @@ export default function HomepageManagementClient() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {/* Upload button */}
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/*,video/*"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (file) await handleUpload(file);
-                            e.target.value = '';
-                          }}
-                        />
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-[var(--border-color)] hover:bg-[var(--bg-secondary)] transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <CloudArrowUpIcon className="w-4 h-4" />
-                          {uploading ? 'Uploading…' : 'Upload Media'}
-                        </span>
-                      </label>
                       <Button
                         variant="primary"
                         onClick={handleSave}
@@ -483,6 +465,7 @@ export default function HomepageManagementClient() {
                               }}
                               label={`Update ${idx + 1}`}
                               depth={1}
+                              onUpload={(file) => handleUpload(file)}
                             />
                           </Card>
                         ))}
@@ -493,6 +476,7 @@ export default function HomepageManagementClient() {
                         onChange={handleContentChange}
                         label={`${sectionDetail.section} content`}
                         depth={0}
+                        onUpload={(file) => handleUpload(file)}
                       />
                     )}
                   </div>
@@ -534,11 +518,10 @@ export default function HomepageManagementClient() {
                     type="button"
                     onClick={() => { if (!newsLoading && query !== selectedNewsQuery) void loadNewsByQuery(query); }}
                     disabled={newsLoading}
-                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                      selectedNewsQuery === query
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${selectedNewsQuery === query
                         ? 'bg-[#991B1B] text-white border-[#991B1B]'
                         : 'border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
-                    }`}
+                      }`}
                   >
                     {query}
                   </button>
@@ -561,18 +544,18 @@ export default function HomepageManagementClient() {
                       if (Array.isArray(value) && value.length === 0) return false;
                       return true;
                     });
-                    
+
                     return (
                       <div key={key} className="relative group">
                         <Card className="p-3 transition-all hover:ring-2 hover:ring-[#991B1B]/50">
                           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                             <div className="md:col-span-3">
                               {item.image_url ? (
-                                <img 
-                                  src={item.image_url} 
+                                <img
+                                  src={item.image_url}
                                   alt={item.title || 'news image'}
-                                  className="w-full h-[110px] object-cover rounded-lg border border-[var(--border-color)]" 
-                                  loading="lazy" 
+                                  className="w-full h-[110px] object-cover rounded-lg border border-[var(--border-color)]"
+                                  loading="lazy"
                                 />
                               ) : (
                                 <div className="w-full h-[110px] rounded-lg border border-dashed border-[var(--border-color)] flex items-center justify-center text-xs text-[var(--text-muted)]">
@@ -588,9 +571,9 @@ export default function HomepageManagementClient() {
                                   {item.pubDate && <span>{new Date(item.pubDate).toLocaleString()}</span>}
                                 </div>
                                 {targetNewsIndex !== null && (
-                                  <Button 
-                                    variant="primary" 
-                                    size="sm" 
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
                                     className="!bg-[#991B1B] !text-white h-7 px-3"
                                     onClick={() => {
                                       const dateObj = item.pubDate ? new Date(item.pubDate) : new Date();
@@ -603,7 +586,7 @@ export default function HomepageManagementClient() {
                                         paragraph: item.description || '',
                                         sourceLink: item.link || ''
                                       };
-                                      
+
                                       const items = [...(editedContent?.items as any[])];
                                       items[targetNewsIndex] = mappedUpdate;
                                       handleContentChange({ ...editedContent, items });
