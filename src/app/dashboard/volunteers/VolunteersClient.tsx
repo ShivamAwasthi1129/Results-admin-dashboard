@@ -26,6 +26,7 @@ import {
   ShieldCheckIcon,
   XMarkIcon,
   TrashIcon,
+  ExclamationCircleIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon, CheckBadgeIcon as CheckBadgeSolidIcon } from '@heroicons/react/24/solid';
 
@@ -176,7 +177,7 @@ export default function VolunteersClient({
     hasOwnVehicle: false,
     vehicleType: 'none',
     // Status
-    status: 'active',
+    status: 'APPROVED',
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -329,11 +330,72 @@ export default function VolunteersClient({
       const data = await response.json();
       
       if (data.success) {
-        toast.success(selectedVolunteer ? 'Volunteer updated!' : 'Volunteer account created!');
-        setShowModal(false);
-        setSelectedVolunteer(null);
-        resetForm();
-        fetchVolunteers();
+        if (!selectedVolunteer) {
+          // ── New volunteer: approve + send email ──────────────────────────────
+          toast.success('Volunteer account created! Approving…');
+          setShowModal(false);
+          setSelectedVolunteer(null);
+          resetForm();
+
+          // The backend may return the new volunteer object at data.data.volunteer
+          const newVolunteer = data.data?.volunteer;
+          const newId = newVolunteer?.id || newVolunteer?._id;
+          const newVolunteerId = newVolunteer?.volunteerId;
+          const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+          const skillsList = (formData.skills || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+
+          if (newId) {
+            // Call approve endpoint
+            try {
+              const approveRes = await fetch(`${process.env.NEXT_PUBLIC_DOMAIN_NAME}/api/admin/volunteers/${newId}/approve`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ notes: 'Approved by admin on registration' }),
+              });
+              const approveData = await approveRes.json();
+              if (approveData.success) {
+                toast.success('Volunteer approved successfully!');
+              } else {
+                toast.warning(approveData.message || approveData.error || 'Approval step returned an issue');
+              }
+            } catch {
+              toast.warning('Volunteer created but auto-approval failed. Please approve manually.');
+            }
+
+            // Send approval email (fire-and-forget, non-blocking)
+            if (formData.email) {
+              fetch('/api/send-volunteer-approval-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: fullName,
+                  email: formData.email,
+                  volunteerId: newVolunteerId || newId,
+                  skills: skillsList,
+                  city: formData.city,
+                  state: formData.state,
+                }),
+              })
+                .then(r => r.json())
+                .then(r => {
+                  if (r.success) toast.success('Approval confirmation email sent to volunteer!');
+                  else toast.warning('Volunteer approved but email could not be delivered.');
+                })
+                .catch(() => toast.warning('Volunteer approved but email delivery failed.'));
+            }
+          } else {
+            toast.info('Volunteer created. ID not returned — please approve manually.');
+          }
+
+          fetchVolunteers();
+        } else {
+          // ── Existing volunteer updated ────────────────────────────────────────
+          toast.success('Volunteer updated!');
+          setShowModal(false);
+          setSelectedVolunteer(null);
+          resetForm();
+          fetchVolunteers();
+        }
       } else {
         toast.error(data.error || 'Operation failed');
       }
@@ -387,7 +449,7 @@ export default function VolunteersClient({
       preferredShift: 'any', preferredWorkAreas: '', willingToTravel: true, maxTravelDistance: '50',
       emergencyName: '', emergencyPhone: '', emergencyRelation: '', emergencyEmail: '',
       medicalConditions: '', allergies: '', physicallyFit: true,
-      hasOwnVehicle: false, vehicleType: 'none', status: 'active',
+      hasOwnVehicle: false, vehicleType: 'none', status: 'APPROVED',
     });
     setActiveTab('basic');
     setPhotoPreview(null);
@@ -442,7 +504,7 @@ export default function VolunteersClient({
       physicallyFit: volunteer.healthInfo?.physicallyFit ?? true,
       hasOwnVehicle: volunteer.hasOwnVehicle || false,
       vehicleType: volunteer.vehicleType || 'none',
-      status: volunteer.status || 'active',
+      status: volunteer.status || 'APPROVED',
     });
     setShowModal(true);
   };
@@ -456,7 +518,61 @@ export default function VolunteersClient({
     total: volunteers.length,
     available: volunteers.filter(v => v.availability === 'available').length,
     onMission: volunteers.filter(v => v.availability === 'on_mission').length,
-    avgRating: volunteers.length > 0 ? (volunteers.reduce((acc, v) => acc + v.rating, 0) / volunteers.length).toFixed(1) : '0.0'
+    avgRating: volunteers.length > 0 ? (volunteers.reduce((acc, v) => acc + v.rating, 0) / volunteers.length).toFixed(1) : '0.0',
+    pendingVerification: volunteers.filter(v => v.verificationStatus === 'pending' || v.status === 'PENDING').length,
+  };
+
+  const handleVerifyVolunteer = async (volunteer: Volunteer) => {
+    if (!confirm(`Verify ${getVolunteerName(volunteer)}? This will mark them as verified and approved.`)) return;
+    try {
+      const id = volunteer.id || volunteer._id;
+      // Use PATCH /api/volunteers/{id}/approve (maps to PATCH /api/admin/volunteer-mgmt/{id}/approve)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_DOMAIN_NAME}/api/admin/volunteers/${id}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ notes: 'Approved by admin' }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Volunteer verified and approved successfully!');
+        fetchVolunteers();
+        // Update selectedVolunteer in detail modal if open
+        if (selectedVolunteer && (selectedVolunteer.id || selectedVolunteer._id) === id) {
+          setSelectedVolunteer({
+            ...selectedVolunteer,
+            verificationStatus: 'verified',
+            status: 'APPROVED',
+          });
+        }
+        // Send approval email (fire-and-forget)
+        const name = getVolunteerName(volunteer);
+        const email = volunteer.userId?.email;
+        if (email) {
+          fetch('/api/send-volunteer-approval-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              email,
+              volunteerId: volunteer.volunteerId,
+              skills: volunteer.skills || [],
+              city: volunteer.address?.city,
+              state: volunteer.address?.state,
+            }),
+          })
+            .then(r => r.json())
+            .then(r => {
+              if (r.success) toast.success('Approval confirmation email sent!');
+              else toast.warning('Approved but email delivery failed.');
+            })
+            .catch(() => toast.warning('Approved but email delivery failed.'));
+        }
+      } else {
+        toast.error(data.error || data.message || 'Verification failed');
+      }
+    } catch (error) {
+      toast.error('Failed to verify volunteer');
+    }
   };
 
   const renderStars = (rating: number) => (
@@ -510,6 +626,13 @@ export default function VolunteersClient({
             <StarIcon className="w-5 h-5 text-teal-400" />
           </div>
           <p className="text-2xl font-bold text-teal-400 leading-tight">{stats.avgRating}</p>
+        </Card>
+        <Card className="p-3 border-l-4 border-l-orange-500">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-medium text-[var(--text-muted)]">Pending Verify</p>
+            <ExclamationCircleIcon className="w-5 h-5 text-orange-400" />
+          </div>
+          <p className="text-2xl font-bold text-orange-400 leading-tight">{stats.pendingVerification}</p>
         </Card>
       </div>
 
@@ -589,9 +712,10 @@ export default function VolunteersClient({
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Contact</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Location</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Assigned Disasters</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Skills</th>
+                  {/* <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Skills</th> */}
                   <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Stats</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Status</th>
+                  <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Availability</th>
+                  <th className="text-left px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Verification</th>
                   <th className="text-right px-4 py-3 text-sm font-semibold text-[var(--text-secondary)]">Actions</th>
                 </tr>
               </thead>
@@ -665,7 +789,7 @@ export default function VolunteersClient({
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-4">
+                    {/* <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1 max-w-[180px]">
                         {volunteer.skills?.slice(0, 2).map((skill, i) => (
                           <Badge key={i} variant="primary" size="sm">{skill}</Badge>
@@ -674,7 +798,7 @@ export default function VolunteersClient({
                           <Badge variant="secondary" size="sm">+{volunteer.skills.length - 2}</Badge>
                         )}
                       </div>
-                    </td>
+                    </td> */}
                     <td className="px-4 py-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-1.5">
@@ -694,6 +818,27 @@ export default function VolunteersClient({
                         {volunteer.availability?.replace('_', ' ')}
                       </Badge>
                     </td>
+                    <td className="px-4 py-4">
+                      <div className="space-y-1">
+                        {/* verificationStatus badge */}
+                        <Badge
+                          variant={volunteer.verificationStatus === 'verified' ? 'success' : volunteer.verificationStatus === 'rejected' ? 'danger' : 'warning'}
+                          size="sm"
+                          dot
+                        >
+                          {volunteer.verificationStatus || 'pending'}
+                        </Badge>
+                        {/* status badge */}
+                        <div>
+                          <Badge
+                            variant={volunteer.status === 'APPROVED' || volunteer.status === 'active' ? 'success' : volunteer.status === 'PENDING' || volunteer.status === 'pending_verification' ? 'warning' : volunteer.status === 'suspended' ? 'danger' : 'secondary'}
+                            size="sm"
+                          >
+                            {volunteer.status || 'N/A'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -705,6 +850,16 @@ export default function VolunteersClient({
                         </button>
                         {canManage && (
                           <>
+                            {/* Verify button – only for unverified/pending volunteers */}
+                            {(volunteer.verificationStatus !== 'verified' || volunteer.status === 'PENDING') && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleVerifyVolunteer(volunteer); }}
+                                className="p-2 rounded-lg text-[var(--text-muted)] hover:text-emerald-400 hover:bg-emerald-400/10 transition-colors"
+                                title="Verify Volunteer"
+                              >
+                                <ShieldCheckIcon className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();
@@ -1052,10 +1207,10 @@ export default function VolunteersClient({
                     <ShieldCheckIcon className="w-5 h-5" /> Account Status
                   </h4>
                   <Select label="Status" value={formData.status} onChange={(value) => setFormData({ ...formData, status: value })} options={[
-                    { value: 'active', label: '🟢 Active' },
-                    { value: 'inactive', label: '⚪ Inactive' },
-                    { value: 'suspended', label: '🔴 Suspended' },
-                    { value: 'pending_verification', label: '🟡 Pending Verification' }
+                    { value: 'APPROVED', label: '🟢 Approved' },
+                    { value: 'PENDING', label: '🟡 Pending Verification' },
+                    { value: 'SUSPENDED', label: '🔴 Suspended' },
+                    { value: 'REJECTED', label: '⚪ Rejected' }
                   ]} />
                 </div>
               </div>
@@ -1084,9 +1239,24 @@ export default function VolunteersClient({
                   )}
                 </div>
                 <p className="text-[var(--primary-500)] font-mono font-bold">ID: {selectedVolunteer.volunteerId}</p>
-                <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-4 mt-2 flex-wrap">
                   <Badge variant={selectedVolunteer.availability === 'available' ? 'success' : 'warning'} size="sm" dot>
                     {selectedVolunteer.availability?.replace('_', ' ')}
+                  </Badge>
+                  {/* verificationStatus */}
+                  <Badge
+                    variant={selectedVolunteer.verificationStatus === 'verified' ? 'success' : selectedVolunteer.verificationStatus === 'rejected' ? 'danger' : 'warning'}
+                    size="sm"
+                    dot
+                  >
+                    {selectedVolunteer.verificationStatus || 'pending'}
+                  </Badge>
+                  {/* status */}
+                  <Badge
+                    variant={selectedVolunteer.status === 'APPROVED' || selectedVolunteer.status === 'active' ? 'success' : selectedVolunteer.status === 'PENDING' || selectedVolunteer.status === 'pending_verification' ? 'warning' : 'secondary'}
+                    size="sm"
+                  >
+                    {selectedVolunteer.status || 'N/A'}
                   </Badge>
                   {renderStars(selectedVolunteer.rating)}
                 </div>
@@ -1223,6 +1393,18 @@ export default function VolunteersClient({
             {canManage && (
               <div className="flex justify-end gap-4 pt-4 border-t border-[var(--border-color)]">
                 <Button variant="secondary" onClick={() => setShowDetailModal(false)}>Close</Button>
+                {/* Verify button in detail modal */}
+                {(selectedVolunteer.verificationStatus !== 'verified' || selectedVolunteer.status === 'PENDING') && (
+                  <Button
+                    variant="success"
+                    onClick={() => {
+                      setShowDetailModal(false);
+                      handleVerifyVolunteer(selectedVolunteer);
+                    }}
+                  >
+                    <ShieldCheckIcon className="w-4 h-4 mr-2" /> Verify Volunteer
+                  </Button>
+                )}
                 <Button variant="gradient" onClick={() => { setShowDetailModal(false); openEditModal(selectedVolunteer); }}>
                   <PencilIcon className="w-4 h-4 mr-2" /> Edit
                 </Button>
