@@ -666,7 +666,7 @@ export default function ResultsHomepageClient() {
                       {/* Catch all for other keys in news */}
                       <JsonFieldEditor
                         data={Object.fromEntries(Object.entries(editedContent).filter(([k]) => !['leadStory', 'leadStories', 'sideStories', 'sideStory', 'wireItems', 'wireitems', 'wireItem'].includes(k)))}
-                        onChange={(val) => handleContentChange({ ...editedContent, ...val })}
+                        onChange={(val) => handleContentChange({ ...editedContent, ...(val as Record<string, unknown>) })}
                         label={`Other ${selectedSection} fields`}
                         depth={0}
                         onUpload={(file) => handleUpload(file)}
