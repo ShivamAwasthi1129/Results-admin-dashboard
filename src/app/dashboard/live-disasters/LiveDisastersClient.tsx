@@ -332,6 +332,18 @@ export default function LiveDisastersClient() {
     loadInitialData();
   }, [token]);
 
+  const generateDisasterDisplayId = (id: string, type: string) => {
+    const prefix = (type || 'UN').substring(0, 2).toUpperCase();
+    const strId = String(id || '');
+    let hash = 0;
+    for (let i = 0; i < strId.length; i++) {
+      hash = ((hash << 5) - hash) + strId.charCodeAt(i);
+      hash |= 0;
+    }
+    const hashStr = Math.abs(hash).toString(36).toUpperCase().substring(0, 6).padEnd(6, '0');
+    return `${prefix}-${hashStr}`;
+  };
+
   // Update combined disasters when either live or database disasters change (current year only)
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -381,10 +393,14 @@ export default function LiveDisastersClient() {
       ...liveDisasters.map(d => ({
         ...d,
         id: d.id,
+        displayId: generateDisasterDisplayId(d.id, d.type),
         isLive: true,
         source: 'live'
       })),
-      ...transformedDatabaseDisasters
+      ...transformedDatabaseDisasters.map(d => ({
+        ...d,
+        displayId: generateDisasterDisplayId(d.id, d.type)
+      }))
     ];
     setAllDisasters(combined);
   }, [liveDisasters, databaseDisasters]);
@@ -825,13 +841,15 @@ export default function LiveDisastersClient() {
       const state = (d.location?.state || '').toLowerCase();
       const type = (d.type || '').toLowerCase();
       const category = (d.category || '').toLowerCase();
+      const displayId = (d.displayId || '').toLowerCase();
       if (!(
         title.includes(q) ||
         desc.includes(q) ||
         country.includes(q) ||
         state.includes(q) ||
         type.includes(q) ||
-        category.includes(q)
+        category.includes(q) ||
+        displayId.includes(q)
       )) {
         return false;
       }
@@ -840,7 +858,7 @@ export default function LiveDisastersClient() {
     return true;
   });
 
-  // Search within the filtered list (title, description, location, type)
+  // Search within the filtered list (title, description, location, type, displayId)
   const listSearchLower = listSearchQuery.trim().toLowerCase();
   const listFilteredDisasters = listSearchLower
     ? filteredDisasters.filter(d => {
@@ -850,13 +868,15 @@ export default function LiveDisastersClient() {
       const state = (d.location?.state || '').toLowerCase();
       const type = (d.type || '').toLowerCase();
       const category = (d.category || '').toLowerCase();
+      const displayId = (d.displayId || '').toLowerCase();
       return (
         title.includes(listSearchLower) ||
         desc.includes(listSearchLower) ||
         country.includes(listSearchLower) ||
         state.includes(listSearchLower) ||
         type.includes(listSearchLower) ||
-        category.includes(listSearchLower)
+        category.includes(listSearchLower) ||
+        displayId.includes(listSearchLower)
       );
     })
     : filteredDisasters;
@@ -1425,6 +1445,9 @@ export default function LiveDisastersClient() {
                               </Badge>
                             </div>
                             <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-2">
+                              <span className="font-mono bg-[var(--bg-card)] px-1 py-0.5 rounded mr-1 border border-[var(--border-color)]">
+                                {disaster.displayId}
+                              </span>
                               {disaster.category || disaster.type}
                               {disaster.location?.country && ` • ${disaster.location.country}`}
                               {disaster.location?.state && ` • ${disaster.location.state}`}
@@ -1502,10 +1525,7 @@ export default function LiveDisastersClient() {
                     lat: '', lng: '', estimatedAffectedPeople: '',
                     selectedNasaDisasterId: '', useCustomDisaster: false,
                   });
-                  // Open modal first, then fetch NASA disasters in background
                   setShowAddModal(true);
-                  // Fetch NASA disasters when opening modal (non-blocking)
-                  await fetchNasaDisasters();
                 } catch (error) {
                   console.error('Error opening add disaster modal:', error);
                   // Still open the modal even if fetch fails
@@ -1727,7 +1747,6 @@ export default function LiveDisastersClient() {
                       useCustomDisaster: true,
                     });
                     setShowAddModal(true);
-                    fetchNasaDisasters().catch(err => console.error('Error fetching live disasters:', err));
                   };
                   return (
                     <div className="flex items-center justify-center gap-1">
@@ -1788,13 +1807,8 @@ export default function LiveDisastersClient() {
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                 Select Disaster <span className="text-red-400">*</span>
               </label>
-              {isLoadingNasaDisasters ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                </div>
-              ) : (
-                <div className="relative disaster-search-container z-[60]">
-                  <div className="relative">
+              <div className="relative disaster-search-container z-[60]">
+                <div className="relative">
                     <Input
                       value={formData.selectedNasaDisasterId
                         ? (allDisasters.find(d => (d.id ?? d._id) === formData.selectedNasaDisasterId)?.title) || formData.title || disasterSearchQuery
@@ -1939,6 +1953,7 @@ export default function LiveDisastersClient() {
                                       <div className="flex items-start gap-3">
                                         <div className="flex-1 min-w-0">
                                           <p className="font-medium text-[var(--text-primary)] mb-1">
+                                            {disaster.displayId && <span className="font-mono bg-[var(--bg-card)] px-1 py-0.5 rounded mr-1 border border-[var(--border-color)] text-xs text-[var(--text-secondary)]">{disaster.displayId}</span>}
                                             {disaster.title}
                                           </p>
                                           <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--text-muted)]">
@@ -2000,8 +2015,7 @@ export default function LiveDisastersClient() {
                       })()}
                     </div>
                   )}
-                </div>
-              )}
+              </div>
               <p className="text-xs text-[var(--text-muted)] mt-1">
                 Search by disaster name or location. If not found, click the + icon to add as custom disaster.
               </p>

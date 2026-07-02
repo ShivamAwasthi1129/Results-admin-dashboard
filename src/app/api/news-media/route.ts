@@ -44,7 +44,10 @@ async function fetchOneQuery(
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
-    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    };
+    const res = await fetch(url, { cache: 'no-store', signal: controller.signal, headers });
     clearTimeout(timeout);
     if (!res.ok) {
       return { query, results: [], error: `Request failed with status ${res.status}` };

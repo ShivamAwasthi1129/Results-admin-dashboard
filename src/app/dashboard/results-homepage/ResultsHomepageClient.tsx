@@ -42,6 +42,39 @@ function formatDate(iso: string): string {
   } catch { return iso; }
 }
 
+/* ─── News & Media ─── */
+interface NewsMediaArticle {
+  [key: string]: unknown;
+  article_id?: string;
+  title?: string;
+  description?: string | null;
+  link?: string;
+  image_url?: string | null;
+  pubDate?: string;
+  source_name?: string;
+  source_url?: string;
+  category?: string[];
+  country?: string[];
+  q?: string;
+}
+
+const NEWS_QUERY_OPTIONS = [
+  'wildfires', 'earthquake', 'hurricane', 'tornado', 'landslide', 'tsunami', 'heatwave',
+] as const;
+const NEWS_CACHE_KEY = 'results_homepage_news_media_cache_v2';
+const NEWS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+type NewsCacheRecord = { fetchedAt: number; articles: NewsMediaArticle[] };
+type NewsCacheMap = Record<string, NewsCacheRecord>;
+
+function readNewsCache(): NewsCacheMap {
+  if (typeof window === 'undefined') return {};
+  try { const raw = window.localStorage.getItem(NEWS_CACHE_KEY); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+}
+function writeNewsCache(next: NewsCacheMap): void {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+}
+
 /* ─── Main Component ─── */
 export default function ResultsHomepageClient() {
   const { token } = useAuth();
@@ -73,6 +106,20 @@ export default function ResultsHomepageClient() {
   // ── State: section load errors ────────────────────────────────────────────
   const [sectionError, setSectionError] = useState<string | null>(null);
 
+  // ── State: news ────────────────────────────────────────────────────────
+  const [newsOpen, setNewsOpen] = useState(false);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState<string | null>(null);
+  const [newsArticles, setNewsArticles] = useState<NewsMediaArticle[]>([]);
+  const [selectedNewsQuery, setSelectedNewsQuery] = useState<string>('wildfires');
+  const [targetNewsField, setTargetNewsField] = useState<{ type: string, index?: number } | null>(null);
+
+  const authHeaders = useMemo(() => {
+    const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+    if (token) h.Authorization = `Bearer ${token}`;
+    return h;
+  }, [token]);
+
   /* ─── Load metadata ──────────────────────────────────────────────────────── */
   const loadMeta = useCallback(async () => {
     if (!token) return;
@@ -90,6 +137,43 @@ export default function ResultsHomepageClient() {
   }, [token]);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
+
+  /* ─── News & Media Functions ───────────────────────────────────────────── */
+  const loadNewsAndMedia = async () => {
+    setNewsOpen(true);
+    await loadNewsByQuery('wildfires');
+  };
+
+  const loadNewsByQuery = async (query: string) => {
+    setSelectedNewsQuery(query);
+    setNewsError(null);
+    const cached = readNewsCache()[query];
+    if (cached && Date.now() - cached.fetchedAt < NEWS_CACHE_TTL_MS) {
+      setNewsArticles(cached.articles);
+      setNewsLoading(false);
+      return;
+    }
+    setNewsLoading(true);
+    try {
+      const res = await fetch(`/api/news-media?country=us&limit=12&q=${encodeURIComponent(query)}`, {
+        headers: authHeaders, cache: 'no-store',
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success || !json.data) {
+        setNewsError(json.error || 'Unable to load news');
+        return;
+      }
+      const articles = Array.isArray(json.data.articles) ? json.data.articles : [];
+      setNewsArticles(articles);
+      const cache = readNewsCache();
+      cache[query] = { fetchedAt: Date.now(), articles };
+      writeNewsCache(cache);
+    } catch {
+      setNewsError('Unable to load news');
+    } finally {
+      setNewsLoading(false);
+    }
+  };
 
   /* ─── Load section content ───────────────────────────────────────────────── */
   const loadSection = useCallback(async (section: ResultsSectionKey) => {
@@ -440,13 +524,163 @@ export default function ResultsHomepageClient() {
 
                 {/* JSON Field Editor */}
                 <div className="max-h-[calc(100vh-320px)] overflow-y-auto pr-1 space-y-3">
-                  <JsonFieldEditor
-                    data={editedContent}
-                    onChange={handleContentChange}
-                    label={`${selectedSection} content`}
-                    depth={0}
-                    onUpload={(file) => handleUpload(file)}
-                  />
+                  {selectedSection === 'news' && editedContent ? (
+                    <div className="space-y-6">
+                      {['leadStory', 'leadStories'].map(key => {
+                        if (!(key in editedContent)) return null;
+                        const isArray = Array.isArray(editedContent[key]);
+                        if (isArray) {
+                          return (
+                            <div className="space-y-4" key={key}>
+                               <div className="flex items-center justify-between p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                                 <p className="text-sm font-medium text-amber-800">Lead Stories Manager</p>
+                                 <Button variant="secondary" size="sm" onClick={() => {
+                                   const arr = [...(editedContent[key] as any[])];
+                                   arr.unshift({ title: '', paragraph: '', sourceLink: '', image: '', date: '', time: '' });
+                                   handleContentChange({ ...editedContent, [key]: arr });
+                                 }}>Add Lead Story</Button>
+                               </div>
+                               {(editedContent[key] as any[]).map((item, idx) => (
+                                 <Card key={idx} className="p-4 space-y-3 border-l-4 border-l-[#991B1B]">
+                                   <div className="flex items-center justify-between">
+                                     <span className="text-xs font-bold uppercase text-[var(--text-muted)]">Lead Story #{idx + 1}</span>
+                                     <div className="flex gap-2">
+                                       <Button variant="secondary" size="sm" onClick={() => {
+                                         setTargetNewsField({ type: key, index: idx });
+                                         loadNewsAndMedia();
+                                       }}><SparklesIcon className="w-3.5 h-3.5 mr-1" /> Fetch from News</Button>
+                                       <Button variant="secondary" size="sm" className="text-red-600" onClick={() => {
+                                         const arr = [...(editedContent[key] as any[])];
+                                         arr.splice(idx, 1);
+                                         handleContentChange({ ...editedContent, [key]: arr });
+                                       }}>Remove</Button>
+                                     </div>
+                                   </div>
+                                   <JsonFieldEditor data={item} onChange={(val) => {
+                                     const arr = [...(editedContent[key] as any[])];
+                                     arr[idx] = val;
+                                     handleContentChange({ ...editedContent, [key]: arr });
+                                   }} label={`Lead Story ${idx + 1}`} depth={1} onUpload={(file) => handleUpload(file)} />
+                                 </Card>
+                               ))}
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <Card key={key} className="p-4 space-y-3 border-l-4 border-l-[#991B1B]">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-bold uppercase text-[var(--text-muted)]">Lead Story</span>
+                                <Button variant="secondary" size="sm" onClick={() => {
+                                  setTargetNewsField({ type: key });
+                                  loadNewsAndMedia();
+                                }}><SparklesIcon className="w-3.5 h-3.5 mr-1" /> Fetch from News</Button>
+                              </div>
+                              <JsonFieldEditor
+                                data={editedContent[key] as Record<string, unknown>}
+                                onChange={(val) => handleContentChange({ ...editedContent, [key]: val })}
+                                label="Lead Story" depth={1} onUpload={(file) => handleUpload(file)}
+                              />
+                            </Card>
+                          );
+                        }
+                      })}
+
+                      {['sideStories', 'sideStory'].map(key => {
+                        if (!(key in editedContent)) return null;
+                        return (
+                            <div className="space-y-4" key={key}>
+                               <div className="flex items-center justify-between p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                                 <p className="text-sm font-medium text-amber-800">Side Stories Manager</p>
+                                 <Button variant="secondary" size="sm" onClick={() => {
+                                   const arr = Array.isArray(editedContent[key]) ? [...(editedContent[key] as any[])] : [];
+                                   arr.unshift({ title: '', paragraph: '', sourceLink: '', image: '', date: '', time: '' });
+                                   handleContentChange({ ...editedContent, [key]: arr });
+                                 }}>Add Side Story</Button>
+                               </div>
+                               {(Array.isArray(editedContent[key]) ? editedContent[key] as any[] : []).map((item, idx) => (
+                                 <Card key={idx} className="p-4 space-y-3 border-l-4 border-l-blue-600">
+                                   <div className="flex items-center justify-between">
+                                     <span className="text-xs font-bold uppercase text-[var(--text-muted)]">Side Story #{idx + 1}</span>
+                                     <div className="flex gap-2">
+                                       <Button variant="secondary" size="sm" onClick={() => {
+                                         setTargetNewsField({ type: key, index: idx });
+                                         loadNewsAndMedia();
+                                       }}><SparklesIcon className="w-3.5 h-3.5 mr-1" /> Fetch from News</Button>
+                                       <Button variant="secondary" size="sm" className="text-red-600" onClick={() => {
+                                         const arr = [...(editedContent[key] as any[])];
+                                         arr.splice(idx, 1);
+                                         handleContentChange({ ...editedContent, [key]: arr });
+                                       }}>Remove</Button>
+                                     </div>
+                                   </div>
+                                   <JsonFieldEditor data={item} onChange={(val) => {
+                                     const arr = [...(editedContent[key] as any[])];
+                                     arr[idx] = val;
+                                     handleContentChange({ ...editedContent, [key]: arr });
+                                   }} label={`Side Story ${idx + 1}`} depth={1} onUpload={(file) => handleUpload(file)} />
+                                 </Card>
+                               ))}
+                            </div>
+                        );
+                      })}
+
+                      {['wireItems', 'wireitems', 'wireItem'].map(key => {
+                        if (!(key in editedContent)) return null;
+                        return (
+                            <div className="space-y-4" key={key}>
+                               <div className="flex items-center justify-between p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                                 <p className="text-sm font-medium text-amber-800">Wire Items Manager</p>
+                                 <Button variant="secondary" size="sm" onClick={() => {
+                                   const arr = Array.isArray(editedContent[key]) ? [...(editedContent[key] as any[])] : [];
+                                   arr.unshift({ title: '', paragraph: '', sourceLink: '', image: '', date: '', time: '' });
+                                   handleContentChange({ ...editedContent, [key]: arr });
+                                 }}>Add Wire Item</Button>
+                               </div>
+                               {(Array.isArray(editedContent[key]) ? editedContent[key] as any[] : []).map((item, idx) => (
+                                 <Card key={idx} className="p-4 space-y-3 border-l-4 border-l-emerald-600">
+                                   <div className="flex items-center justify-between">
+                                     <span className="text-xs font-bold uppercase text-[var(--text-muted)]">Wire Item #{idx + 1}</span>
+                                     <div className="flex gap-2">
+                                       <Button variant="secondary" size="sm" onClick={() => {
+                                         setTargetNewsField({ type: key, index: idx });
+                                         loadNewsAndMedia();
+                                       }}><SparklesIcon className="w-3.5 h-3.5 mr-1" /> Fetch from News</Button>
+                                       <Button variant="secondary" size="sm" className="text-red-600" onClick={() => {
+                                         const arr = [...(editedContent[key] as any[])];
+                                         arr.splice(idx, 1);
+                                         handleContentChange({ ...editedContent, [key]: arr });
+                                       }}>Remove</Button>
+                                     </div>
+                                   </div>
+                                   <JsonFieldEditor data={item} onChange={(val) => {
+                                     const arr = [...(editedContent[key] as any[])];
+                                     arr[idx] = val;
+                                     handleContentChange({ ...editedContent, [key]: arr });
+                                   }} label={`Wire Item ${idx + 1}`} depth={1} onUpload={(file) => handleUpload(file)} />
+                                 </Card>
+                               ))}
+                            </div>
+                        );
+                      })}
+                      
+                      {/* Catch all for other keys in news */}
+                      <JsonFieldEditor
+                        data={Object.fromEntries(Object.entries(editedContent).filter(([k]) => !['leadStory', 'leadStories', 'sideStories', 'sideStory', 'wireItems', 'wireitems', 'wireItem'].includes(k)))}
+                        onChange={(val) => handleContentChange({ ...editedContent, ...val })}
+                        label={`Other ${selectedSection} fields`}
+                        depth={0}
+                        onUpload={(file) => handleUpload(file)}
+                      />
+                    </div>
+                  ) : (
+                    <JsonFieldEditor
+                      data={editedContent}
+                      onChange={handleContentChange}
+                      label={`${selectedSection} content`}
+                      depth={0}
+                      onUpload={(file) => handleUpload(file)}
+                    />
+                  )}
                 </div>
 
                 {/* Bottom save bar (sticky-feel for long content) */}
@@ -562,6 +796,141 @@ export default function ResultsHomepageClient() {
               {seeding ? 'Seeding…' : 'Yes, Seed Defaults'}
             </Button>
           </div>
+        </div>
+      </Modal>
+      {/* ── News Modal ── */}
+      <Modal isOpen={newsOpen} onClose={() => setNewsOpen(false)} title="News and media" size="xl">
+        <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1">
+          {newsLoading ? (
+            <p className="text-sm text-[var(--text-muted)]">Loading latest updates...</p>
+          ) : newsError ? (
+            <p className="text-sm text-red-600">{newsError}</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {NEWS_QUERY_OPTIONS.map((query) => (
+                  <button
+                    key={query}
+                    type="button"
+                    onClick={() => { if (!newsLoading && query !== selectedNewsQuery) void loadNewsByQuery(query); }}
+                    disabled={newsLoading}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${selectedNewsQuery === query
+                        ? 'bg-[#991B1B] text-white border-[#991B1B]'
+                        : 'border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
+                      }`}
+                  >
+                    {query}
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-[var(--text-muted)]">
+                Showing: <span className="font-semibold text-[var(--text-primary)]">{selectedNewsQuery}</span> ({newsArticles.length} articles)
+              </div>
+              {newsArticles.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">No articles available for selected categories.</p>
+              ) : (
+                <div className="space-y-3">
+                  {newsArticles.map((item, index) => {
+                    const key = item.article_id || item.link || `${item.title || 'article'}-${index}`;
+                    const metadataEntries = Object.entries(item).filter(([field, value]) => {
+                      if (field.startsWith('ai_')) return false;
+                      if (['article_id', 'title', 'description', 'link', 'image_url', 'q'].includes(field)) return false;
+                      if (value == null) return false;
+                      if (typeof value === 'string' && !value.trim()) return false;
+                      if (Array.isArray(value) && value.length === 0) return false;
+                      return true;
+                    });
+
+                    return (
+                      <div key={key} className="relative group">
+                        <Card className="p-3 transition-all hover:ring-2 hover:ring-[#991B1B]/50">
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                            <div className="md:col-span-3">
+                              {item.image_url ? (
+                                <img
+                                  src={item.image_url}
+                                  alt={item.title || 'news image'}
+                                  className="w-full h-[110px] object-cover rounded-lg border border-[var(--border-color)]"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-[110px] rounded-lg border border-dashed border-[var(--border-color)] flex items-center justify-center text-xs text-[var(--text-muted)]">
+                                  No image available
+                                </div>
+                              )}
+                            </div>
+                            <div className="md:col-span-9 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                                  <Badge variant="secondary">{item.q || 'general'}</Badge>
+                                  <span>{item.source_name || 'Unknown source'}</span>
+                                  {item.pubDate && <span>{new Date(item.pubDate).toLocaleString()}</span>}
+                                </div>
+                                {targetNewsField !== null && (
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    className="!bg-[#991B1B] !text-white h-7 px-3"
+                                    onClick={() => {
+                                      const dateObj = item.pubDate ? new Date(item.pubDate) : new Date();
+                                      const mappedUpdate = {
+                                        date: dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+                                        time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                                        image: item.image_url || '',
+                                        title: item.title || '',
+                                        country: Array.isArray(item.country) ? item.country[0] : (item.country || 'USA'),
+                                        paragraph: item.description || '',
+                                        description: item.description || '',
+                                        sourceLink: item.link || '',
+                                        link: item.link || ''
+                                      };
+
+                                      if (targetNewsField.index !== undefined) {
+                                        const arr = [...(editedContent?.[targetNewsField.type] as any[])];
+                                        arr[targetNewsField.index] = { ...arr[targetNewsField.index], ...mappedUpdate };
+                                        handleContentChange({ ...editedContent, [targetNewsField.type]: arr });
+                                        toast.success(`News published to ${targetNewsField.type} #${targetNewsField.index + 1}`);
+                                      } else {
+                                        const old = editedContent?.[targetNewsField.type] || {};
+                                        handleContentChange({ ...editedContent, [targetNewsField.type]: { ...(old as object), ...mappedUpdate } });
+                                        toast.success(`News published to ${targetNewsField.type}`);
+                                      }
+                                      setTargetNewsField(null);
+                                      setNewsOpen(false);
+                                    }}
+                                  >
+                                    Select to Publish
+                                  </Button>
+                                )}
+                              </div>
+                              <p className="font-medium text-[var(--text-primary)]">{item.title || 'Untitled'}</p>
+                              {item.description && <p className="text-sm text-[var(--text-secondary)]">{item.description}</p>}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                {metadataEntries.map(([field, value]) => {
+                                  const normalized = Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value);
+                                  return (
+                                    <div key={`${key}-${field}`} className="rounded border border-[var(--border-color)] px-2 py-1 bg-[var(--bg-secondary)]">
+                                      <span className="font-semibold text-[var(--text-primary)]">{field}: </span>
+                                      <span className="text-[var(--text-muted)]">{normalized}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {item.link && (
+                                <a href={item.link} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline break-all">
+                                  {item.link}
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </Card>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Modal>
     </div>

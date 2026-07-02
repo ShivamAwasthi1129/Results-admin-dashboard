@@ -123,6 +123,7 @@ function getTooltipContent(disaster: LiveDisaster, color: string, lat: number, l
   return `
     <div style="padding: 16px; min-width: 280px; max-width: 320px; font-family: 'Plus Jakarta Sans', sans-serif; background: #1a1a2e; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+        ${(disaster as any).displayId ? `<span style="padding: 5px 10px; background: rgba(255,255,255,0.1); color: #f8fafc; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; font-size: 12px; font-family: monospace;">${(disaster as any).displayId}</span>` : ''}
         <span style="padding: 5px 10px; background: ${color}30; color: ${color}; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: capitalize;">${disaster.severity}</span>
         <span style="padding: 5px 10px; background: rgba(139, 92, 246, 0.2); color: #a78bfa; border-radius: 20px; font-size: 12px; text-transform: capitalize;">${disaster.type}</span>
         ${disaster.source === 'database' ? '<span style="padding: 5px 10px; background: rgba(34, 197, 94, 0.2); color: #22c55e; border-radius: 20px; font-size: 11px; font-weight: 600;">Custom disaster</span>' : ''}
@@ -367,7 +368,7 @@ export default function LiveDisasterMap({
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
       {/* Map Legend Overlay - clickable severity filter */}
-      {disasters.length > 0 && (
+      {/* {disasters.length > 0 && (
         <div 
           className="absolute top-4 right-4 z-[20] rounded-lg p-3 shadow-xl w-[20%]"
           style={{
@@ -408,7 +409,7 @@ export default function LiveDisasterMap({
             })}
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 }

@@ -85,7 +85,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, icon, onMenuClick }) =
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
           {/* Search Button */}
-          <button
+          {/* <button
             onClick={openSearch}
             className="flex items-center gap-3 px-4 py-3 bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] rounded-xl border border-[var(--border-color)] transition-colors min-w-[200px] lg:min-w-[280px]"
           >
@@ -94,7 +94,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, icon, onMenuClick }) =
             <kbd className="hidden md:flex items-center gap-1 px-2 py-1 bg-[var(--bg-card)] rounded-lg text-xs text-[var(--text-muted)] border border-[var(--border-color)] ml-auto">
               ⌘K
             </kbd>
-          </button>
+          </button> */}
 
           {/* Theme Toggle */}
           <button
