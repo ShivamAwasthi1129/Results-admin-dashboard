@@ -128,6 +128,7 @@ interface AssignedVolunteer {
 
 interface ManagedDisaster {
   _id: string;
+  id?: string;
   title: string;
   type: string;
   description: string;
@@ -149,6 +150,7 @@ interface ManagedDisaster {
 
 interface Volunteer {
   _id: string;
+  id?: string;
   volunteerId: string;
   userId: {
     firstName?: string;
@@ -248,10 +250,10 @@ export default function LiveDisastersClient() {
   const fetchLiveDisasters = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/merged-live-disasters?t=${Date.now()}`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_DOMAIN_NAME}/api/disasters?limit=500&t=${Date.now()}`);
       const data = await response.json();
       if (data.success) {
-        const allLiveFromApi = data.data.disasters || [];
+        const allLiveFromApi = data.data.items || data.data.disasters || [];
         setLiveDisasters(allLiveFromApi);
         updateCache('disasters', allLiveFromApi);
         if (data.data.metadata?.lastUpdated) {
@@ -269,10 +271,10 @@ export default function LiveDisastersClient() {
   const fetchNasaDisasters = async () => {
     setIsLoadingNasaDisasters(true);
     try {
-      const response = await fetch('/api/merged-live-disasters');
+      const response = await fetch('/api/disasters?limit=500');
       const data = await response.json();
       if (data.success) {
-        setNasaDisasters(data.data.disasters || []);
+        setNasaDisasters(data.data.items || data.data.disasters || []);
       }
     } catch (error) {
       console.error('Failed to fetch live disasters:', error);
@@ -293,11 +295,11 @@ export default function LiveDisastersClient() {
       });
       const data = await response.json();
       if (data.success) {
-        console.log('Fetched disasters from API:', data.data.disasters.length);
+        const allDisastersFromApi = data.data.items || data.data.disasters || [];
+        console.log('Fetched disasters from API:', allDisastersFromApi.length);
 
         // Show ALL disasters from database, not just USA
         // The map will filter to USA, but the list shows all
-        const allDisastersFromApi = data.data.disasters || [];
         setDatabaseDisasters(allDisastersFromApi);
         console.log('Database disasters set:', allDisastersFromApi.length);
       } else {
@@ -332,17 +334,7 @@ export default function LiveDisastersClient() {
     loadInitialData();
   }, [token]);
 
-  const generateDisasterDisplayId = (id: string, type: string) => {
-    const prefix = (type || 'UN').substring(0, 2).toUpperCase();
-    const strId = String(id || '');
-    let hash = 0;
-    for (let i = 0; i < strId.length; i++) {
-      hash = ((hash << 5) - hash) + strId.charCodeAt(i);
-      hash |= 0;
-    }
-    const hashStr = Math.abs(hash).toString(36).toUpperCase().substring(0, 6).padEnd(6, '0');
-    return `${prefix}-${hashStr}`;
-  };
+
 
   // Update combined disasters when either live or database disasters change (current year only)
   useEffect(() => {
@@ -352,7 +344,7 @@ export default function LiveDisastersClient() {
       const y = new Date(dateStr).getFullYear();
       return !isNaN(y) && y === currentYear;
     };
-    const dbCurrentYear = databaseDisasters.filter((d: ManagedDisaster) => isCurrentYear(d.createdAt));
+    const dbCurrentYear = databaseDisasters.filter((d: any) => isCurrentYear(d.createdAt || d.date));
 
     // Transform database disasters for map display
     const transformedDatabaseDisasters = dbCurrentYear.map((d: ManagedDisaster) => {
@@ -369,7 +361,7 @@ export default function LiveDisastersClient() {
       }
 
       return {
-        id: d._id,
+        id: d.id || d._id,
         title: d.title,
         description: d.description,
         type: d.type,
@@ -381,7 +373,7 @@ export default function LiveDisastersClient() {
           country: d.location?.country || 'USA',
           state: d.location?.state,
         },
-        date: d.createdAt,
+        date: d.createdAt || (d as any).date,
         isLive: false,
         source: 'database',
         affectedArea: d.affectedArea,
@@ -393,13 +385,13 @@ export default function LiveDisastersClient() {
       ...liveDisasters.map(d => ({
         ...d,
         id: d.id,
-        displayId: generateDisasterDisplayId(d.id, d.type),
+        displayId: d.id,
         isLive: true,
         source: 'live'
       })),
       ...transformedDatabaseDisasters.map(d => ({
         ...d,
-        displayId: generateDisasterDisplayId(d.id, d.type)
+        displayId: d.id
       }))
     ];
     setAllDisasters(combined);
@@ -437,14 +429,14 @@ export default function LiveDisastersClient() {
               const merged = [...eonetOnly, ...fromWs];
               return merged;
             });
-          } catch (_) {}
+          } catch (_) { }
         };
         ws.onclose = () => {
           ws = null;
           setTimeout(connect, 10000);
         };
         ws.onerror = () => { ws?.close(); };
-      } catch (_) {}
+      } catch (_) { }
     };
     connect();
     return () => { ws?.close(); };
@@ -533,7 +525,7 @@ export default function LiveDisastersClient() {
     }
 
     try {
-      const url = selectedManagedDisaster ? `/api/disasters/${selectedManagedDisaster._id}` : '/api/disasters';
+      const url = selectedManagedDisaster ? `/api/disasters/${selectedManagedDisaster.id || selectedManagedDisaster._id}` : '/api/disasters';
       const method = selectedManagedDisaster ? 'PUT' : 'POST';
 
       // Prepare coordinates - API expects [lng, lat] format for GeoJSON
@@ -560,6 +552,7 @@ export default function LiveDisastersClient() {
       }
 
       const body = {
+        id: formData.selectedNasaDisasterId || undefined,
         title: formData.title,
         type: formData.type,
         description: formData.description,
@@ -670,7 +663,7 @@ export default function LiveDisastersClient() {
             return fullVolunteer.userId.name;
           }
         }
-        
+
         return fullVolunteer.volunteerId || fullVolunteer.id || fullVolunteer._id || 'Unknown Volunteer';
       }
     }
@@ -698,8 +691,8 @@ export default function LiveDisastersClient() {
         await Promise.all([fetchDatabaseDisasters(), fetchVolunteers()]);
         // Update the modal if it's open - need to wait for state update
         setTimeout(() => {
-          if (selectedDisasterForVolunteers && selectedDisasterForVolunteers._id === disasterId) {
-            const updatedDisaster = databaseDisasters.find(d => d._id === disasterId);
+          if (selectedDisasterForVolunteers && (selectedDisasterForVolunteers.id || selectedDisasterForVolunteers._id) === disasterId) {
+            const updatedDisaster = databaseDisasters.find(d => (d.id || d._id) === disasterId);
             if (updatedDisaster && updatedDisaster.assignedVolunteers && updatedDisaster.assignedVolunteers.length > 0) {
               setSelectedDisasterForVolunteers(updatedDisaster);
             } else {
@@ -822,11 +815,11 @@ export default function LiveDisastersClient() {
       const state = (d.location?.state || '').toLowerCase();
       const title = (d.title || '').toLowerCase();
       const desc = (d.description || '').toLowerCase();
-      
+
       const stateMatches = state && (state === fs || state.includes(fs));
       const titleMatches = title.includes(fs);
       const descMatches = desc.includes(fs);
-      
+
       if (!stateMatches && !titleMatches && !descMatches) {
         return false;
       }
@@ -972,1673 +965,1654 @@ export default function LiveDisastersClient() {
         <LiveDisastersMappingLoader />
       ) : (
         <>
-      {/* Quick Stats */}
-      <div className="mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <Card
-          className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 w-full ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'cyclone' ? 'all' : 'cyclone'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Hurricane</p>
-            <CloudIcon className="w-5 h-5 text-blue-400" />
+          {/* Quick Stats */}
+          <div className="mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+              <Card
+                className={`p-3 border-l-4 border-l-blue-500 cursor-pointer transition-all hover:ring-2 hover:ring-blue-500/30 w-full ${filterType === 'cyclone' ? 'ring-2 ring-blue-500/40' : ''}`}
+                onClick={() => { setFilterType(prev => prev === 'cyclone' ? 'all' : 'cyclone'); setFilterSeverity('all'); }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">Hurricane</p>
+                  <CloudIcon className="w-5 h-5 text-blue-400" />
+                </div>
+                <p className="text-2xl font-bold text-blue-400 leading-tight">{stats.storms}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+              </Card>
+              <Card
+                className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 w-full ${filterType === 'flood' ? 'ring-2 ring-purple-500/40' : ''}`}
+                onClick={() => { setFilterType(prev => prev === 'flood' ? 'all' : 'flood'); setFilterSeverity('all'); }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">Floods</p>
+                  <span className="text-lg" aria-hidden>💧</span>
+                </div>
+                <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.flood}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+              </Card>
+              <Card
+                className={`p-3 border-l-4 border-l-amber-500 cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30 w-full ${filterType === 'wildfire' ? 'ring-2 ring-amber-500/40' : ''}`}
+                onClick={() => { setFilterType(prev => prev === 'wildfire' ? 'all' : 'wildfire'); setFilterSeverity('all'); }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">Wildfires</p>
+                  <FireIcon className="w-5 h-5 text-amber-400" />
+                </div>
+                <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.wildfires}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+              </Card>
+              <Card
+                className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 w-full ${filterType === 'snow_storm' ? 'ring-2 ring-cyan-500/40' : ''}`}
+                onClick={() => { setFilterType(prev => prev === 'snow_storm' ? 'all' : 'snow_storm'); setFilterSeverity('all'); }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">Snow Storm</p>
+                  <span className="text-lg" aria-hidden>❄️</span>
+                </div>
+                <p className="text-2xl font-bold text-cyan-400 leading-tight">{stats.snowStorm}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+              </Card>
+              <Card
+                className={`p-3 border-l-4 border-l-violet-500 cursor-pointer transition-all hover:ring-2 hover:ring-violet-500/30 w-full ${filterType === 'tornado' ? 'ring-2 ring-violet-500/40' : ''}`}
+                onClick={() => { setFilterType(prev => prev === 'tornado' ? 'all' : 'tornado'); setFilterSeverity('all'); }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">Tornados</p>
+                  <span className="text-lg leading-none" aria-hidden>🌪️</span>
+                </div>
+                <p className="text-2xl font-bold text-violet-400 leading-tight">{stats.tornados}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+              </Card>
+              <Card
+                className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 w-full ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
+                onClick={() => { setFilterType(prev => prev === 'earthquake' ? 'all' : 'earthquake'); setFilterSeverity('all'); }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">Earthquakes</p>
+                  <SunIcon className="w-5 h-5 text-yellow-400" />
+                </div>
+                <p className="text-2xl font-bold text-yellow-400 leading-tight">{stats.earthquakes}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+              </Card>
+              <Card
+                className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 w-full ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
+                onClick={() => { setFilterType(prev => prev === 'volcanic' ? 'all' : 'volcanic'); setFilterSeverity('all'); }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">Volcanic Eruptions</p>
+                  <span className="text-lg" aria-hidden>🌋</span>
+                </div>
+                <p className="text-2xl font-bold text-red-400 leading-tight">{stats.volcanic}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
+              </Card>
+              <Card
+                className={`p-3 border-l-4 border-l-slate-500 cursor-pointer transition-all hover:ring-2 hover:ring-slate-400/30 w-full ${filterType === 'power_outage' ? 'ring-2 ring-slate-400/40' : ''}`}
+                onClick={() => { setFilterType(prev => prev === 'power_outage' ? 'all' : 'power_outage'); setFilterSeverity('all'); }}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">Power Outage</p>
+                  <BoltIcon className="w-5 h-5 text-slate-400" />
+                </div>
+                <p className="text-2xl font-bold text-slate-400 leading-tight">{stats.powerOutage}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">No Data Available</p>
+              </Card>
+            </div>
           </div>
-          <p className="text-2xl font-bold text-blue-400 leading-tight">{stats.storms}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
-        </Card>
-        <Card
-          className={`p-3 border-l-4 border-l-purple-500 cursor-pointer transition-all hover:ring-2 hover:ring-purple-500/30 w-full ${filterType === 'flood' ? 'ring-2 ring-purple-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'flood' ? 'all' : 'flood'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Floods</p>
-            <span className="text-lg" aria-hidden>💧</span>
-          </div>
-          <p className="text-2xl font-bold text-purple-400 leading-tight">{stats.flood}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
-        </Card>
-        <Card
-          className={`p-3 border-l-4 border-l-amber-500 cursor-pointer transition-all hover:ring-2 hover:ring-amber-500/30 w-full ${filterType === 'wildfire' ? 'ring-2 ring-amber-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'wildfire' ? 'all' : 'wildfire'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Wildfires</p>
-            <FireIcon className="w-5 h-5 text-amber-400" />
-          </div>
-          <p className="text-2xl font-bold text-amber-400 leading-tight">{stats.wildfires}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
-        </Card>
-        <Card
-          className={`p-3 border-l-4 border-l-cyan-500 cursor-pointer transition-all hover:ring-2 hover:ring-cyan-500/30 w-full ${filterType === 'snow_storm' ? 'ring-2 ring-cyan-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'snow_storm' ? 'all' : 'snow_storm'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Snow Storm</p>
-            <span className="text-lg" aria-hidden>❄️</span>
-          </div>
-          <p className="text-2xl font-bold text-cyan-400 leading-tight">{stats.snowStorm}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
-        </Card>
-        <Card
-          className={`p-3 border-l-4 border-l-violet-500 cursor-pointer transition-all hover:ring-2 hover:ring-violet-500/30 w-full ${filterType === 'tornado' ? 'ring-2 ring-violet-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'tornado' ? 'all' : 'tornado'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Tornados</p>
-            <span className="text-lg leading-none" aria-hidden>🌪️</span>
-          </div>
-          <p className="text-2xl font-bold text-violet-400 leading-tight">{stats.tornados}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
-        </Card>
-        <Card
-          className={`p-3 border-l-4 border-l-yellow-500 cursor-pointer transition-all hover:ring-2 hover:ring-yellow-500/30 w-full ${filterType === 'earthquake' ? 'ring-2 ring-yellow-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'earthquake' ? 'all' : 'earthquake'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Earthquakes</p>
-            <SunIcon className="w-5 h-5 text-yellow-400" />
-          </div>
-          <p className="text-2xl font-bold text-yellow-400 leading-tight">{stats.earthquakes}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
-        </Card>
-        <Card
-          className={`p-3 border-l-4 border-l-red-600 cursor-pointer transition-all hover:ring-2 hover:ring-red-500/30 w-full ${filterType === 'volcanic' ? 'ring-2 ring-red-500/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'volcanic' ? 'all' : 'volcanic'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Volcanic Eruptions</p>
-            <span className="text-lg" aria-hidden>🌋</span>
-          </div>
-          <p className="text-2xl font-bold text-red-400 leading-tight">{stats.volcanic}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">Active</p>
-        </Card>
-        <Card
-          className={`p-3 border-l-4 border-l-slate-500 cursor-pointer transition-all hover:ring-2 hover:ring-slate-400/30 w-full ${filterType === 'power_outage' ? 'ring-2 ring-slate-400/40' : ''}`}
-          onClick={() => { setFilterType(prev => prev === 'power_outage' ? 'all' : 'power_outage'); setFilterSeverity('all'); }}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-medium text-[var(--text-muted)]">Power Outage</p>
-            <BoltIcon className="w-5 h-5 text-slate-400" />
-          </div>
-          <p className="text-2xl font-bold text-slate-400 leading-tight">{stats.powerOutage}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">No Data Available</p>
-        </Card>
-        </div>
-      </div>
-      {/* Top filter row: all filters in ONE line with search taking more space */}
-      <div className="mb-6 relative z-[8000] isolate">
-        <div className="p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20 backdrop-blur-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 w-full items-end">
-            {/* Search Bar - Takes 2 cols on xl */}
-            <div className="flex flex-col gap-1.5 xl:col-span-2">
-              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+          {/* Top filter row: all filters in ONE line with search taking more space */}
+          <div className="mb-6 relative z-[8000] isolate">
+            <div className="p-5 rounded-xl bg-gradient-to-br from-purple-500/5 to-blue-500/5 border border-purple-500/20 backdrop-blur-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 w-full items-end">
+                {/* Search Bar - Takes 2 cols on xl */}
+                <div className="flex flex-col gap-1.5 xl:col-span-2">
+                  {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
                 Search
               </label> */}
-              <div className="relative h-[42px]">
-                <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
-                <Input
-                  type="text"
-                  placeholder="Search globally..."
-                  value={globalSearchQuery}
-                  onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                  className="pl-12 pr-10 py-0 h-full text-sm w-full bg-[var(--bg-card)] border-purple-500/30 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg shadow-sm transition-all duration-200"
-                />
-                {globalSearchQuery && (
-                  <button
-                    onClick={() => setGlobalSearchQuery('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-purple-500/10 rounded-md transition-colors"
-                  >
-                    <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Type Filter */}
-            <div className="flex flex-col gap-1.5">
-              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
-                Type
-              </label> */}
-              <select
-                value={filterType}
-                onChange={(e) => { setFilterType(e.target.value); setSelectedDisaster(null); }}
-                className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
-              >
-                <option value="all">All Types</option>
-                {uniqueTypes.map(type => (
-                  <option key={type} value={type}>{getTypeDisplayLabel(type)}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Severity Filter */}
-            <div className="flex flex-col gap-1.5">
-              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
-                Severity
-              </label> */}
-              <select
-                value={filterSeverity}
-                onChange={(e) => { setFilterSeverity(e.target.value); setSelectedDisaster(null); }}
-                className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
-              >
-                <option value="all">All Severity</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
-            </div>
-
-            {/* Countries — multi-select (USA, Mexico, Canada, All other countries) */}
-            <div className="flex flex-col gap-1.5 h-[42px] z-10">
-              <MultiSelect
-                variant="filter"
-                placeholder="All countries"
-                options={[
-                  { value: 'usa', label: 'USA' },
-                  { value: 'mexico', label: 'Mexico' },
-                  { value: 'canada', label: 'Canada' },
-                  { value: 'other', label: 'All other countries' },
-                ]}
-                value={filterCountryRegions}
-                onChange={(v) => {
-                  setFilterCountryRegions(v);
-                  setSelectedDisaster(null);
-                }}
-              />
-            </div>
-
-            {/* State Filter — only when exactly one of USA / Mexico / Canada is selected */}
-            {singleRegionForState && availableStates.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
-                  State
-                </label> */}
-                <select
-                  value={filterState}
-                  onChange={(e) => { setFilterState(e.target.value); setSelectedDisaster(null); }}
-                  className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
-                >
-                  <option value="all">All States</option>
-                  {availableStates.map(state => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* From Date */}
-            <div className="flex flex-col gap-1.5">
-              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
-                From Date
-              </label> */}
-              <input
-                type="date"
-                value={filterFromDate}
-                onChange={(e) => setFilterFromDate(e.target.value)}
-                className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
-              />
-            </div>
-
-            {/* To Date */}
-            <div className="flex flex-col gap-1.5">
-              {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
-                To Date
-              </label> */}
-              <input
-                type="date"
-                value={filterToDate}
-                onChange={(e) => setFilterToDate(e.target.value)}
-                className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
-              />
-            </div>
-
-            {/* Clear Filters Button - Equal Height */}
-            {showClearFiltersButton && (
-              <div className="flex flex-col gap-1.5">
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  className="px-4 h-[42px] text-sm font-medium text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 whitespace-nowrap w-full"
-                >
-                  <XMarkIcon className="w-4 h-4" />
-                  Clear
-                </button>
-              </div>
-            )}
-            {/* Active Filters and Selected Countries (Next to Clear Button) */}
-            {(hasActiveFilters || filterCountryRegions.length > 0) && (
-              <div className="col-span-full xl:col-span-7 flex flex-wrap gap-2 items-center">
-                {filterCountryRegions.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 items-center mr-2">
-                    <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide shrink-0">
-                      Countries:
-                    </span>
-                    {filterCountryRegions.map((r) => {
-                      const regionLabel =
-                        ({ usa: 'USA', mexico: 'Mexico', canada: 'Canada', other: 'All other countries' } as const)[
-                          r as 'usa' | 'mexico' | 'canada' | 'other'
-                        ] ?? r;
-                      return (
-                        <span
-                          key={r}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-500/15 text-purple-400 border border-purple-500/25 rounded-md text-xs font-medium"
-                        >
-                          {regionLabel}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFilterCountryRegions(filterCountryRegions.filter((x) => x !== r));
-                              setSelectedDisaster(null);
-                            }}
-                            className="p-0.5 rounded hover:bg-purple-500/20 text-purple-300"
-                            aria-label={`Remove ${regionLabel}`}
-                          >
-                            <XMarkIcon className="w-3 h-3" />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {hasActiveFilters && (
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
-                      Active:
-                    </span>
-                    {filterType !== 'all' && (
-                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                        Type: {filterType}
-                      </span>
-                    )}
-                    {filterSeverity !== 'all' && (
-                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                        Severity: {filterSeverity}
-                      </span>
-                    )}
-                    {filterState !== 'all' && (
-                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                        State: {filterState}
-                      </span>
-                    )}
-                    {filterFromDate && (
-                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                        From: {filterFromDate}
-                      </span>
-                    )}
-                    {filterToDate && (
-                      <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
-                        To: {filterToDate}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Map */}
-        <div className="lg:col-span-2">
-          <Card padding="none" className="h-[600px] overflow-hidden">
-            <div className="h-full">
-              <LiveDisasterMap
-                disasters={filteredDisasters.filter((d: any) => {
-                  const c = d.location?.coordinates;
-                  return c && (Array.isArray(c) ? c.length >= 2 : c?.lat != null && c?.lng != null);
-                }).map((d: any) => {
-                  const c = d.location?.coordinates;
-                  let coordinates: { lat: number; lng: number } | undefined;
-                  if (Array.isArray(c) && c.length >= 2) {
-                    coordinates = { lat: Number(c[1]), lng: Number(c[0]) };
-                  } else if (c && typeof c === 'object' && 'lat' in c && 'lng' in c) {
-                    coordinates = { lat: Number(c.lat), lng: Number(c.lng) };
-                  }
-                  return {
-                    id: d.id,
-                    title: d.title,
-                    type: d.type,
-                    severity: d.severity,
-                    description: d.description,
-                    date: d.date,
-                    magnitude: d.magnitude,
-                    magnitudeUnit: d.magnitudeUnit,
-                    location: {
-                      coordinates,
-                      country: d.location?.country,
-                      state: d.location?.state,
-                    },
-                    source: d.source === 'database' ? 'database' : 'live',
-                  };
-                })}
-                selectedId={selectedDisaster?.id ?? selectedDisaster?._id}
-                highlightedId={highlightedDisasterId}
-                onSelectDisaster={(id) => {
-                  const disaster = allDisasters.find(d => d.id === id) || filteredDisasters.find(d => d.id === id);
-                  if (disaster) {
-                    setSelectedDisaster(disaster);
-                    setHighlightedDisasterId(id);
-                    setTimeout(() => setHighlightedDisasterId(null), 2000);
-                  }
-                }}
-                filterSeverity={filterSeverity}
-                onSeverityClick={(severity) => setFilterSeverity(prev => prev === severity ? 'all' : severity)}
-                activeFilterType={filterType !== 'all' ? filterType : undefined}
-              />
-            </div>
-          </Card>
-        </div>
-
-        {/* Sidebar - Events List */}
-        <div className="lg:col-span-1">
-          <Card padding="none" className="h-[600px] flex flex-col">
-            <div className="p-3 border-b border-[var(--border-color)] bg-[var(--bg-input)] shrink-0">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-[var(--text-muted)]">
-                  Showing <span className="font-semibold text-[var(--text-primary)]">{listFilteredDisasters.length}</span> of <span className="font-semibold text-[var(--text-primary)]">{filteredDisasters.length}</span> events
-                </p>
-                {selectedDisaster && (
-                  <button
-                    onClick={() => setSelectedDisaster(null)}
-                    className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 shrink-0"
-                  >
-                    <XMarkIcon className="w-3 h-3" />
-                    Deselect
-                  </button>
-                )}
-              </div>
-              <div className="mt-3 relative">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
-                <Input
-                  type="text"
-                  placeholder="Search in list..."
-                  value={listSearchQuery}
-                  onChange={(e) => setListSearchQuery(e.target.value)}
-                  className="pl-9 pr-8 py-2 text-xs w-full bg-[var(--bg-card)] border-purple-500/30 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20 rounded-md shadow-sm transition-all duration-200"
-                />
-                {listSearchQuery && (
-                  <button
-                    onClick={() => setListSearchQuery('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-purple-500/10 rounded-md transition-colors"
-                  >
-                    <XMarkIcon className="w-3 h-3 text-[var(--text-muted)]" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Events List */}
-            <div className="flex-1 overflow-y-auto">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                </div>
-              ) : filteredDisasters.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                  <GlobeAltIcon className="w-12 h-12 text-[var(--text-muted)] mb-3" />
-                  <p className="text-[var(--text-muted)]">No disasters matching filters</p>
-                </div>
-              ) : listFilteredDisasters.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                  <MagnifyingGlassIcon className="w-12 h-12 text-[var(--text-muted)] mb-3" />
-                  <p className="text-[var(--text-muted)]">No disasters match your search</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">Try a different search term</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-[var(--border-color)]">
-                  {listFilteredDisasters.map((disaster, index) => {
-                    const colors = severityColors[disaster.severity] || severityColors.medium;
-                    const Icon = typeIcons[disaster.type] || typeIcons.default;
-                    const disasterId = disaster.id ?? disaster._id ?? `disaster-${index}`;
-                    const isSelected = selectedDisaster && (selectedDisaster.id === disaster.id || selectedDisaster._id === disaster._id);
-                    const isExpanded = expandedListDisasterId === disasterId;
-                    const listItemKey = `list-${index}-${disasterId}-${(disaster.source ?? 'live')}`;
-
-                    return (
-                      <button
-                        key={listItemKey}
-                        id={`disaster-${listItemKey}`}
-                        onClick={() => {
-                          if (isExpanded) {
-                            setExpandedListDisasterId(null);
-                            setSelectedDisaster(null);
-                            setSelectedListKey(null);
-                          } else {
-                            setExpandedListDisasterId(disasterId);
-                            setSelectedDisaster(disaster);
-                            setSelectedListKey(listItemKey);
-                          }
-                          setHighlightedDisasterId(disaster.id ?? disaster._id ?? null);
-                          setTimeout(() => setHighlightedDisasterId(null), 2000);
-                        }}
-                        className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-all duration-200 ${isExpanded
-                            ? 'bg-[var(--bg-input)] border-l-4 border-purple-500 shadow-lg'
-                            : highlightedDisasterId === disasterId
-                              ? 'bg-purple-500/10 border-l-4 border-purple-400 animate-pulse'
-                              : 'border-l-4 border-transparent'
-                          }`}
-                        onMouseEnter={() => setHighlightedDisasterId(disasterId)}
-                        onMouseLeave={() => {
-                          if (highlightedDisasterId === disasterId && !isExpanded) {
-                            setHighlightedDisasterId(null);
-                          }
-                        }}
-                      >
-                        <div className="flex gap-3">
-                          <div className={`w-10 h-10 rounded-xl ${colors.bg} flex items-center justify-center shrink-0`}>
-                            <Icon className={`w-5 h-5 ${colors.text}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <h4 className="font-medium text-[var(--text-primary)] text-sm line-clamp-1">
-                                {disaster.title}
-                              </h4>
-                              <Badge
-                                variant={disaster.severity === 'critical' ? 'danger' : disaster.severity === 'high' ? 'warning' : 'secondary'}
-                                size="sm"
-                              >
-                                {disaster.severity}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-2">
-                              <span className="font-mono bg-[var(--bg-card)] px-1 py-0.5 rounded mr-1 border border-[var(--border-color)]">
-                                {disaster.displayId}
-                              </span>
-                              {disaster.category || disaster.type}
-                              {disaster.location?.country && ` • ${disaster.location.country}`}
-                              {disaster.location?.state && ` • ${disaster.location.state}`}
-                              {disaster.isLive && <span className="text-emerald-400 ml-1">• LIVE</span>}
-                            </p>
-                            <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                              <span className="flex items-center gap-1">
-                                <ClockIcon className="w-3 h-3" />
-                                {disaster.date ? new Date(disaster.date).toLocaleDateString() : 'N/A'}
-                              </span>
-                              {disaster.magnitude && (
-                                <span className="flex items-center gap-1">
-                                  <SignalIcon className="w-3 h-3" />
-                                  {disaster.magnitude} {disaster.magnitudeUnit}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Expanded Details - only this item (carousel: one expanded at a time) */}
-                        {isExpanded && (
-                          <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
-                            <p className="text-sm text-[var(--text-secondary)] mb-4">
-                              {disaster.description}
-                            </p>
-                            {disaster.url && (
-                              <a
-                                href={disaster.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View Source
-                                <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-                              </a>
-                            )}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Data Sources */}
-            <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-input)]">
-              <p className="text-xs text-[var(--text-muted)] text-center">
-                Data from <span className="text-purple-400">Disasters API</span> (microservice) & <span className="text-purple-400">ReliefWeb</span>
-              </p>
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      {/* All Disasters from Database Section */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-bold text-[var(--text-primary)]">All Disasters</h3>
-            <p className="text-sm text-[var(--text-muted)]">
-              Showing {stats.live} live disasters and {stats.database} custom (worldwide)
-            </p>
-          </div>
-          {canManage && (
-            <Button
-              onClick={async () => {
-                try {
-                  setSelectedManagedDisaster(null);
-                  setFormData({
-                    title: '', type: 'flood', description: '', severity: 'medium', status: 'active',
-                    address: '', locationType: 'local', range: '', country: 'USA',
-                    lat: '', lng: '', estimatedAffectedPeople: '',
-                    selectedNasaDisasterId: '', useCustomDisaster: false,
-                  });
-                  setShowAddModal(true);
-                } catch (error) {
-                  console.error('Error opening add disaster modal:', error);
-                  // Still open the modal even if fetch fails
-                  setShowAddModal(true);
-                }
-              }}
-              leftIcon={<PlusIcon className="w-4 h-4" />}
-              variant="gradient"
-            >
-              Add Disaster
-            </Button>
-          )}
-        </div>
-
-        {/* Search Bar */}
-        <div className="mb-4">
-          <Input
-            icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-            placeholder="Search all disasters..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        {/* All Disasters Table - Show only database disasters */}
-        {isLoadingDatabase ? (
-          <Card className="p-6">
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-            </div>
-          </Card>
-        ) : databaseDisasters.length === 0 ? (
-          <Card className="p-6">
-            <div className="text-center py-12">
-              <MapPinIcon className="w-16 h-16 mx-auto text-[var(--text-muted)] mb-4" />
-              <p className="text-[var(--text-secondary)]">No disasters in database</p>
-              {canManage && (
-                <p className="text-sm text-[var(--text-muted)] mt-2">Click "Add Disaster" to create one</p>
-              )}
-            </div>
-          </Card>
-        ) : (
-          <Table
-            rowKey={(d, i) => d._id ?? `db-disaster-${i}`}
-            data={databaseDisasters.filter(d => {
-              // Apply search filter
-              if (searchQuery) {
-                const query = searchQuery.toLowerCase();
-                return d.title.toLowerCase().includes(query) ||
-                  d.description?.toLowerCase().includes(query) ||
-                  d.type.toLowerCase().includes(query) ||
-                  d.location?.city?.toLowerCase().includes(query) ||
-                  d.location?.state?.toLowerCase().includes(query);
-              }
-              return true;
-            })}
-            isLoading={isLoadingDatabase}
-            emptyMessage="No disasters found"
-            columns={[
-              {
-                key: 'title',
-                label: 'Disaster',
-                width: '22%',
-                render: (disaster: ManagedDisaster) => {
-                  const Icon = typeIcons[disaster.type] || typeIcons.default;
-                  const colors = severityColors[disaster.severity] || severityColors.medium;
-                  return (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-10 h-10 rounded-lg ${colors.bg} flex items-center justify-center shrink-0`}>
-                        <Icon className={`w-5 h-5 ${colors.text}`} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-[var(--text-primary)] truncate" title={disaster.title}>{disaster.title}</div>
-                        <div className="text-xs text-[var(--text-muted)] truncate capitalize" title={disaster.type}>{disaster.type}</div>
-                      </div>
-                    </div>
-                  );
-                },
-              },
-              {
-                key: 'location',
-                label: 'Location',
-                width: '18%',
-                render: (disaster: ManagedDisaster) => {
-                  const loc = [disaster.location?.address, disaster.location?.city, disaster.location?.state].filter(Boolean).join(', ') || 'Unknown';
-                  return (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <MapPinIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-                      <span className="text-sm truncate block min-w-0" title={loc}>{loc}</span>
-                    </div>
-                  );
-                },
-              },
-              {
-                key: 'severity',
-                label: 'Severity',
-                width: '10%',
-                render: (disaster: ManagedDisaster) => (
-                  <Badge
-                    variant={disaster.severity === 'critical' ? 'danger' : disaster.severity === 'high' ? 'warning' : 'secondary'}
-                    size="sm"
-                    className="capitalize"
-                  >
-                    {disaster.severity}
-                  </Badge>
-                ),
-              },
-              {
-                key: 'status',
-                label: 'Status',
-                width: '10%',
-                render: (disaster: ManagedDisaster) => (
-                  <Badge
-                    variant={disaster.status === 'active' ? 'danger' : disaster.status === 'resolved' ? 'success' : 'secondary'}
-                    size="sm"
-                  >
-                    {disaster.status}
-                  </Badge>
-                ),
-              },
-              {
-                key: 'assignedVolunteers',
-                label: 'Assigned Volunteers',
-                width: '25%',
-                render: (disaster: ManagedDisaster) => {
-                  const assignedCount = disaster.assignedVolunteers?.length || 0;
-                  return (
-                    <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (assignedCount > 0) {
-                            setSelectedDisasterForVolunteers(disaster);
-                            setShowVolunteersModal(true);
-                          }
-                        }}
-                        className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer flex-1 text-left min-w-0"
-                        disabled={assignedCount === 0}
-                      >
-                        <UserGroupIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-                        <span className="text-sm font-medium shrink-0">{assignedCount}</span>
-                        {assignedCount > 0 && (
-                          <div className="flex-1 min-w-0 overflow-hidden">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {disaster.assignedVolunteers?.slice(0, 2).map((av, idx) => {
-                                let volId = '';
-                                if (typeof av === 'string') {
-                                  volId = av;
-                                } else if (typeof av === 'object' && av !== null) {
-                                  const vId = av.volunteerId || av;
-                                  if (typeof vId === 'string') volId = vId;
-                                  else if (typeof vId === 'object') {
-                                    const o = vId as { _id?: string; volunteerId?: string };
-                                    volId = o._id ?? o.volunteerId ?? String(o._id ?? o.volunteerId ?? '');
-                                  }
-                                }
-                                const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
-                                let volunteerName = 'Unknown';
-                                if (fullVolunteer?.userId) {
-                                  if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
-                                    volunteerName = `${fullVolunteer.userId.firstName} ${fullVolunteer.userId.lastName}`;
-                                  } else if (fullVolunteer.userId.name) {
-                                    volunteerName = fullVolunteer.userId.name;
-                                  }
-                                } else {
-                                  volunteerName = getVolunteerName(av.volunteerId);
-                                }
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="flex items-center gap-1.5 px-1.5 py-0.5 bg-[var(--bg-input)] rounded-md border border-[var(--border-color)] shrink-0 max-w-[120px] min-w-0"
-                                    title={volunteerName}
-                                  >
-                                    <div className="w-4 h-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-[9px] font-bold shrink-0">
-                                      {volunteerName.charAt(0).toUpperCase()}
-                                    </div>
-                                    <span className="text-xs text-[var(--text-primary)] truncate block min-w-0">
-                                      {volunteerName}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {assignedCount > 2 && (
-                                <span className="text-xs text-[var(--text-muted)] shrink-0">+{assignedCount - 2} more</span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </button>
-                    </div>
-                  );
-                },
-              },
-              {
-                key: 'actions',
-                label: 'Actions',
-                width: '15%',
-                render: (disaster: ManagedDisaster) => {
-                  if (!canManage) return <span className="text-[var(--text-muted)] text-sm">—</span>;
-                  const openEdit = () => {
-                    const lat = Array.isArray(disaster.location?.coordinates) ? disaster.location.coordinates[1] : (disaster.location?.coordinates as any)?.lat;
-                    const lng = Array.isArray(disaster.location?.coordinates) ? disaster.location.coordinates[0] : (disaster.location?.coordinates as any)?.lng;
-                    setSelectedManagedDisaster(disaster);
-                    setFormData({
-                      title: disaster.title,
-                      type: disaster.type,
-                      description: disaster.description,
-                      severity: disaster.severity,
-                      status: disaster.status,
-                      address: disaster.location?.address || '',
-                      locationType: 'local',
-                      range: '',
-                      country: disaster.location?.country || 'USA',
-                      lat: lat?.toString() || '',
-                      lng: lng?.toString() || '',
-                      estimatedAffectedPeople: disaster.estimatedAffectedPeople?.toString() || '',
-                      selectedNasaDisasterId: '',
-                      useCustomDisaster: true,
-                    });
-                    setShowAddModal(true);
-                  };
-                  return (
-                    <div className="flex items-center justify-center gap-1">
-                      {disaster.source !== 'live' ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setSelectedDisasterForAssign(disaster); setShowAssignVolunteerModal(true); }}
-                            className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/20 transition-colors"
-                            title="Assign Volunteer"
-                          >
-                            <UserPlusIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); openEdit(); }}
-                            className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-colors"
-                            title="Edit"
-                          >
-                            <PencilIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleDeleteDisaster(disaster._id); }}
-                            className="p-2 rounded-lg text-red-400 hover:bg-red-500/20 transition-colors"
-                            title="Delete"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        </>
-                      ) : (
-                        <span className="text-xs text-[var(--text-muted)] italic px-2">Managed Externally</span>
-                      )}
-                    </div>
-                  );
-                },
-              },
-            ]}
-          />
-        )}
-      </div>
-
-      {/* Add/Edit Disaster Modal */}
-      <Modal
-        isOpen={showAddModal}
-        onClose={() => {
-          setShowAddModal(false);
-          setSelectedManagedDisaster(null);
-        }}
-        title={selectedManagedDisaster ? 'Edit Disaster' : 'Add New Disaster'}
-        size="lg"
-        className="z-[10001]"
-      >
-        <form onSubmit={handleSubmitDisaster} className="space-y-4">
-          {/* Combined Disaster Selection - Single Field */}
-          <div className="space-y-4">
-            <div className="relative">
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-                Select Disaster <span className="text-red-400">*</span>
-              </label>
-              <div className="relative disaster-search-container z-[60]">
-                <div className="relative">
+                  <div className="relative h-[42px]">
+                    <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
                     <Input
-                      value={formData.selectedNasaDisasterId
-                        ? (allDisasters.find(d => (d.id ?? d._id) === formData.selectedNasaDisasterId)?.title) || formData.title || disasterSearchQuery
-                        : formData.title || disasterSearchQuery
-                      }
-                      onChange={(e) => {
-                        const query = e.target.value;
-                        setDisasterSearchQuery(query);
-                        setShowDisasterDropdown(true);
-                        // If user is typing, set as custom disaster title
-                        setFormData({
-                          ...formData,
-                          title: query,
-                          selectedNasaDisasterId: '',
-                          useCustomDisaster: true
-                        });
-                      }}
-                      onFocus={() => setShowDisasterDropdown(true)}
-                      onBlur={() => {
-                        // Delay closing to allow click on dropdown item
-                        setTimeout(() => setShowDisasterDropdown(false), 200);
-                      }}
-                      placeholder="Search disaster by name or location, or type custom disaster name..."
-                      icon={
-                        disasterSearchQuery && !formData.selectedNasaDisasterId ? (
-                          <PlusIcon className="w-5 h-5 text-purple-500" />
-                        ) : (
-                          <MagnifyingGlassIcon className="w-5 h-5" />
-                        )
-                      }
-                      iconPosition="right"
+                      type="text"
+                      placeholder="Search globally..."
+                      value={globalSearchQuery}
+                      onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                      className="pl-12 pr-10 py-0 h-full text-sm w-full bg-[var(--bg-card)] border-purple-500/30 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-lg shadow-sm transition-all duration-200"
                     />
-                    {formData.selectedNasaDisasterId && (
+                    {globalSearchQuery && (
                       <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true, title: '' });
-                          setDisasterSearchQuery('');
-                        }}
-                        className="absolute right-14 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--bg-input)] transition-colors z-20"
+                        onClick={() => setGlobalSearchQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-purple-500/10 rounded-md transition-colors"
                       >
                         <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
                       </button>
                     )}
-                    {disasterSearchQuery && !formData.selectedNasaDisasterId && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Use the typed value as custom disaster
-                          setFormData({
-                            ...formData,
-                            title: disasterSearchQuery,
-                            useCustomDisaster: true,
-                            selectedNasaDisasterId: ''
-                          });
-                          setDisasterSearchQuery('');
-                          setShowDisasterDropdown(false);
-                        }}
-                        className="absolute right-14 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--bg-input)] transition-colors z-20"
-                        title="Add custom disaster"
-                      >
-                        <PlusIcon className="w-5 h-5 text-purple-500" />
-                      </button>
-                    )}
                   </div>
+                </div>
 
-                  {/* Searchable Dropdown */}
-                  {showDisasterDropdown && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-[1100] max-h-60 overflow-y-auto">
-                      {(() => {
-                        // Combined list: live (EONET + backend) + database; filter by search query
-                        const filteredDisasters = allDisasters.filter(disaster => {
-                          if (!disasterSearchQuery) return true;
-                          const query = disasterSearchQuery.toLowerCase();
-                          const titleMatch = disaster.title?.toLowerCase().includes(query);
-                          const locationMatch =
-                            disaster.location?.state?.toLowerCase().includes(query) ||
-                            disaster.location?.country?.toLowerCase().includes(query) ||
-                            disaster.location?.region?.toLowerCase().includes(query);
-                          const typeMatch = disaster.type?.toLowerCase().includes(query);
-                          return titleMatch || locationMatch || typeMatch;
-                        });
+                {/* Type Filter */}
+                <div className="flex flex-col gap-1.5">
+                  {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                Type
+              </label> */}
+                  <select
+                    value={filterType}
+                    onChange={(e) => { setFilterType(e.target.value); setSelectedDisaster(null); }}
+                    className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                  >
+                    <option value="all">All Types</option>
+                    {uniqueTypes.map(type => (
+                      <option key={type} value={type}>{getTypeDisplayLabel(type)}</option>
+                    ))}
+                  </select>
+                </div>
 
-                        // Check if query doesn't match any disaster
-                        const hasNoMatches = disasterSearchQuery && filteredDisasters.length === 0;
-                        const queryMatchesSelected = filteredDisasters.some(d =>
-                          d.title?.toLowerCase() === disasterSearchQuery.toLowerCase()
-                        );
+                {/* Severity Filter */}
+                <div className="flex flex-col gap-1.5">
+                  {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                Severity
+              </label> */}
+                  <select
+                    value={filterSeverity}
+                    onChange={(e) => { setFilterSeverity(e.target.value); setSelectedDisaster(null); }}
+                    className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                  >
+                    <option value="all">All Severity</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
 
-                        return (
-                          <>
-                            {filteredDisasters.length > 0 && (
-                              <>
-                                {filteredDisasters.map((disaster, ddIndex) => {
-                                  const did = disaster.id ?? disaster._id;
-                                  const isSelected = formData.selectedNasaDisasterId === did;
-                                  const dropdownItemKey = `dd-${ddIndex}-${did}-${(disaster.source ?? 'live')}`;
-                                  const coords = disaster.location?.coordinates;
-                                  const locationStr = [
-                                    disaster.location?.region,
-                                    disaster.location?.state,
-                                    disaster.location?.country
-                                  ].filter(Boolean).join(', ') || 'Unknown Location';
+                {/* Countries — multi-select (USA, Mexico, Canada, All other countries) */}
+                <div className="flex flex-col gap-1.5 h-[42px] z-10">
+                  <MultiSelect
+                    variant="filter"
+                    placeholder="All countries"
+                    options={[
+                      { value: 'usa', label: 'USA' },
+                      { value: 'mexico', label: 'Mexico' },
+                      { value: 'canada', label: 'Canada' },
+                      { value: 'other', label: 'All other countries' },
+                    ]}
+                    value={filterCountryRegions}
+                    onChange={(v) => {
+                      setFilterCountryRegions(v);
+                      setSelectedDisaster(null);
+                    }}
+                  />
+                </div>
 
-                                  return (
-                                    <button
-                                      key={dropdownItemKey}
-                                      type="button"
-                                      onClick={() => {
-                                        // Build address from location data
-                                        let addressParts = [];
-                                        if (disaster.location?.state) {
-                                          addressParts.push(disaster.location.state);
-                                        }
-                                        if (disaster.location?.country) {
-                                          addressParts.push(disaster.location.country);
-                                        } else {
-                                          addressParts.push('USA');
-                                        }
-                                        const address = addressParts.join(', ') || 'USA';
+                {/* State Filter — only when exactly one of USA / Mexico / Canada is selected */}
+                {singleRegionForState && availableStates.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                  State
+                </label> */}
+                    <select
+                      value={filterState}
+                      onChange={(e) => { setFilterState(e.target.value); setSelectedDisaster(null); }}
+                      className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                    >
+                      <option value="all">All States</option>
+                      {availableStates.map(state => (
+                        <option key={state} value={state}>{state}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-                                        setFormData({
-                                          ...formData,
-                                          selectedNasaDisasterId: did,
-                                          useCustomDisaster: false,
-                                          title: disaster.title,
-                                          description: disaster.description || '',
-                                          type: disaster.type,
-                                          severity: disaster.severity,
-                                          lat: coords?.lat?.toString() || '',
-                                          lng: coords?.lng?.toString() || '',
-                                          address: address,
-                                        });
-                                        setDisasterSearchQuery('');
-                                        setShowDisasterDropdown(false);
-                                      }}
-                                      className={`w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0 ${isSelected ? 'bg-purple-500/10 border-l-4 border-purple-500' : ''
-                                        }`}
-                                    >
-                                      <div className="flex items-start gap-3">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="font-medium text-[var(--text-primary)] mb-1">
-                                            {disaster.displayId && <span className="font-mono bg-[var(--bg-card)] px-1 py-0.5 rounded mr-1 border border-[var(--border-color)] text-xs text-[var(--text-secondary)]">{disaster.displayId}</span>}
-                                            {disaster.title}
-                                          </p>
-                                          <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--text-muted)]">
-                                            <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 capitalize">
-                                              {disaster.type}
-                                            </span>
-                                            <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 capitalize">
-                                              {disaster.severity}
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                              <MapPinIcon className="w-3 h-3" />
-                                              {locationStr}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        {isSelected && (
-                                          <CheckCircleIcon className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
-                                        )}
-                                      </div>
-                                    </button>
-                                  );
-                                })}
-                              </>
-                            )}
+                {/* From Date */}
+                <div className="flex flex-col gap-1.5">
+                  {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                From Date
+              </label> */}
+                  <input
+                    type="date"
+                    value={filterFromDate}
+                    onChange={(e) => setFilterFromDate(e.target.value)}
+                    className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                  />
+                </div>
 
-                            {/* Show "Add Custom Disaster" option when no matches found */}
-                            {hasNoMatches && !queryMatchesSelected && (
+                {/* To Date */}
+                <div className="flex flex-col gap-1.5">
+                  {/* <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                To Date
+              </label> */}
+                  <input
+                    type="date"
+                    value={filterToDate}
+                    onChange={(e) => setFilterToDate(e.target.value)}
+                    className="px-3 h-[42px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] hover:border-purple-500/50 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all cursor-pointer w-full"
+                  />
+                </div>
+
+                {/* Clear Filters Button - Equal Height */}
+                {showClearFiltersButton && (
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={clearAllFilters}
+                      className="px-4 h-[42px] text-sm font-medium text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg flex items-center justify-center gap-2 transition-all duration-200 whitespace-nowrap w-full"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                      Clear
+                    </button>
+                  </div>
+                )}
+                {/* Active Filters and Selected Countries (Next to Clear Button) */}
+                {(hasActiveFilters || filterCountryRegions.length > 0) && (
+                  <div className="col-span-full xl:col-span-7 flex flex-wrap gap-2 items-center">
+                    {filterCountryRegions.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 items-center mr-2">
+                        <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide shrink-0">
+                          Countries:
+                        </span>
+                        {filterCountryRegions.map((r) => {
+                          const regionLabel =
+                            ({ usa: 'USA', mexico: 'Mexico', canada: 'Canada', other: 'All other countries' } as const)[
+                            r as 'usa' | 'mexico' | 'canada' | 'other'
+                            ] ?? r;
+                          return (
+                            <span
+                              key={r}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-500/15 text-purple-400 border border-purple-500/25 rounded-md text-xs font-medium"
+                            >
+                              {regionLabel}
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setFormData({
-                                    ...formData,
-                                    title: disasterSearchQuery,
-                                    useCustomDisaster: true,
-                                    selectedNasaDisasterId: ''
-                                  });
-                                  setDisasterSearchQuery('');
-                                  setShowDisasterDropdown(false);
+                                  setFilterCountryRegions(filterCountryRegions.filter((x) => x !== r));
+                                  setSelectedDisaster(null);
                                 }}
-                                className="w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-t border-[var(--border-color)] flex items-center gap-3 text-purple-500"
+                                className="p-0.5 rounded hover:bg-purple-500/20 text-purple-300"
+                                aria-label={`Remove ${regionLabel}`}
                               >
-                                <PlusIcon className="w-5 h-5" />
-                                <div>
-                                  <p className="font-medium">Add Custom Disaster</p>
-                                  <p className="text-xs text-[var(--text-muted)]">
-                                    "{disasterSearchQuery}" will be added as a custom disaster
-                                  </p>
-                                </div>
+                                <XMarkIcon className="w-3 h-3" />
                               </button>
-                            )}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                            {!hasNoMatches && filteredDisasters.length === 0 && !disasterSearchQuery && (
-                              <div className="p-4 text-center text-sm text-[var(--text-muted)]">
-                                Start typing to search disasters from Disasters API
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
+                    {hasActiveFilters && (
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">
+                          Active:
+                        </span>
+                        {filterType !== 'all' && (
+                          <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                            Type: {filterType}
+                          </span>
+                        )}
+                        {filterSeverity !== 'all' && (
+                          <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                            Severity: {filterSeverity}
+                          </span>
+                        )}
+                        {filterState !== 'all' && (
+                          <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                            State: {filterState}
+                          </span>
+                        )}
+                        {filterFromDate && (
+                          <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                            From: {filterFromDate}
+                          </span>
+                        )}
+                        {filterToDate && (
+                          <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full border border-purple-500/20">
+                            To: {filterToDate}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                Search by disaster name or location. If not found, click the + icon to add as custom disaster.
-              </p>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Map */}
+            <div className="lg:col-span-2">
+              <Card padding="none" className="h-[600px] overflow-hidden">
+                <div className="h-full">
+                  <LiveDisasterMap
+                    disasters={filteredDisasters.filter((d: any) => {
+                      const c = d.location?.coordinates;
+                      return c && (Array.isArray(c) ? c.length >= 2 : c?.lat != null && c?.lng != null);
+                    }).map((d: any) => {
+                      const c = d.location?.coordinates;
+                      let coordinates: { lat: number; lng: number } | undefined;
+                      if (Array.isArray(c) && c.length >= 2) {
+                        coordinates = { lat: Number(c[1]), lng: Number(c[0]) };
+                      } else if (c && typeof c === 'object' && 'lat' in c && 'lng' in c) {
+                        coordinates = { lat: Number(c.lat), lng: Number(c.lng) };
+                      }
+                      return {
+                        id: d.id,
+                        title: d.title,
+                        type: d.type,
+                        severity: d.severity,
+                        description: d.description,
+                        date: d.date,
+                        magnitude: d.magnitude,
+                        magnitudeUnit: d.magnitudeUnit,
+                        location: {
+                          coordinates,
+                          country: d.location?.country,
+                          state: d.location?.state,
+                        },
+                        source: d.source === 'database' ? 'database' : 'live',
+                      };
+                    })}
+                    selectedId={selectedDisaster?.id ?? selectedDisaster?._id}
+                    highlightedId={highlightedDisasterId}
+                    onSelectDisaster={(id) => {
+                      const disaster = allDisasters.find(d => d.id === id) || filteredDisasters.find(d => d.id === id);
+                      if (disaster) {
+                        setSelectedDisaster(disaster);
+                        setHighlightedDisasterId(id);
+                        setTimeout(() => setHighlightedDisasterId(null), 2000);
+                      }
+                    }}
+                    filterSeverity={filterSeverity}
+                    onSeverityClick={(severity) => setFilterSeverity(prev => prev === severity ? 'all' : severity)}
+                    activeFilterType={filterType !== 'all' ? filterType : undefined}
+                  />
+                </div>
+              </Card>
             </div>
 
-            {/* Auto-filled fields when NASA disaster is selected */}
-            {formData.selectedNasaDisasterId && !formData.useCustomDisaster && (
-              <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-2">
-                <p className="text-xs font-medium text-purple-400">Auto-filled from Disasters API:</p>
-                <div className="text-xs text-[var(--text-muted)] space-y-1">
-                  <p><span className="font-medium">Title:</span> {formData.title}</p>
-                  <p><span className="font-medium">Type:</span> {formData.type}</p>
-                  <p><span className="font-medium">Severity:</span> {formData.severity}</p>
-                  <p><span className="font-medium">Coordinates:</span> {formData.lat}, {formData.lng}</p>
+            {/* Sidebar - Events List */}
+            <div className="lg:col-span-1">
+              <Card padding="none" className="h-[600px] flex flex-col">
+                <div className="p-3 border-b border-[var(--border-color)] bg-[var(--bg-input)] shrink-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Showing <span className="font-semibold text-[var(--text-primary)]">{listFilteredDisasters.length}</span> of <span className="font-semibold text-[var(--text-primary)]">{filteredDisasters.length}</span> events
+                    </p>
+                    {selectedDisaster && (
+                      <button
+                        onClick={() => setSelectedDisaster(null)}
+                        className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 shrink-0"
+                      >
+                        <XMarkIcon className="w-3 h-3" />
+                        Deselect
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3 relative">
+                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
+                    <Input
+                      type="text"
+                      placeholder="Search in list..."
+                      value={listSearchQuery}
+                      onChange={(e) => setListSearchQuery(e.target.value)}
+                      className="pl-9 pr-8 py-2 text-xs w-full bg-[var(--bg-card)] border-purple-500/30 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20 rounded-md shadow-sm transition-all duration-200"
+                    />
+                    {listSearchQuery && (
+                      <button
+                        onClick={() => setListSearchQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-purple-500/10 rounded-md transition-colors"
+                      >
+                        <XMarkIcon className="w-3 h-3 text-[var(--text-muted)]" />
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Events List */}
+                <div className="flex-1 overflow-y-auto">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                    </div>
+                  ) : filteredDisasters.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                      <GlobeAltIcon className="w-12 h-12 text-[var(--text-muted)] mb-3" />
+                      <p className="text-[var(--text-muted)]">No disasters matching filters</p>
+                    </div>
+                  ) : listFilteredDisasters.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                      <MagnifyingGlassIcon className="w-12 h-12 text-[var(--text-muted)] mb-3" />
+                      <p className="text-[var(--text-muted)]">No disasters match your search</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">Try a different search term</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[var(--border-color)]">
+                      {listFilteredDisasters.map((disaster, index) => {
+                        const colors = severityColors[disaster.severity] || severityColors.medium;
+                        const Icon = typeIcons[disaster.type] || typeIcons.default;
+                        const disasterId = disaster.id ?? disaster._id ?? `disaster-${index}`;
+                        const isSelected = selectedDisaster && (selectedDisaster.id === disaster.id || selectedDisaster._id === disaster._id);
+                        const isExpanded = expandedListDisasterId === disasterId;
+                        const listItemKey = `list-${index}-${disasterId}-${(disaster.source ?? 'live')}`;
+
+                        return (
+                          <button
+                            key={listItemKey}
+                            id={`disaster-${listItemKey}`}
+                            onClick={() => {
+                              if (isExpanded) {
+                                setExpandedListDisasterId(null);
+                                setSelectedDisaster(null);
+                                setSelectedListKey(null);
+                              } else {
+                                setExpandedListDisasterId(disasterId);
+                                setSelectedDisaster(disaster);
+                                setSelectedListKey(listItemKey);
+                              }
+                              setHighlightedDisasterId(disaster.id ?? disaster._id ?? null);
+                              setTimeout(() => setHighlightedDisasterId(null), 2000);
+                            }}
+                            className={`w-full p-4 text-left hover:bg-[var(--bg-input)] transition-all duration-200 ${isExpanded
+                              ? 'bg-[var(--bg-input)] border-l-4 border-purple-500 shadow-lg'
+                              : highlightedDisasterId === disasterId
+                                ? 'bg-purple-500/10 border-l-4 border-purple-400 animate-pulse'
+                                : 'border-l-4 border-transparent'
+                              }`}
+                            onMouseEnter={() => setHighlightedDisasterId(disasterId)}
+                            onMouseLeave={() => {
+                              if (highlightedDisasterId === disasterId && !isExpanded) {
+                                setHighlightedDisasterId(null);
+                              }
+                            }}
+                          >
+                            <div className="flex gap-3">
+                              <div className={`w-10 h-10 rounded-xl ${colors.bg} flex items-center justify-center shrink-0`}>
+                                <Icon className={`w-5 h-5 ${colors.text}`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <h4 className="font-medium text-[var(--text-primary)] text-sm line-clamp-1">
+                                    {disaster.title}
+                                  </h4>
+                                  <Badge
+                                    variant={disaster.severity === 'critical' ? 'danger' : disaster.severity === 'high' ? 'warning' : 'secondary'}
+                                    size="sm"
+                                  >
+                                    {disaster.severity}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-2">
+                                  <span className="font-mono bg-[var(--bg-card)] px-1 py-0.5 rounded mr-1 border border-[var(--border-color)]">
+                                    {disaster.displayId}
+                                  </span>
+                                  {disaster.category || disaster.type}
+                                  {disaster.location?.country && ` • ${disaster.location.country}`}
+                                  {disaster.location?.state && ` • ${disaster.location.state}`}
+                                  {disaster.isLive && <span className="text-emerald-400 ml-1">• LIVE</span>}
+                                </p>
+                                <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                                  <span className="flex items-center gap-1">
+                                    <ClockIcon className="w-3 h-3" />
+                                    {disaster.date ? new Date(disaster.date).toLocaleDateString() : 'N/A'}
+                                  </span>
+                                  {disaster.magnitude && (
+                                    <span className="flex items-center gap-1">
+                                      <SignalIcon className="w-3 h-3" />
+                                      {disaster.magnitude} {disaster.magnitudeUnit}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Expanded Details - only this item (carousel: one expanded at a time) */}
+                            {isExpanded && (
+                              <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
+                                <p className="text-sm text-[var(--text-secondary)] mb-4">
+                                  {disaster.description}
+                                </p>
+                                {disaster.url && (
+                                  <a
+                                    href={disaster.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    View Source
+                                    <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Data Sources */}
+                <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-input)]">
+                  <p className="text-xs text-[var(--text-muted)] text-center">
+                    Data from <span className="text-purple-400">Disasters API</span> (microservice) & <span className="text-purple-400">ReliefWeb</span>
+                  </p>
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* All Disasters from Database Section */}
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-[var(--text-primary)]">All Disasters</h3>
+                <p className="text-sm text-[var(--text-muted)]">
+                  Showing {stats.live} live disasters and {stats.database} custom (worldwide)
+                </p>
               </div>
+              {canManage && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      setSelectedManagedDisaster(null);
+                      setFormData({
+                        title: '', type: 'flood', description: '', severity: 'medium', status: 'active',
+                        address: '', locationType: 'local', range: '', country: 'USA',
+                        lat: '', lng: '', estimatedAffectedPeople: '',
+                        selectedNasaDisasterId: '', useCustomDisaster: false,
+                      });
+                      setShowAddModal(true);
+                    } catch (error) {
+                      console.error('Error opening add disaster modal:', error);
+                      // Still open the modal even if fetch fails
+                      setShowAddModal(true);
+                    }
+                  }}
+                  leftIcon={<PlusIcon className="w-4 h-4" />}
+                  variant="gradient"
+                >
+                  Add Disaster
+                </Button>
+              )}
+            </div>
+
+            {/* Search Bar */}
+            <div className="mb-4">
+              <Input
+                icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+                placeholder="Search all disasters..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* All Disasters Table - Show only database disasters */}
+            {isLoadingDatabase ? (
+              <Card className="p-6">
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-3 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                </div>
+              </Card>
+            ) : databaseDisasters.length === 0 ? (
+              <Card className="p-6">
+                <div className="text-center py-12">
+                  <MapPinIcon className="w-16 h-16 mx-auto text-[var(--text-muted)] mb-4" />
+                  <p className="text-[var(--text-secondary)]">No disasters in database</p>
+                  {canManage && (
+                    <p className="text-sm text-[var(--text-muted)] mt-2">Click "Add Disaster" to create one</p>
+                  )}
+                </div>
+              </Card>
+            ) : (
+              <Table
+                rowKey={(d, i) => d._id ?? `db-disaster-${i}`}
+                data={databaseDisasters.filter(d => {
+                  // Apply search filter
+                  if (searchQuery) {
+                    const query = searchQuery.toLowerCase();
+                    return d.title.toLowerCase().includes(query) ||
+                      d.description?.toLowerCase().includes(query) ||
+                      d.type.toLowerCase().includes(query) ||
+                      d.location?.city?.toLowerCase().includes(query) ||
+                      d.location?.state?.toLowerCase().includes(query);
+                  }
+                  return true;
+                })}
+                isLoading={isLoadingDatabase}
+                emptyMessage="No disasters found"
+                columns={[
+                  {
+                    key: 'title',
+                    label: 'Disaster',
+                    width: '56%',
+                    render: (disaster: ManagedDisaster) => {
+                      const Icon = typeIcons[disaster.type] || typeIcons.default;
+                      const colors = severityColors[disaster.severity] || severityColors.medium;
+                      return (
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-10 h-10 rounded-lg ${colors.bg} flex items-center justify-center shrink-0`}>
+                            <Icon className={`w-5 h-5 ${colors.text}`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-[var(--text-primary)] truncate" title={disaster.title}>
+                              {disaster.id && (
+                                <span className="font-mono bg-[var(--bg-card)] px-1 py-0.5 rounded mr-1 border border-[var(--border-color)] text-xs text-[var(--text-secondary)]">
+                                  {disaster.id}
+                                </span>
+                              )}
+                              {disaster.title}
+                            </div>
+                            <div className="text-xs text-[var(--text-muted)] truncate capitalize" title={disaster.type}>{disaster.type}</div>
+                          </div>
+                        </div>
+                      );
+                    },
+                  },
+                  {
+                    key: 'location',
+                    label: 'Location',
+                    width: '18%',
+                    render: (disaster: ManagedDisaster) => {
+                      const loc = [disaster.location?.address, disaster.location?.city, disaster.location?.state].filter(Boolean).join(', ') || 'Unknown';
+                      return (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <MapPinIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                          <span className="text-sm truncate block min-w-0" title={loc}>{loc}</span>
+                        </div>
+                      );
+                    },
+                  },
+                  {
+                    key: 'severity',
+                    label: 'Severity',
+                    width: '10%',
+                    render: (disaster: ManagedDisaster) => (
+                      <Badge
+                        variant={disaster.severity === 'critical' ? 'danger' : disaster.severity === 'high' ? 'warning' : 'secondary'}
+                        size="sm"
+                        className="capitalize"
+                      >
+                        {disaster.severity}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: 'status',
+                    label: 'Status',
+                    width: '10%',
+                    render: (disaster: ManagedDisaster) => (
+                      <Badge
+                        variant={disaster.status === 'active' ? 'danger' : disaster.status === 'resolved' ? 'success' : 'secondary'}
+                        size="sm"
+                      >
+                        {disaster.status}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: 'assignedVolunteers',
+                    label: 'Assigned Volunteers',
+                    width: '25%',
+                    render: (disaster: ManagedDisaster) => {
+                      const assignedCount = disaster.assignedVolunteers?.length || 0;
+                      return (
+                        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (assignedCount > 0) {
+                                setSelectedDisasterForVolunteers(disaster);
+                                setShowVolunteersModal(true);
+                              }
+                            }}
+                            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer flex-1 text-left min-w-0"
+                            disabled={assignedCount === 0}
+                          >
+                            <UserGroupIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                            <span className="text-sm font-medium shrink-0">{assignedCount}</span>
+                            {assignedCount > 0 && (
+                              <div className="flex-1 min-w-0 overflow-hidden">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {disaster.assignedVolunteers?.slice(0, 2).map((av, idx) => {
+                                    let volId = '';
+                                    if (typeof av === 'string') {
+                                      volId = av;
+                                    } else if (typeof av === 'object' && av !== null) {
+                                      const vId = av.volunteerId || av;
+                                      if (typeof vId === 'string') volId = vId;
+                                      else if (typeof vId === 'object') {
+                                        const o = vId as { _id?: string; volunteerId?: string };
+                                        volId = o._id ?? o.volunteerId ?? String(o._id ?? o.volunteerId ?? '');
+                                      }
+                                    }
+                                    const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
+                                    let volunteerName = 'Unknown';
+                                    if (fullVolunteer?.userId) {
+                                      if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
+                                        volunteerName = `${fullVolunteer.userId.firstName} ${fullVolunteer.userId.lastName}`;
+                                      } else if (fullVolunteer.userId.name) {
+                                        volunteerName = fullVolunteer.userId.name;
+                                      }
+                                    } else {
+                                      volunteerName = getVolunteerName(av.volunteerId);
+                                    }
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className="flex items-center gap-1.5 px-1.5 py-0.5 bg-[var(--bg-input)] rounded-md border border-[var(--border-color)] shrink-0 max-w-[120px] min-w-0"
+                                        title={volunteerName}
+                                      >
+                                        <div className="w-4 h-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-[9px] font-bold shrink-0">
+                                          {volunteerName.charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="text-xs text-[var(--text-primary)] truncate block min-w-0">
+                                          {volunteerName}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                  {assignedCount > 2 && (
+                                    <span className="text-xs text-[var(--text-muted)] shrink-0">+{assignedCount - 2} more</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    },
+                  },
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    width: '15%',
+                    render: (disaster: ManagedDisaster) => {
+                      if (!canManage) return <span className="text-[var(--text-muted)] text-sm">—</span>;
+                      const openEdit = () => {
+                        const lat = Array.isArray(disaster.location?.coordinates) ? disaster.location.coordinates[1] : (disaster.location?.coordinates as any)?.lat;
+                        const lng = Array.isArray(disaster.location?.coordinates) ? disaster.location.coordinates[0] : (disaster.location?.coordinates as any)?.lng;
+                        setSelectedManagedDisaster(disaster);
+                        setFormData({
+                          title: disaster.title,
+                          type: disaster.type,
+                          description: disaster.description,
+                          severity: disaster.severity,
+                          status: disaster.status,
+                          address: disaster.location?.address || '',
+                          locationType: 'local',
+                          range: '',
+                          country: disaster.location?.country || 'USA',
+                          lat: lat?.toString() || '',
+                          lng: lng?.toString() || '',
+                          estimatedAffectedPeople: disaster.estimatedAffectedPeople?.toString() || '',
+                          selectedNasaDisasterId: '',
+                          useCustomDisaster: true,
+                        });
+                        setShowAddModal(true);
+                      };
+                      return (
+                        <div className="flex items-center justify-center gap-1">
+                          {disaster.source !== 'live' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setSelectedDisasterForAssign(disaster); setShowAssignVolunteerModal(true); }}
+                                className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/20 transition-colors"
+                                title="Assign Volunteer"
+                              >
+                                <UserPlusIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openEdit(); }}
+                                className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-colors"
+                                title="Edit"
+                              >
+                                <PencilIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleDeleteDisaster(disaster.id || disaster._id); }}
+                                className="p-2 rounded-lg text-red-400 hover:bg-red-500/20 transition-colors"
+                                title="Delete"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-[var(--text-muted)] italic px-2">Managed Externally</span>
+                          )}
+                        </div>
+                      );
+                    },
+                  },
+                ]}
+              />
             )}
           </div>
 
-          {/* Type and Severity - Always visible */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Type *</label>
-              <Select
-                value={formData.type}
-                onChange={(value) => setFormData({ ...formData, type: value })}
-                options={[
-                  { value: 'flood', label: 'Flood' },
-                  { value: 'earthquake', label: 'Earthquake' },
-                  { value: 'cyclone', label: 'Cyclone' },
-                  { value: 'fire', label: 'Fire' },
-                  { value: 'wildfire', label: 'Wildfire' },
-                  { value: 'landslide', label: 'Landslide' },
-                  { value: 'drought', label: 'Drought' },
-                  { value: 'other', label: 'Other' },
-                ]}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Severity *</label>
-              <Select
-                value={formData.severity}
-                onChange={(value) => setFormData({ ...formData, severity: value })}
-                options={[
-                  { value: 'low', label: 'Low' },
-                  { value: 'medium', label: 'Medium' },
-                  { value: 'high', label: 'High' },
-                  { value: 'critical', label: 'Critical' },
-                ]}
-              />
-            </div>
-          </div>
+          {/* Add/Edit Disaster Modal */}
+          <Modal
+            isOpen={showAddModal}
+            onClose={() => {
+              setShowAddModal(false);
+              setSelectedManagedDisaster(null);
+            }}
+            title={selectedManagedDisaster ? 'Edit Disaster' : 'Add New Disaster'}
+            size="lg"
+            className="z-[10001]"
+          >
+            <form onSubmit={handleSubmitDisaster} className="space-y-4">
+              {/* Combined Disaster Selection - Single Field */}
+              <div className="space-y-4">
+                <div className="relative">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                    Select Disaster <span className="text-red-400">*</span>
+                  </label>
+                  <div className="relative disaster-search-container z-[60]">
+                    <div className="relative">
+                      <Input
+                        value={formData.selectedNasaDisasterId
+                          ? (allDisasters.find(d => (d.id ?? d._id) === formData.selectedNasaDisasterId)?.title) || formData.title || disasterSearchQuery
+                          : formData.title || disasterSearchQuery
+                        }
+                        onChange={(e) => {
+                          const query = e.target.value;
+                          setDisasterSearchQuery(query);
+                          setShowDisasterDropdown(true);
+                          // If user is typing, set as custom disaster title
+                          setFormData({
+                            ...formData,
+                            title: query,
+                            selectedNasaDisasterId: '',
+                            useCustomDisaster: true
+                          });
+                        }}
+                        onFocus={() => setShowDisasterDropdown(true)}
+                        onBlur={() => {
+                          // Delay closing to allow click on dropdown item
+                          setTimeout(() => setShowDisasterDropdown(false), 200);
+                        }}
+                        placeholder="Search disaster by name or location, or type custom disaster name..."
+                        icon={
+                          disasterSearchQuery && !formData.selectedNasaDisasterId ? (
+                            <PlusIcon className="w-5 h-5 text-purple-500" />
+                          ) : (
+                            <MagnifyingGlassIcon className="w-5 h-5" />
+                          )
+                        }
+                        iconPosition="right"
+                      />
+                      {formData.selectedNasaDisasterId && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormData({ ...formData, selectedNasaDisasterId: '', useCustomDisaster: true, title: '' });
+                            setDisasterSearchQuery('');
+                          }}
+                          className="absolute right-14 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--bg-input)] transition-colors z-20"
+                        >
+                          <XMarkIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                        </button>
+                      )}
+                      {disasterSearchQuery && !formData.selectedNasaDisasterId && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Use the typed value as custom disaster
+                            setFormData({
+                              ...formData,
+                              title: disasterSearchQuery,
+                              useCustomDisaster: true,
+                              selectedNasaDisasterId: ''
+                            });
+                            setDisasterSearchQuery('');
+                            setShowDisasterDropdown(false);
+                          }}
+                          className="absolute right-14 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-[var(--bg-input)] transition-colors z-20"
+                          title="Add custom disaster"
+                        >
+                          <PlusIcon className="w-5 h-5 text-purple-500" />
+                        </button>
+                      )}
+                    </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Description *</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Disaster description"
-              className="w-full px-4 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500"
-              rows={3}
-              required
-            />
-          </div>
-          {/* Affected People - Removed Affected Area */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Affected People</label>
-            <Input
-              type="number"
-              value={formData.estimatedAffectedPeople}
-              onChange={(e) => setFormData({ ...formData, estimatedAffectedPeople: e.target.value })}
-              placeholder="0"
-            />
-          </div>
+                    {/* Searchable Dropdown */}
+                    {showDisasterDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-2xl z-[1100] max-h-60 overflow-y-auto">
+                        {(() => {
+                          // Use allDisasters which perfectly matches the live module list
+                          const filteredDisasters = allDisasters.filter((disaster: any) => {
+                            if (!disasterSearchQuery) return true;
+                            const query = disasterSearchQuery.toLowerCase();
+                            const titleMatch = disaster.title?.toLowerCase().includes(query);
+                            const locationMatch =
+                              disaster.location?.state?.toLowerCase().includes(query) ||
+                              disaster.location?.country?.toLowerCase().includes(query) ||
+                              disaster.location?.region?.toLowerCase().includes(query);
+                            const typeMatch = disaster.type?.toLowerCase().includes(query);
+                            const idMatch = disaster.displayId?.toLowerCase().includes(query) || disaster.id?.toLowerCase().includes(query);
+                            return titleMatch || locationMatch || typeMatch || idMatch;
+                          });
 
-          {/* Location Type: Local or Widespread */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-              Location Type <span className="text-red-400">*</span>
-            </label>
-            <Select
-              value={formData.locationType}
-              onChange={(value) => setFormData({ ...formData, locationType: value as 'local' | 'widespread' })}
-              options={[
-                { value: 'local', label: 'Local' },
-                { value: 'widespread', label: 'Widespread' },
-              ]}
-            />
-          </div>
+                          // Check if query doesn't match any disaster
+                          const hasNoMatches = disasterSearchQuery && filteredDisasters.length === 0;
+                          const queryMatchesSelected = filteredDisasters.some(d =>
+                            d.title?.toLowerCase() === disasterSearchQuery.toLowerCase()
+                          );
 
-          {/* Address Field - Always visible */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-              Address <span className="text-red-400">*</span>
-            </label>
-            <Input
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              placeholder={formData.locationType === 'widespread' ? 'Enter Address' : 'Enter address'}
-              required
-              id="disaster-address-input"
-            />
-            {/* {formData.locationType === 'widespread' && (
+                          return (
+                            <>
+                              {filteredDisasters.length > 0 && (
+                                <>
+                                  {filteredDisasters.map((disaster, ddIndex) => {
+                                    const did = disaster.id || disaster._id;
+                                    const isSelected = formData.selectedNasaDisasterId === did;
+                                    const dropdownItemKey = `dd-${ddIndex}-${did}-${(disaster.source ?? 'live')}`;
+                                    const coords = disaster.location?.coordinates;
+                                    const locationStr = [
+                                      disaster.location?.region,
+                                      disaster.location?.state,
+                                      disaster.location?.country
+                                    ].filter(Boolean).join(', ') || 'Unknown Location';
+
+                                    return (
+                                      <button
+                                        key={dropdownItemKey}
+                                        type="button"
+                                        onClick={() => {
+                                          // Build address from location data
+                                          let addressParts = [];
+                                          if (disaster.location?.state) {
+                                            addressParts.push(disaster.location.state);
+                                          }
+                                          if (disaster.location?.country) {
+                                            addressParts.push(disaster.location.country);
+                                          } else {
+                                            addressParts.push('USA');
+                                          }
+                                          const address = addressParts.join(', ') || 'USA';
+
+                                          setFormData({
+                                            ...formData,
+                                            selectedNasaDisasterId: did,
+                                            useCustomDisaster: false,
+                                            title: disaster.title,
+                                            description: disaster.description || '',
+                                            type: disaster.type,
+                                            severity: disaster.severity,
+                                            lat: coords?.lat?.toString() || '',
+                                            lng: coords?.lng?.toString() || '',
+                                            address: address,
+                                          });
+                                          setDisasterSearchQuery('');
+                                          setShowDisasterDropdown(false);
+                                        }}
+                                        className={`w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-b border-[var(--border-color)] last:border-b-0 ${isSelected ? 'bg-purple-500/10 border-l-4 border-purple-500' : ''
+                                          }`}
+                                      >
+                                        <div className="flex items-start gap-3">
+                                          <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-[var(--text-primary)] mb-1">
+                                              {disaster.id && <span className="font-mono bg-[var(--bg-card)] px-1 py-0.5 rounded mr-1 border border-[var(--border-color)] text-xs text-[var(--text-secondary)]">{disaster.id}</span>}
+                                              {disaster.title}
+                                            </p>
+                                            <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--text-muted)]">
+                                              <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 capitalize">
+                                                {disaster.type}
+                                              </span>
+                                              <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 capitalize">
+                                                {disaster.severity}
+                                              </span>
+                                              <span className="flex items-center gap-1">
+                                                <MapPinIcon className="w-3 h-3" />
+                                                {locationStr}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          {isSelected && (
+                                            <CheckCircleIcon className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </>
+                              )}
+
+                              {/* Show "Add Custom Disaster" option when no matches found */}
+                              {hasNoMatches && !queryMatchesSelected && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      title: disasterSearchQuery,
+                                      useCustomDisaster: true,
+                                      selectedNasaDisasterId: ''
+                                    });
+                                    setDisasterSearchQuery('');
+                                    setShowDisasterDropdown(false);
+                                  }}
+                                  className="w-full px-4 py-3 text-left hover:bg-[var(--bg-input)] transition-colors border-t border-[var(--border-color)] flex items-center gap-3 text-purple-500"
+                                >
+                                  <PlusIcon className="w-5 h-5" />
+                                  <div>
+                                    <p className="font-medium">Add Custom Disaster</p>
+                                    <p className="text-xs text-[var(--text-muted)]">
+                                      "{disasterSearchQuery}" will be added as a custom disaster
+                                    </p>
+                                  </div>
+                                </button>
+                              )}
+
+                              {!hasNoMatches && filteredDisasters.length === 0 && !disasterSearchQuery && (
+                                <div className="p-4 text-center text-sm text-[var(--text-muted)]">
+                                  Start typing to search disasters from Disasters API
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
+                    Search by disaster name or location. If not found, click the + icon to add as custom disaster.
+                  </p>
+                </div>
+
+                {/* Auto-filled fields when NASA disaster is selected */}
+                {formData.selectedNasaDisasterId && !formData.useCustomDisaster && (
+                  <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-2">
+                    <p className="text-xs font-medium text-purple-400">Auto-filled from Disasters API:</p>
+                    <div className="text-xs text-[var(--text-muted)] space-y-1">
+                      <p><span className="font-medium">Title:</span> {formData.title}</p>
+                      <p><span className="font-medium">Type:</span> {formData.type}</p>
+                      <p><span className="font-medium">Severity:</span> {formData.severity}</p>
+                      <p><span className="font-medium">Coordinates:</span> {formData.lat}, {formData.lng}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Type and Severity - Always visible */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Type *</label>
+                  <Select
+                    value={formData.type}
+                    onChange={(value) => setFormData({ ...formData, type: value })}
+                    options={[
+                      { value: 'flood', label: 'Flood' },
+                      { value: 'earthquake', label: 'Earthquake' },
+                      { value: 'cyclone', label: 'Cyclone' },
+                      { value: 'fire', label: 'Fire' },
+                      { value: 'wildfire', label: 'Wildfire' },
+                      { value: 'landslide', label: 'Landslide' },
+                      { value: 'drought', label: 'Drought' },
+                      { value: 'other', label: 'Other' },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Severity *</label>
+                  <Select
+                    value={formData.severity}
+                    onChange={(value) => setFormData({ ...formData, severity: value })}
+                    options={[
+                      { value: 'low', label: 'Low' },
+                      { value: 'medium', label: 'Medium' },
+                      { value: 'high', label: 'High' },
+                      { value: 'critical', label: 'Critical' },
+                    ]}
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Description *</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Disaster description"
+                  className="w-full px-4 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  rows={3}
+                  required
+                />
+              </div>
+              {/* Affected People - Removed Affected Area */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Affected People</label>
+                <Input
+                  type="number"
+                  value={formData.estimatedAffectedPeople}
+                  onChange={(e) => setFormData({ ...formData, estimatedAffectedPeople: e.target.value })}
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Location Type: Local or Widespread */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                  Location Type <span className="text-red-400">*</span>
+                </label>
+                <Select
+                  value={formData.locationType}
+                  onChange={(value) => setFormData({ ...formData, locationType: value as 'local' | 'widespread' })}
+                  options={[
+                    { value: 'local', label: 'Local' },
+                    { value: 'widespread', label: 'Widespread' },
+                  ]}
+                />
+              </div>
+
+              {/* Address Field - Always visible */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                  Address <span className="text-red-400">*</span>
+                </label>
+                <Input
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder={formData.locationType === 'widespread' ? 'Enter Address' : 'Enter address'}
+                  required
+                  id="disaster-address-input"
+                />
+                {/* {formData.locationType === 'widespread' && (
               <p className="text-xs text-[var(--text-muted)] mt-1">
                 Start typing to search for an address. Google autocomplete will be enabled if API key is configured.
               </p>
             )} */}
-          </div>
+              </div>
 
-          {/* Range of Disaster */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
-              Range of Disaster <span className="text-red-400">*</span>
-            </label>
-            <Select
-              value={formData.range}
-              onChange={(value) => setFormData({ ...formData, range: value })}
-              options={[
-                { value: '<1', label: 'Less than 1 mile' },
-                { value: '1-5', label: '1 - 5 miles' },
-                { value: '5-10', label: '5 - 10 miles' },
-                { value: '10-15', label: '10 - 15 miles' },
-                { value: '15-20', label: '15 - 20 miles' },
-                { value: '20-25', label: '20 - 25 miles' },
-                { value: '25-30', label: '25 - 30 miles' },
-                { value: '30-35', label: '30 - 35 miles' },
-                { value: '35-40', label: '35 - 40 miles' },
-                { value: '40-45', label: '40 - 45 miles' },
-                { value: '45-50', label: '45 - 50 miles' },
-                { value: '50+', label: 'More than 50 miles' },
-              ]}
-              required
-            />
-          </div>
+              {/* Range of Disaster */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+                  Range of Disaster <span className="text-red-400">*</span>
+                </label>
+                <Select
+                  value={formData.range}
+                  onChange={(value) => setFormData({ ...formData, range: value })}
+                  options={[
+                    { value: '<1', label: 'Less than 1 mile' },
+                    { value: '1-5', label: '1 - 5 miles' },
+                    { value: '5-10', label: '5 - 10 miles' },
+                    { value: '10-15', label: '10 - 15 miles' },
+                    { value: '15-20', label: '15 - 20 miles' },
+                    { value: '20-25', label: '20 - 25 miles' },
+                    { value: '25-30', label: '25 - 30 miles' },
+                    { value: '30-35', label: '30 - 35 miles' },
+                    { value: '35-40', label: '35 - 40 miles' },
+                    { value: '40-45', label: '40 - 45 miles' },
+                    { value: '45-50', label: '45 - 50 miles' },
+                    { value: '50+', label: 'More than 50 miles' },
+                  ]}
+                  required
+                />
+              </div>
 
-          {/* Coordinates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Latitude</label>
-              <Input
-                type="number"
-                step="any"
-                value={formData.lat}
-                onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
-                placeholder="e.g., 40.7128"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Longitude</label>
-              <Input
-                type="number"
-                step="any"
-                value={formData.lng}
-                onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
-                placeholder="e.g., -74.0060"
-              />
-            </div>
-          </div>
-
-
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-color)]">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setShowAddModal(false);
-                setSelectedManagedDisaster(null);
-                setFormData({
-                  title: '', type: 'flood', description: '', severity: 'medium', status: 'active',
-                  address: '', locationType: 'local', range: '', country: 'USA',
-                  lat: '', lng: '', estimatedAffectedPeople: '',
-                  selectedNasaDisasterId: '', useCustomDisaster: false,
-                });
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="gradient">
-              {selectedManagedDisaster ? 'Update' : 'Add'} Disaster
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Assigned Volunteers Modal */}
-      <Modal
-        isOpen={showVolunteersModal}
-        onClose={() => {
-          setShowVolunteersModal(false);
-          setSelectedDisasterForVolunteers(null);
-        }}
-        title={`Assigned Volunteers - ${selectedDisasterForVolunteers?.title || 'Disaster'}`}
-        size="lg"
-        className="z-[10001]"
-      >
-        {selectedDisasterForVolunteers && (
-          <div className="space-y-4">
-            {selectedDisasterForVolunteers.assignedVolunteers && selectedDisasterForVolunteers.assignedVolunteers.length > 0 ? (
-              <div className="space-y-3">
-                {selectedDisasterForVolunteers.assignedVolunteers.map((av, idx) => {
-                  const volunteer = av.volunteerId || av;
-                  let volId = '';
-                  const o = typeof volunteer === 'object' && volunteer ? (volunteer as { _id?: string; volunteerId?: string }) : null;
-                  if (o && (o._id ?? o.volunteerId)) {
-                    const raw = o._id ?? o.volunteerId ?? '';
-                    volId = typeof raw === 'string' ? raw : String(raw);
-                  } else if (typeof volunteer === 'string') {
-                    volId = volunteer;
-                  }
-
-                  // Find full volunteer data from fetched volunteers list
-                  const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
-
-                  // Get name from full volunteer data or fallback to getVolunteerName
-                  let volunteerName = 'Unknown Volunteer';
-                  let volunteerEmail = '';
-                  let volunteerPhone = '';
-
-                  if (fullVolunteer?.userId) {
-                    if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
-                      volunteerName = `${fullVolunteer.userId.firstName} ${fullVolunteer.userId.lastName}`;
-                    } else if (fullVolunteer.userId.name) {
-                      volunteerName = fullVolunteer.userId.name;
-                    }
-                    volunteerEmail = fullVolunteer.userId.email || '';
-                    volunteerPhone = fullVolunteer.userId.phone || '';
-                  } else {
-                    volunteerName = getVolunteerName(av.volunteerId);
-                    volunteerEmail = volunteer?.userId?.email || '';
-                    volunteerPhone = volunteer?.userId?.phone || '';
-                  }
-
-                  const initials = volunteerName.charAt(0).toUpperCase();
-                  const isExpanded = expandedVolunteers.has(volId);
+              {/* Coordinates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Latitude</label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={formData.lat}
+                    onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
+                    placeholder="e.g., 40.7128"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Longitude</label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={formData.lng}
+                    onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
+                    placeholder="e.g., -74.0060"
+                  />
+                </div>
+              </div>
 
 
-                  const toggleExpand = () => {
-                    const newExpanded = new Set(expandedVolunteers);
-                    if (isExpanded) {
-                      newExpanded.delete(volId);
-                    } else {
-                      newExpanded.add(volId);
-                    }
-                    setExpandedVolunteers(newExpanded);
-                  };
 
-                  return (
-                    <div
-                      key={idx}
-                      className="p-4 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg hover:border-purple-500/50 transition-colors"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-lg font-bold shrink-0">
-                          {initials}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-3">
-                            <h4 className="font-semibold text-[var(--text-primary)]">{volunteerName}</h4>
-                            <Badge
-                              variant={av.status === 'active' ? 'success' : av.status === 'completed' ? 'primary' : 'secondary'}
-                              size="sm"
-                              className="capitalize"
-                            >
-                              {av.status}
-                            </Badge>
-                            {canManage && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (volId) {
-                                    handleRemoveVolunteerFromDisaster(selectedDisasterForVolunteers._id, volId);
-                                  }
-                                }}
-                                className="ml-auto p-1.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
-                                title="Remove Volunteer"
-                              >
-                                <TrashIcon className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-color)]">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setSelectedManagedDisaster(null);
+                    setFormData({
+                      title: '', type: 'flood', description: '', severity: 'medium', status: 'active',
+                      address: '', locationType: 'local', range: '', country: 'USA',
+                      lat: '', lng: '', estimatedAffectedPeople: '',
+                      selectedNasaDisasterId: '', useCustomDisaster: false,
+                    });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="gradient">
+                  {selectedManagedDisaster ? 'Update' : 'Add'} Disaster
+                </Button>
+              </div>
+            </form>
+          </Modal>
 
-                          {/* Basic Information - Always Visible */}
-                          <div className="space-y-2 mb-3">
-                            {/* Name - Always show */}
-                            <div className="flex items-center gap-2">
-                              <span className="text-[var(--text-muted)] font-medium text-sm">Name:</span>
-                              <span className="text-[var(--text-primary)] font-semibold">{volunteerName}</span>
+          {/* Assigned Volunteers Modal */}
+          <Modal
+            isOpen={showVolunteersModal}
+            onClose={() => {
+              setShowVolunteersModal(false);
+              setSelectedDisasterForVolunteers(null);
+            }}
+            title={`Assigned Volunteers - ${selectedDisasterForVolunteers?.title || 'Disaster'}`}
+            size="lg"
+            className="z-[10001]"
+          >
+            {selectedDisasterForVolunteers && (
+              <div className="space-y-4">
+                {selectedDisasterForVolunteers.assignedVolunteers && selectedDisasterForVolunteers.assignedVolunteers.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedDisasterForVolunteers.assignedVolunteers.map((av, idx) => {
+                      const volunteer = av.volunteerId || av;
+                      let volId = '';
+                      const o = typeof volunteer === 'object' && volunteer ? (volunteer as { _id?: string; volunteerId?: string }) : null;
+                      if (o && (o._id ?? o.volunteerId)) {
+                        const raw = o._id ?? o.volunteerId ?? '';
+                        volId = typeof raw === 'string' ? raw : String(raw);
+                      } else if (typeof volunteer === 'string') {
+                        volId = volunteer;
+                      }
+
+                      // Find full volunteer data from fetched volunteers list
+                      const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
+
+                      // Get name from full volunteer data or fallback to getVolunteerName
+                      let volunteerName = 'Unknown Volunteer';
+                      let volunteerEmail = '';
+                      let volunteerPhone = '';
+
+                      if (fullVolunteer?.userId) {
+                        if (fullVolunteer.userId.firstName && fullVolunteer.userId.lastName) {
+                          volunteerName = `${fullVolunteer.userId.firstName} ${fullVolunteer.userId.lastName}`;
+                        } else if (fullVolunteer.userId.name) {
+                          volunteerName = fullVolunteer.userId.name;
+                        }
+                        volunteerEmail = fullVolunteer.userId.email || '';
+                        volunteerPhone = fullVolunteer.userId.phone || '';
+                      } else {
+                        volunteerName = getVolunteerName(av.volunteerId);
+                        volunteerEmail = volunteer?.userId?.email || '';
+                        volunteerPhone = volunteer?.userId?.phone || '';
+                      }
+
+                      const initials = volunteerName.charAt(0).toUpperCase();
+                      const isExpanded = expandedVolunteers.has(volId);
+
+
+                      const toggleExpand = () => {
+                        const newExpanded = new Set(expandedVolunteers);
+                        if (isExpanded) {
+                          newExpanded.delete(volId);
+                        } else {
+                          newExpanded.add(volId);
+                        }
+                        setExpandedVolunteers(newExpanded);
+                      };
+
+                      return (
+                        <div
+                          key={idx}
+                          className="p-4 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg hover:border-purple-500/50 transition-colors"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-lg font-bold shrink-0">
+                              {initials}
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                              {/* Volunteer ID */}
-                              {volunteer?.volunteerId && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[var(--text-muted)] font-medium">ID:</span>
-                                  <span className="font-mono text-xs font-bold text-[var(--primary-500)] bg-[var(--primary-500)]/10 px-2 py-1 rounded">
-                                    {volunteer.volunteerId}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Email */}
-                              {volunteerEmail && (
-                                <div className="flex items-center gap-2">
-                                  <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-                                  <span className="text-[var(--text-secondary)] truncate">
-                                    {volunteerEmail}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Phone */}
-                              {volunteerPhone && (
-                                <div className="flex items-center gap-2">
-                                  <PhoneIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-                                  <span className="text-[var(--text-secondary)]">
-                                    {volunteerPhone}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Blood Group */}
-                              {fullVolunteer?.bloodGroup && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[var(--text-muted)] font-medium">Blood Group:</span>
-                                  <span className="text-[var(--text-secondary)] font-semibold">{fullVolunteer.bloodGroup}</span>
-                                </div>
-                              )}
-
-                              {/* Assigned Date */}
-                              {av.assignedAt && (
-                                <div className="flex items-center gap-2">
-                                  <CalendarIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-                                  <span className="text-[var(--text-secondary)]">
-                                    Assigned: {new Date(av.assignedAt).toLocaleDateString()}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Expandable Additional Details */}
-                          {(() => {
-                            const v = volunteer as { _id?: string; volunteerId?: string } | null;
-                            const raw = v?._id ?? v?.volunteerId;
-                            const volId = typeof raw === 'string' ? raw : (raw != null ? String(raw) : '');
-                            const isExpanded = expandedVolunteers.has(volId);
-                            const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
-
-                            if (!fullVolunteer) return null;
-
-                            const toggleExpand = () => {
-                              const newExpanded = new Set(expandedVolunteers);
-                              if (isExpanded) {
-                                newExpanded.delete(volId);
-                              } else {
-                                newExpanded.add(volId);
-                              }
-                              setExpandedVolunteers(newExpanded);
-                            };
-
-                            return (
-                              <div>
-                                <button
-                                  onClick={toggleExpand}
-                                  className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors mb-2"
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-3">
+                                <h4 className="font-semibold text-[var(--text-primary)]">{volunteerName}</h4>
+                                <Badge
+                                  variant={av.status === 'active' ? 'success' : av.status === 'completed' ? 'primary' : 'secondary'}
+                                  size="sm"
+                                  className="capitalize"
                                 >
-                                  {isExpanded ? (
-                                    <>
-                                      <ChevronUpIcon className="w-4 h-4" />
-                                      <span>Hide Details</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ChevronDownIcon className="w-4 h-4" />
-                                      <span>Show More Details</span>
-                                    </>
-                                  )}
-                                </button>
+                                  {av.status}
+                                </Badge>
+                                {canManage && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (volId) {
+                                        handleRemoveVolunteerFromDisaster(selectedDisasterForVolunteers.id || selectedDisasterForVolunteers._id, volId);
+                                      }
+                                    }}
+                                    className="ml-auto p-1.5 rounded-lg text-red-400 hover:bg-red-400/10 transition-colors"
+                                    title="Remove Volunteer"
+                                  >
+                                    <TrashIcon className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
 
-                                {isExpanded && (
-                                  <div className="mt-3 pt-3 border-t border-[var(--border-color)] space-y-3">
-                                    {/* Skills */}
-                                    {fullVolunteer.skills && fullVolunteer.skills.length > 0 && (
-                                      <div>
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <AcademicCapIcon className="w-4 h-4 text-[var(--text-muted)]" />
-                                          <span className="text-xs font-semibold text-[var(--text-muted)] uppercase">Skills</span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                          {fullVolunteer.skills.slice(0, 5).map((skill: string, i: number) => (
-                                            <Badge key={i} variant="primary" size="sm">{skill}</Badge>
-                                          ))}
-                                          {fullVolunteer.skills.length > 5 && (
-                                            <Badge variant="secondary" size="sm">+{fullVolunteer.skills.length - 5} more</Badge>
+                              {/* Basic Information - Always Visible */}
+                              <div className="space-y-2 mb-3">
+                                {/* Name - Always show */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[var(--text-muted)] font-medium text-sm">Name:</span>
+                                  <span className="text-[var(--text-primary)] font-semibold">{volunteerName}</span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                  {/* Volunteer ID */}
+                                  {volunteer?.volunteerId && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[var(--text-muted)] font-medium">ID:</span>
+                                      <span className="font-mono text-xs font-bold text-[var(--primary-500)] bg-[var(--primary-500)]/10 px-2 py-1 rounded">
+                                        {volunteer.volunteerId}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Email */}
+                                  {volunteerEmail && (
+                                    <div className="flex items-center gap-2">
+                                      <EnvelopeIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                                      <span className="text-[var(--text-secondary)] truncate">
+                                        {volunteerEmail}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Phone */}
+                                  {volunteerPhone && (
+                                    <div className="flex items-center gap-2">
+                                      <PhoneIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                                      <span className="text-[var(--text-secondary)]">
+                                        {volunteerPhone}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Blood Group */}
+                                  {fullVolunteer?.bloodGroup && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[var(--text-muted)] font-medium">Blood Group:</span>
+                                      <span className="text-[var(--text-secondary)] font-semibold">{fullVolunteer.bloodGroup}</span>
+                                    </div>
+                                  )}
+
+                                  {/* Assigned Date */}
+                                  {av.assignedAt && (
+                                    <div className="flex items-center gap-2">
+                                      <CalendarIcon className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                                      <span className="text-[var(--text-secondary)]">
+                                        Assigned: {new Date(av.assignedAt).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Expandable Additional Details */}
+                              {(() => {
+                                const v = volunteer as { _id?: string; volunteerId?: string } | null;
+                                const raw = v?._id ?? v?.volunteerId;
+                                const volId = typeof raw === 'string' ? raw : (raw != null ? String(raw) : '');
+                                const isExpanded = expandedVolunteers.has(volId);
+                                const fullVolunteer = volunteers.find(v => (v.id || v._id) === volId);
+
+                                if (!fullVolunteer) return null;
+
+                                const toggleExpand = () => {
+                                  const newExpanded = new Set(expandedVolunteers);
+                                  if (isExpanded) {
+                                    newExpanded.delete(volId);
+                                  } else {
+                                    newExpanded.add(volId);
+                                  }
+                                  setExpandedVolunteers(newExpanded);
+                                };
+
+                                return (
+                                  <div>
+                                    <button
+                                      onClick={toggleExpand}
+                                      className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors mb-2"
+                                    >
+                                      {isExpanded ? (
+                                        <>
+                                          <ChevronUpIcon className="w-4 h-4" />
+                                          <span>Hide Details</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ChevronDownIcon className="w-4 h-4" />
+                                          <span>Show More Details</span>
+                                        </>
+                                      )}
+                                    </button>
+
+                                    {isExpanded && (
+                                      <div className="mt-3 pt-3 border-t border-[var(--border-color)] space-y-3">
+                                        {/* Skills */}
+                                        {fullVolunteer.skills && fullVolunteer.skills.length > 0 && (
+                                          <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <AcademicCapIcon className="w-4 h-4 text-[var(--text-muted)]" />
+                                              <span className="text-xs font-semibold text-[var(--text-muted)] uppercase">Skills</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {fullVolunteer.skills.slice(0, 5).map((skill: string, i: number) => (
+                                                <Badge key={i} variant="primary" size="sm">{skill}</Badge>
+                                              ))}
+                                              {fullVolunteer.skills.length > 5 && (
+                                                <Badge variant="secondary" size="sm">+{fullVolunteer.skills.length - 5} more</Badge>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Rating & Experience */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                          {fullVolunteer.rating !== undefined && (
+                                            <div>
+                                              <div className="flex items-center gap-1 mb-1">
+                                                <StarSolidIcon className="w-4 h-4 text-amber-400" />
+                                                <span className="text-xs font-semibold text-[var(--text-muted)]">Rating</span>
+                                              </div>
+                                              <p className="text-sm font-medium text-[var(--text-primary)]">
+                                                {fullVolunteer.rating.toFixed(1)} / 5.0
+                                                {fullVolunteer.totalReviews && (
+                                                  <span className="text-xs text-[var(--text-muted)] ml-1">
+                                                    ({fullVolunteer.totalReviews} reviews)
+                                                  </span>
+                                                )}
+                                              </p>
+                                            </div>
+                                          )}
+                                          {fullVolunteer.completedMissions !== undefined && (
+                                            <div>
+                                              <span className="text-xs font-semibold text-[var(--text-muted)]">Missions</span>
+                                              <p className="text-sm font-medium text-[var(--text-primary)]">
+                                                {fullVolunteer.completedMissions} completed
+                                              </p>
+                                            </div>
+                                          )}
+                                          {fullVolunteer.experience?.years !== undefined && (
+                                            <div>
+                                              <span className="text-xs font-semibold text-[var(--text-muted)]">Experience</span>
+                                              <p className="text-sm font-medium text-[var(--text-primary)]">
+                                                {fullVolunteer.experience.years} years
+                                              </p>
+                                            </div>
+                                          )}
+                                          {fullVolunteer.availability && (
+                                            <div>
+                                              <span className="text-xs font-semibold text-[var(--text-muted)]">Availability</span>
+                                              <p className="text-sm font-medium text-[var(--text-primary)] capitalize">
+                                                {fullVolunteer.availability.replace('_', ' ')}
+                                              </p>
+                                            </div>
                                           )}
                                         </div>
-                                      </div>
-                                    )}
 
-                                    {/* Rating & Experience */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                      {fullVolunteer.rating !== undefined && (
-                                        <div>
-                                          <div className="flex items-center gap-1 mb-1">
-                                            <StarSolidIcon className="w-4 h-4 text-amber-400" />
-                                            <span className="text-xs font-semibold text-[var(--text-muted)]">Rating</span>
+                                        {/* Address */}
+                                        {fullVolunteer.address && (fullVolunteer.address.city || fullVolunteer.address.state) && (
+                                          <div>
+                                            <span className="text-xs font-semibold text-[var(--text-muted)]">Location</span>
+                                            <p className="text-sm text-[var(--text-secondary)]">
+                                              {[fullVolunteer.address.city, fullVolunteer.address.state]
+                                                .filter(Boolean)
+                                                .join(', ')}
+                                            </p>
                                           </div>
-                                          <p className="text-sm font-medium text-[var(--text-primary)]">
-                                            {fullVolunteer.rating.toFixed(1)} / 5.0
-                                            {fullVolunteer.totalReviews && (
-                                              <span className="text-xs text-[var(--text-muted)] ml-1">
-                                                ({fullVolunteer.totalReviews} reviews)
-                                              </span>
-                                            )}
-                                          </p>
-                                        </div>
-                                      )}
-                                      {fullVolunteer.completedMissions !== undefined && (
-                                        <div>
-                                          <span className="text-xs font-semibold text-[var(--text-muted)]">Missions</span>
-                                          <p className="text-sm font-medium text-[var(--text-primary)]">
-                                            {fullVolunteer.completedMissions} completed
-                                          </p>
-                                        </div>
-                                      )}
-                                      {fullVolunteer.experience?.years !== undefined && (
-                                        <div>
-                                          <span className="text-xs font-semibold text-[var(--text-muted)]">Experience</span>
-                                          <p className="text-sm font-medium text-[var(--text-primary)]">
-                                            {fullVolunteer.experience.years} years
-                                          </p>
-                                        </div>
-                                      )}
-                                      {fullVolunteer.availability && (
-                                        <div>
-                                          <span className="text-xs font-semibold text-[var(--text-muted)]">Availability</span>
-                                          <p className="text-sm font-medium text-[var(--text-primary)] capitalize">
-                                            {fullVolunteer.availability.replace('_', ' ')}
-                                          </p>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Address */}
-                                    {fullVolunteer.address && (fullVolunteer.address.city || fullVolunteer.address.state) && (
-                                      <div>
-                                        <span className="text-xs font-semibold text-[var(--text-muted)]">Location</span>
-                                        <p className="text-sm text-[var(--text-secondary)]">
-                                          {[fullVolunteer.address.city, fullVolunteer.address.state]
-                                            .filter(Boolean)
-                                            .join(', ')}
-                                        </p>
+                                        )}
                                       </div>
                                     )}
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })()}
+                                );
+                              })()}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <UserGroupIcon className="w-16 h-16 mx-auto text-[var(--text-muted)] mb-4" />
-                <p className="text-[var(--text-secondary)]">No volunteers assigned to this disaster</p>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <UserGroupIcon className="w-16 h-16 mx-auto text-[var(--text-muted)] mb-4" />
+                    <p className="text-[var(--text-secondary)]">No volunteers assigned to this disaster</p>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
-      </Modal>
+          </Modal>
 
-      {/* Assign Volunteer Modal */}
-      <Modal
-        isOpen={showAssignVolunteerModal}
-        onClose={() => {
-          setShowAssignVolunteerModal(false);
-          setSelectedDisasterForAssign(null);
-          setSelectedVolunteerIds([]);
-          setAssignmentFromDate('');
-          setAssignmentToDate('');
-        }}
-        title={`Assign Volunteers - ${selectedDisasterForAssign?.title || 'Disaster'}`}
-        size="lg"
-        className="z-[10001]"
-      >
-        {selectedDisasterForAssign && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (selectedVolunteerIds.length === 0) {
-                toast.error('Please select at least one volunteer');
-                return;
-              }
-              if (!assignmentFromDate || !assignmentToDate) {
-                toast.error('Please select both from and to dates');
-                return;
-              }
-              if (new Date(assignmentFromDate) > new Date(assignmentToDate)) {
-                toast.error('From date must be before to date');
-                return;
-              }
-
-              try {
-                // Assign all selected volunteers
-                const assignPromises = selectedVolunteerIds.map(volunteerId =>
-                  fetch(`/api/disasters/${selectedDisasterForAssign._id}/assign-volunteer`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                      volunteerId,
-                      fromDate: assignmentFromDate,
-                      toDate: assignmentToDate
-                    })
-                  })
-                );
-
-                const responses = await Promise.all(assignPromises);
-                const results = await Promise.all(responses.map(r => r.json()));
-
-                const successCount = results.filter(r => r.success).length;
-                const failCount = results.length - successCount;
-
-                if (successCount > 0) {
-                  toast.success(`${successCount} volunteer(s) assigned successfully!`);
-                  if (failCount > 0) {
-                    toast.warning(`${failCount} volunteer(s) failed to assign`);
-                  }
-                  await fetchDatabaseDisasters();
-                  await fetchVolunteers();
-                  setShowAssignVolunteerModal(false);
-                  setSelectedDisasterForAssign(null);
-                  setSelectedVolunteerIds([]);
-                  setAssignmentFromDate('');
-                  setAssignmentToDate('');
-                } else {
-                  toast.error('Failed to assign volunteers');
-                }
-              } catch (error) {
-                console.error('Error assigning volunteers:', error);
-                toast.error('Failed to assign volunteers');
-              }
+          {/* Assign Volunteer Modal */}
+          <Modal
+            isOpen={showAssignVolunteerModal}
+            onClose={() => {
+              setShowAssignVolunteerModal(false);
+              setSelectedDisasterForAssign(null);
+              setSelectedVolunteerIds([]);
+              setAssignmentFromDate('');
+              setAssignmentToDate('');
             }}
-            className="space-y-4"
+            title={`Assign Volunteers - ${selectedDisasterForAssign?.title || 'Disaster'}`}
+            size="lg"
+            className="z-[10001]"
           >
-            {/* Date Range Fields */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                  From Date <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={assignmentFromDate}
-                  onChange={(e) => setAssignmentFromDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  required
-                  className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                  To Date <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={assignmentToDate}
-                  onChange={(e) => setAssignmentToDate(e.target.value)}
-                  min={assignmentFromDate || new Date().toISOString().split('T')[0]}
-                  required
-                  className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                />
-              </div>
-            </div>
+            {selectedDisasterForAssign && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (selectedVolunteerIds.length === 0) {
+                    toast.error('Please select at least one volunteer');
+                    return;
+                  }
+                  if (!assignmentFromDate || !assignmentToDate) {
+                    toast.error('Please select both from and to dates');
+                    return;
+                  }
+                  if (new Date(assignmentFromDate) > new Date(assignmentToDate)) {
+                    toast.error('From date must be before to date');
+                    return;
+                  }
 
-            {/* Volunteers List with Checkboxes */}
-            <div>
-              <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">
-                Select Volunteers <span className="text-red-400">*</span>
-              </label>
-              <div className="max-h-[400px] overflow-y-auto border border-[var(--border-color)] rounded-lg p-4 space-y-3">
-                {isLoadingVolunteers ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                    <p className="text-sm text-[var(--text-muted)]">Loading volunteers...</p>
+                  try {
+                    // Assign all selected volunteers
+                    const assignPromises = selectedVolunteerIds.map(volunteerId =>
+                      fetch(`/api/disasters/${selectedDisasterForAssign.id || selectedDisasterForAssign._id}/assign-volunteer`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                          volunteerId,
+                          fromDate: assignmentFromDate,
+                          toDate: assignmentToDate
+                        })
+                      })
+                    );
+
+                    const responses = await Promise.all(assignPromises);
+                    const results = await Promise.all(responses.map(r => r.json()));
+
+                    const successCount = results.filter(r => r.success).length;
+                    const failCount = results.length - successCount;
+
+                    if (successCount > 0) {
+                      toast.success(`${successCount} volunteer(s) assigned successfully!`);
+                      if (failCount > 0) {
+                        toast.warning(`${failCount} volunteer(s) failed to assign`);
+                      }
+                      await fetchDatabaseDisasters();
+                      await fetchVolunteers();
+                      setShowAssignVolunteerModal(false);
+                      setSelectedDisasterForAssign(null);
+                      setSelectedVolunteerIds([]);
+                      setAssignmentFromDate('');
+                      setAssignmentToDate('');
+                    } else {
+                      toast.error('Failed to assign volunteers');
+                    }
+                  } catch (error) {
+                    console.error('Error assigning volunteers:', error);
+                    toast.error('Failed to assign volunteers');
+                  }
+                }}
+                className="space-y-4"
+              >
+                {/* Date Range Fields */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                      From Date <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={assignmentFromDate}
+                      onChange={(e) => setAssignmentFromDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      required
+                      className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                    />
                   </div>
-                ) : volunteers.filter(v => {
-                  // Filter out already assigned volunteers
-                  const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
-                    (av: any) => {
-                      const volId = av.volunteerId;
-                      return typeof volId === 'string' ? volId : (volId as any)?.id?.toString() || (volId as any)?._id?.toString() || '';
-                    }
-                  ) || [];
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                      To Date <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={assignmentToDate}
+                      onChange={(e) => setAssignmentToDate(e.target.value)}
+                      min={assignmentFromDate || new Date().toISOString().split('T')[0]}
+                      required
+                      className="w-full px-3 py-2 bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                    />
+                  </div>
+                </div>
 
-                  // Filter out volunteers who are on mission
-                  const now = new Date();
-                  const hasActiveAssignments = v.assignedDisasters?.some(
-                    (ad: any) => {
-                      const toDate = new Date(ad.toDate);
-                      const status = ad.status;
-                      return toDate > now && (status === 'assigned' || status === 'active');
-                    }
-                  );
-
-                  const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
-
-                  return !assignedVolunteerIds.includes(v.id || v._id) && !isOnMission;
-                }).length === 0 ? (
-                  <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                    All available volunteers are already assigned to this disaster or are currently on mission.
-                  </p>
-                ) : (
-                  volunteers
-                    .filter(v => {
+                {/* Volunteers List with Checkboxes */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">
+                    Select Volunteers <span className="text-red-400">*</span>
+                  </label>
+                  <div className="max-h-[400px] overflow-y-auto border border-[var(--border-color)] rounded-lg p-4 space-y-3">
+                    {isLoadingVolunteers ? (
+                      <div className="flex flex-col items-center justify-center py-12 gap-3">
+                        <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                        <p className="text-sm text-[var(--text-muted)]">Loading volunteers...</p>
+                      </div>
+                    ) : volunteers.filter(v => {
+                      // Filter out already assigned volunteers
                       const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
                         (av: any) => {
                           const volId = av.volunteerId;
@@ -2646,6 +2620,7 @@ export default function LiveDisastersClient() {
                         }
                       ) || [];
 
+                      // Filter out volunteers who are on mission
                       const now = new Date();
                       const hasActiveAssignments = v.assignedDisasters?.some(
                         (ad: any) => {
@@ -2654,92 +2629,119 @@ export default function LiveDisastersClient() {
                           return toDate > now && (status === 'assigned' || status === 'active');
                         }
                       );
+
                       const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
 
                       return !assignedVolunteerIds.includes(v.id || v._id) && !isOnMission;
-                    })
-                    .map((volunteer) => {
-                      const name = volunteer.userId?.firstName && volunteer.userId?.lastName
-                        ? `${volunteer.userId.firstName} ${volunteer.userId.lastName}`
-                        : volunteer.userId?.name || volunteer.volunteerId || 'Unknown';
-                      const isChecked = selectedVolunteerIds.includes(volunteer.id || volunteer._id);
+                    }).length === 0 ? (
+                      <p className="text-sm text-[var(--text-muted)] text-center py-4">
+                        All available volunteers are already assigned to this disaster or are currently on mission.
+                      </p>
+                    ) : (
+                      volunteers
+                        .filter(v => {
+                          const assignedVolunteerIds = selectedDisasterForAssign.assignedVolunteers?.map(
+                            (av: any) => {
+                              const volId = av.volunteerId;
+                              return typeof volId === 'string' ? volId : (volId as any)?.id?.toString() || (volId as any)?._id?.toString() || '';
+                            }
+                          ) || [];
 
-                      return (
-                        <label
-                          key={volunteer.id || volunteer._id}
-                          className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isChecked
-                              ? 'bg-purple-500/10 border-purple-500/50'
-                              : 'bg-[var(--bg-input)] border-[var(--border-color)] hover:border-purple-500/30'
-                            }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedVolunteerIds([...selectedVolunteerIds, volunteer.id || volunteer._id]);
-                              } else {
-                                setSelectedVolunteerIds(selectedVolunteerIds.filter(id => id !== (volunteer.id || volunteer._id)));
-                              }
-                            }}
-                            className="mt-1 w-4 h-4 text-purple-600 bg-[var(--bg-primary)] border-[var(--border-color)] rounded focus:ring-purple-500 focus:ring-2"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-[var(--text-primary)]">{name}</span>
-                              <Badge variant="secondary" size="sm">
-                                {volunteer.volunteerId}
-                              </Badge>
-                            </div>
-                            <div className="text-xs text-[var(--text-muted)]">
-                              <span>Availability: {volunteer.availability || 'N/A'}</span>
-                              {volunteer.userId?.email && (
-                                <span className="ml-2">• {volunteer.userId.email}</span>
-                              )}
-                            </div>
-                          </div>
-                        </label>
-                      );
-                    })
-                )}
-              </div>
-              {selectedVolunteerIds.length > 0 && (
-                <p className="text-xs text-[var(--text-muted)] mt-2">
-                  {selectedVolunteerIds.length} volunteer(s) selected
-                </p>
-              )}
-            </div>
+                          const now = new Date();
+                          const hasActiveAssignments = v.assignedDisasters?.some(
+                            (ad: any) => {
+                              const toDate = new Date(ad.toDate);
+                              const status = ad.status;
+                              return toDate > now && (status === 'assigned' || status === 'active');
+                            }
+                          );
+                          const isOnMission = v.availability === 'on_mission' || hasActiveAssignments;
 
-            <div className="flex gap-3 pt-4">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setShowAssignVolunteerModal(false);
-                  setSelectedDisasterForAssign(null);
-                  setSelectedVolunteerIds([]);
-                  setAssignmentFromDate('');
-                  setAssignmentToDate('');
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="gradient"
-                className="flex-1"
-                disabled={selectedVolunteerIds.length === 0 || !assignmentFromDate || !assignmentToDate}
-              >
-                Assign {selectedVolunteerIds.length > 0 ? `${selectedVolunteerIds.length} ` : ''}Volunteer{selectedVolunteerIds.length !== 1 ? 's' : ''}
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
+                          return !assignedVolunteerIds.includes(v.id || v._id) && !isOnMission;
+                        })
+                        .map((volunteer) => {
+                          const name = volunteer.userId?.firstName && volunteer.userId?.lastName
+                            ? `${volunteer.userId.firstName} ${volunteer.userId.lastName}`
+                            : volunteer.userId?.name || volunteer.volunteerId || 'Unknown';
+                          const isChecked = selectedVolunteerIds.includes(volunteer.id || volunteer._id);
+
+                          return (
+                            <label
+                              key={volunteer.id || volunteer._id}
+                              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${isChecked
+                                ? 'bg-purple-500/10 border-purple-500/50'
+                                : 'bg-[var(--bg-input)] border-[var(--border-color)] hover:border-purple-500/30'
+                                }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedVolunteerIds([...selectedVolunteerIds, volunteer.id || volunteer._id]);
+                                  } else {
+                                    setSelectedVolunteerIds(selectedVolunteerIds.filter(id => id !== (volunteer.id || volunteer._id)));
+                                  }
+                                }}
+                                className="mt-1 w-4 h-4 text-purple-600 bg-[var(--bg-primary)] border-[var(--border-color)] rounded focus:ring-purple-500 focus:ring-2"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium text-[var(--text-primary)]">{name}</span>
+                                  <Badge variant="secondary" size="sm">
+                                    {volunteer.volunteerId}
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-[var(--text-muted)]">
+                                  <span>Availability: {volunteer.availability || 'N/A'}</span>
+                                  {volunteer.userId?.email && (
+                                    <span className="ml-2">• {volunteer.userId.email}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })
+                    )}
+                  </div>
+                  {selectedVolunteerIds.length > 0 && (
+                    <p className="text-xs text-[var(--text-muted)] mt-2">
+                      {selectedVolunteerIds.length} volunteer(s) selected
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setShowAssignVolunteerModal(false);
+                      setSelectedDisasterForAssign(null);
+                      setSelectedVolunteerIds([]);
+                      setAssignmentFromDate('');
+                      setAssignmentToDate('');
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="gradient"
+                    className="flex-1"
+                    disabled={selectedVolunteerIds.length === 0 || !assignmentFromDate || !assignmentToDate}
+                  >
+                    Assign {selectedVolunteerIds.length > 0 ? `${selectedVolunteerIds.length} ` : ''}Volunteer{selectedVolunteerIds.length !== 1 ? 's' : ''}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </Modal>
         </>
       )}
     </DashboardLayout>
   );
 }
+
 

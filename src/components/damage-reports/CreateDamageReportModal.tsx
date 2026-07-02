@@ -124,12 +124,12 @@ function mapApiUserToCustomer(user: ApiUser): Customer {
   const hasLegacy = user.address || user.city || user.state || user.pincode;
   const address: CustomerAddress | undefined = hasLegacy
     ? {
-        street: user.address ?? undefined,
-        city: user.city ?? undefined,
-        state: user.state ?? undefined,
-        pincode: user.pincode ?? undefined,
-        zipCode: user.pincode ?? undefined,
-      }
+      street: user.address ?? undefined,
+      city: user.city ?? undefined,
+      state: user.state ?? undefined,
+      pincode: user.pincode ?? undefined,
+      zipCode: user.pincode ?? undefined,
+    }
     : undefined;
 
   return {
@@ -150,7 +150,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   const cachedCustomers = cache?.customers ?? [];
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<Array<{ url: string; file?: File; mediaKind: 'image' | 'video' }>>([]);
-  
+
   // Customer selection: show cached first, then replace with API response
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
@@ -168,7 +168,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
   const [showDisasterDropdown, setShowDisasterDropdown] = useState(false);
   const [selectedDisaster, setSelectedDisaster] = useState<any | null>(null);
   const disasterDropdownRef = useRef<HTMLDivElement>(null);
-  
+
   const [isAddingCustomArea, setIsAddingCustomArea] = useState(false);
 
   // Normalize customer addresses: prefer addresses[] array, fallback to single address
@@ -179,21 +179,21 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
     return [];
   };
   const customerAddressList = getCustomerAddressList(selectedCustomer);
-  
+
   const [formData, setFormData] = useState({
     // Property Address (can be different from customer address)
     propertyStreet: '',
     propertyCity: '',
     propertyState: '',
     propertyZipCode: '',
-    
+
     // Damage Details
     damageType: '',
     severity: '',
     insuranceCoverage: '' as '' | 'uninsured' | 'partially_insured' | 'fully_insured',
     description: '',
     affectedAreas: [] as string[],
-    
+
     // Financial
     estimatedCost: '',
     fundingSources: {
@@ -289,7 +289,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       ]);
 
       let allDisasters: any[] = [];
-      
+
       if (nasaRes && nasaRes.ok) {
         const nasaData = await nasaRes.json();
         if (nasaData.success && nasaData.data?.disasters) {
@@ -317,7 +317,9 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
     const searchLower = disasterSearchQuery.toLowerCase();
     return (
       disaster.title?.toLowerCase().includes(searchLower) ||
-      disaster.type?.toLowerCase().includes(searchLower)
+      disaster.type?.toLowerCase().includes(searchLower) ||
+      disaster.id?.toLowerCase().includes(searchLower) ||
+      disaster._id?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -411,7 +413,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedCustomer) {
       toast.error('Please select a customer first');
       return;
@@ -424,7 +426,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       toast.error('Total funding sources cannot exceed the estimated repair cost.');
       return;
     }
-    
+
     setIsSubmitting(true);
 
     try {
@@ -460,7 +462,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
       }));
 
       const addressForPayload = selectedCustomerAddress ?? (selectedCustomer.address ? selectedCustomer.address : selectedCustomer.addresses?.[0]);
-        const payload = {
+      const payload = {
         customer: {
           customerId: selectedCustomer.id || selectedCustomer._id || '',
           firstName: selectedCustomer.firstName,
@@ -612,244 +614,244 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
           <div className="space-y-4">
             <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <UserIcon className="w-5 h-5" />
-            Select Customer <span className="text-red-500">*</span>
-          </h3>
-          <div className="relative" ref={customerDropdownRef}>
-            <div className="relative">
-              {/* <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" /> */}
-              <input
-                type="text"
-                placeholder="Search customer by name or email..."
-                value={customerSearchQuery}
-                onChange={(e) => {
-                  setCustomerSearchQuery(e.target.value);
-                  setShowCustomerDropdown(true);
-                  if (!e.target.value) {
-                    setSelectedCustomer(null);
-                  }
-                }}
-                onFocus={() => setShowCustomerDropdown(true)}
-                className="input-field w-full pl-10"
-              />
-              {selectedCustomer && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedCustomer(null);
-                    setCustomerSearchQuery('');
+              Select Customer <span className="text-red-500">*</span>
+            </h3>
+            <div className="relative" ref={customerDropdownRef}>
+              <div className="relative">
+                {/* <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" /> */}
+                <input
+                  type="text"
+                  placeholder="Search customer by name or email..."
+                  value={customerSearchQuery}
+                  onChange={(e) => {
+                    setCustomerSearchQuery(e.target.value);
+                    setShowCustomerDropdown(true);
+                    if (!e.target.value) {
+                      setSelectedCustomer(null);
+                    }
                   }}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-            {showCustomerDropdown && !selectedCustomer && (
-              <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg">
-                {isLoadingCustomers ? (
-                  <div className="p-4 text-center">
-                    <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
-                    <p className="text-sm text-[var(--text-muted)] mt-2">Loading customers...</p>
-                  </div>
-                ) : (
-                  <>
-                    {filteredCustomers.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-[var(--text-muted)]">
-                        No customers found
-                      </div>
-                    ) : (
-                      filteredCustomers.map((customer) => (
-                        <button
-                          key={customer.id || customer._id}
-                          type="button"
-                          onClick={() => handleCustomerSelect(customer)}
-                          className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)]"
-                        >
-                          <div className="font-medium text-[var(--text-primary)]">
-                            {customer.firstName} {customer.lastName}
-                          </div>
-                          <div className="text-sm text-[var(--text-muted)]">{customer.email}</div>
-                          {customer.address?.city && (
-                            <div className="text-xs text-[var(--text-muted)]">
-                              {customer.address.city}, {customer.address.state}
-                            </div>
-                          )}
-                        </button>
-                      ))
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCustomerDropdown(false);
-                        onClose();
-                        router.push('/dashboard/user-management?addUser=1');
-                      }}
-                      className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-t border-[var(--border-color)] flex items-center gap-2 text-[var(--primary-600)] font-medium"
-                    >
-                      <PlusIcon className="w-5 h-5 shrink-0" />
-                   Add new user
-                    </button>
-                  </>
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  className="input-field w-full pl-10"
+                />
+                {selectedCustomer && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCustomer(null);
+                      setCustomerSearchQuery('');
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  >
+                    <XMarkIcon className="w-5 h-5" />
+                  </button>
                 )}
               </div>
-            )}
-          </div>
-          {selectedCustomer && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center text-green-700 dark:text-green-300 font-semibold">
-                  {selectedCustomer.firstName[0]}{selectedCustomer.lastName[0]}
-                </div>
-                <div>
-                  <p className="font-semibold text-[var(--text-primary)]">
-                    {selectedCustomer.firstName} {selectedCustomer.lastName}
-                  </p>
-                  <p className="text-sm text-[var(--text-muted)]">{selectedCustomer.email}</p>
-                  {selectedCustomer.phone && (
-                    <p className="text-sm text-[var(--text-muted)]">{selectedCustomer.phone}</p>
-                  )}
-                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                    Customer ID: {(selectedCustomer.id || selectedCustomer._id || '').slice(-8)}
-                  </p>
-                </div>
-              </div>
-              {customerAddressList.length > 1 && (
-                <div className="mt-4 pt-4 border-t border-green-200 dark:border-green-800">
-                  <h4 className="text-sm font-medium text-[var(--text-primary)] mb-2">
-                    Select address for this report <span className="text-red-500">*</span>
-                  </h4>
-                  <p className="text-xs text-[var(--text-muted)] mb-2">
-                    This customer has multiple addresses. Choose the one where the damage occurred.
-                  </p>
-                  <Select
-                    label=""
-                    value={(() => {
-                      if (!selectedCustomerAddress) return '';
-                      const idx = customerAddressList.indexOf(selectedCustomerAddress);
-                      return idx >= 0 ? String(idx) : '';
-                    })()}
-                    onChange={(value) => {
-                      const idx = parseInt(value, 10);
-                      if (!Number.isNaN(idx) && customerAddressList[idx]) {
-                        handleSelectCustomerAddress(customerAddressList[idx]);
-                      }
-                    }}
-                    options={[
-                      { value: '', label: 'Select an address...' },
-                      ...customerAddressList.map((addr, idx) => {
-                        const label = [addr.street, addr.city, addr.state, addr.pincode || addr.zipCode].filter(Boolean).join(', ') || `Address ${idx + 1}`;
-                        return { value: String(idx), label };
-                      }),
-                    ]}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Disaster Selection */}
-        <div className="space-y-4">
-          <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <GlobeAltIcon className="w-5 h-5" />
-            Select Disaster <span className="text-red-500">*</span>
-          </h3>
-          {/* <p className="text-sm text-[var(--text-muted)]">
-            Search live disasters or add a custom one. Pre-fills damage type and severity if available.
-          </p> */}
-          <div className="relative" ref={disasterDropdownRef}>
-            <div className="relative">
-              {/* <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" /> */}
-              <input
-                type="text"
-                placeholder="Search live disasters..."
-                value={disasterSearchQuery}
-                onChange={(e) => {
-                  setDisasterSearchQuery(e.target.value);
-                  setShowDisasterDropdown(true);
-                  if (!e.target.value) {
-                    setSelectedDisaster(null);
-                  }
-                }}
-                onFocus={() => setShowDisasterDropdown(true)}
-                className="input-field w-full pl-10"
-              />
-              {selectedDisaster && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedDisaster(null);
-                    setDisasterSearchQuery('');
-                  }}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-            {showDisasterDropdown && !selectedDisaster && (
-              <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg">
-                {isLoadingDisasters ? (
-                  <div className="p-4 text-center">
-                    <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
-                    <p className="text-sm text-[var(--text-muted)] mt-2">Loading disasters...</p>
-                  </div>
-                ) : (
-                  <>
-                    {filteredDisasters.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-[var(--text-muted)]">
-                        No live disasters found
-                      </div>
-                    ) : (
-                      filteredDisasters.map((disaster) => (
-                        <button
-                          key={disaster.id || disaster._id}
-                          type="button"
-                          onClick={() => handleDisasterSelect(disaster)}
-                          className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)]"
-                        >
-                          <div className="font-medium text-[var(--text-primary)]">
-                            {disaster.title}
-                          </div>
-                          <div className="text-sm text-[var(--text-muted)] capitalize">
-                            {disaster.type || 'Unknown'} • {disaster.severity || 'Unknown'} Severity
-                          </div>
-                        </button>
-                      ))
-                    )}
-                    {disasterSearchQuery && filteredDisasters.length === 0 && (
+              {showCustomerDropdown && !selectedCustomer && (
+                <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg">
+                  {isLoadingCustomers ? (
+                    <div className="p-4 text-center">
+                      <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
+                      <p className="text-sm text-[var(--text-muted)] mt-2">Loading customers...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {filteredCustomers.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-[var(--text-muted)]">
+                          No customers found
+                        </div>
+                      ) : (
+                        filteredCustomers.map((customer) => (
+                          <button
+                            key={customer.id || customer._id}
+                            type="button"
+                            onClick={() => handleCustomerSelect(customer)}
+                            className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)]"
+                          >
+                            <div className="font-medium text-[var(--text-primary)]">
+                              {customer.firstName} {customer.lastName}
+                            </div>
+                            <div className="text-sm text-[var(--text-muted)]">{customer.email}</div>
+                            {customer.address?.city && (
+                              <div className="text-xs text-[var(--text-muted)]">
+                                {customer.address.city}, {customer.address.state}
+                              </div>
+                            )}
+                          </button>
+                        ))
+                      )}
                       <button
                         type="button"
-                        onClick={handleAddCustomDisaster}
+                        onClick={() => {
+                          setShowCustomerDropdown(false);
+                          onClose();
+                          router.push('/dashboard/user-management?addUser=1');
+                        }}
                         className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-t border-[var(--border-color)] flex items-center gap-2 text-[var(--primary-600)] font-medium"
                       >
                         <PlusIcon className="w-5 h-5 shrink-0" />
-                        Add Custom Disaster
+                        Add new user
                       </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedCustomer && (
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center text-green-700 dark:text-green-300 font-semibold">
+                    {selectedCustomer.firstName[0]}{selectedCustomer.lastName[0]}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-[var(--text-primary)]">
+                      {selectedCustomer.firstName} {selectedCustomer.lastName}
+                    </p>
+                    <p className="text-sm text-[var(--text-muted)]">{selectedCustomer.email}</p>
+                    {selectedCustomer.phone && (
+                      <p className="text-sm text-[var(--text-muted)]">{selectedCustomer.phone}</p>
                     )}
-                  </>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      Customer ID: {(selectedCustomer.id || selectedCustomer._id || '').slice(-8)}
+                    </p>
+                  </div>
+                </div>
+                {customerAddressList.length > 1 && (
+                  <div className="mt-4 pt-4 border-t border-green-200 dark:border-green-800">
+                    <h4 className="text-sm font-medium text-[var(--text-primary)] mb-2">
+                      Select address for this report <span className="text-red-500">*</span>
+                    </h4>
+                    <p className="text-xs text-[var(--text-muted)] mb-2">
+                      This customer has multiple addresses. Choose the one where the damage occurred.
+                    </p>
+                    <Select
+                      label=""
+                      value={(() => {
+                        if (!selectedCustomerAddress) return '';
+                        const idx = customerAddressList.indexOf(selectedCustomerAddress);
+                        return idx >= 0 ? String(idx) : '';
+                      })()}
+                      onChange={(value) => {
+                        const idx = parseInt(value, 10);
+                        if (!Number.isNaN(idx) && customerAddressList[idx]) {
+                          handleSelectCustomerAddress(customerAddressList[idx]);
+                        }
+                      }}
+                      options={[
+                        { value: '', label: 'Select an address...' },
+                        ...customerAddressList.map((addr, idx) => {
+                          const label = [addr.street, addr.city, addr.state, addr.pincode || addr.zipCode].filter(Boolean).join(', ') || `Address ${idx + 1}`;
+                          return { value: String(idx), label };
+                        }),
+                      ]}
+                    />
+                  </div>
                 )}
               </div>
             )}
           </div>
-          {selectedDisaster && (
-            <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-800 flex items-center justify-center text-orange-700 dark:text-orange-300 font-semibold">
-                  <GlobeAltIcon className="w-6 h-6" />
+
+          {/* Disaster Selection */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <GlobeAltIcon className="w-5 h-5" />
+              Select Disaster <span className="text-red-500">*</span>
+            </h3>
+            {/* <p className="text-sm text-[var(--text-muted)]">
+            Search live disasters or add a custom one. Pre-fills damage type and severity if available.
+          </p> */}
+            <div className="relative" ref={disasterDropdownRef}>
+              <div className="relative">
+                {/* <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" /> */}
+                <input
+                  type="text"
+                  placeholder="Search live disasters..."
+                  value={disasterSearchQuery}
+                  onChange={(e) => {
+                    setDisasterSearchQuery(e.target.value);
+                    setShowDisasterDropdown(true);
+                    if (!e.target.value) {
+                      setSelectedDisaster(null);
+                    }
+                  }}
+                  onFocus={() => setShowDisasterDropdown(true)}
+                  className="input-field w-full pl-10"
+                />
+                {selectedDisaster && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDisaster(null);
+                      setDisasterSearchQuery('');
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  >
+                    <XMarkIcon className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+              {showDisasterDropdown && !selectedDisaster && (
+                <div className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg">
+                  {isLoadingDisasters ? (
+                    <div className="p-4 text-center">
+                      <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto" />
+                      <p className="text-sm text-[var(--text-muted)] mt-2">Loading disasters...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {filteredDisasters.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-[var(--text-muted)]">
+                          No live disasters found
+                        </div>
+                      ) : (
+                        filteredDisasters.map((disaster) => (
+                          <button
+                            key={disaster.id || disaster._id}
+                            type="button"
+                            onClick={() => handleDisasterSelect(disaster)}
+                            className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)]"
+                          >
+                            <div className="font-medium text-[var(--text-primary)]">
+                              {disaster.title}
+                            </div>
+                            <div className="text-sm text-[var(--text-muted)] capitalize">
+                              {disaster.type || 'Unknown'} • {disaster.severity || 'Unknown'} Severity
+                            </div>
+                          </button>
+                        ))
+                      )}
+                      {disasterSearchQuery && filteredDisasters.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={handleAddCustomDisaster}
+                          className="w-full px-4 py-3 text-left hover:bg-[var(--bg-secondary)] border-t border-[var(--border-color)] flex items-center gap-2 text-[var(--primary-600)] font-medium"
+                        >
+                          <PlusIcon className="w-5 h-5 shrink-0" />
+                          Add Custom Disaster
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
-                <div>
-                  <p className="font-semibold text-[var(--text-primary)]">
-                    {selectedDisaster.title}
-                  </p>
-                  <p className="text-sm text-[var(--text-muted)] capitalize">
-                    {selectedDisaster.type || 'Unknown Type'} • {selectedDisaster.severity || 'Unknown'} Severity
-                  </p>
+              )}
+            </div>
+            {selectedDisaster && (
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-800 flex items-center justify-center text-orange-700 dark:text-orange-300 font-semibold">
+                    <GlobeAltIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-[var(--text-primary)]">
+                      {selectedDisaster.title}
+                    </p>
+                    <p className="text-sm text-[var(--text-muted)] capitalize">
+                      {selectedDisaster.type || 'Unknown Type'} • {selectedDisaster.severity || 'Unknown'} Severity
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         </div>
 
         {/* Property Address */}
@@ -973,7 +975,7 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                       + Add other area...
                     </option>
                     {[
-                      'Roof Top', 'Garage', 'Backyard', 'Porch', 'Lawn', 'Basement', 'Living Room', 
+                      'Roof Top', 'Garage', 'Backyard', 'Porch', 'Lawn', 'Basement', 'Living Room',
                       'Kitchen', 'Bedroom', 'Bathroom', 'Driveway', 'Fence', 'Windows', 'Doors', 'Gutters', 'Attic'
                     ].map(area => (
                       <option key={area} value={area}>{area}</option>
@@ -1157,11 +1159,11 @@ export default function CreateDamageReportModal({ isOpen, onClose, onSuccess }: 
                         playsInline
                       />
                     ) : (
-                    <img
-                      src={image.url}
-                      alt={`Upload ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+                      <img
+                        src={image.url}
+                        alt={`Upload ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
                     )}
                     <button
                       type="button"

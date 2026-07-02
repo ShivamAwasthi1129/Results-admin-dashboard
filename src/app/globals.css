@@ -698,7 +698,7 @@ table {
   overflow: hidden;
   text-overflow: ellipsis;
   display: inline-block;
-  max-width: 300px;
+  /* max-width: 300px; */
 }
 
 /* Ensure all table wrappers have horizontal scroll */
