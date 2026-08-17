@@ -76,11 +76,135 @@ function writeNewsCache(next: NewsCacheMap): void {
 }
 
 /* ─── Main Component ─── */
+const DEFAULT_RESULTS_CAMPAIGNS = [
+  {
+    id: "CAM-001",
+    name: "Standard Contribution",
+    location: "Global",
+    date: "Ongoing",
+    tiers: [
+      { amount: 50, label: "General Relief", description: "Supports day-to-day operations and general preparedness." },
+      { amount: 100, label: "Community Aid", description: "Fund community-led programs and resources." },
+      { amount: 250, label: "Sustaining Gift", description: "Provides ongoing support for our operational capabilities." }
+    ]
+  },
+  {
+    id: "CAM-002",
+    name: "Venezuela Earthquake Relief",
+    location: "Caracas, Venezuela",
+    date: "June 24, 2026",
+    tiers: [
+      { amount: 50, label: "Emergency Food & Water", description: "Provides immediate clean water and ration packs for a displaced family." },
+      { amount: 100, label: "Medical Supplies Kit", description: "Funds essential medical supplies and first-aid kits for disaster response." },
+      { amount: 250, label: "Temporary Shelter Tent", description: "Supplies a family-sized temporary thermal shelter for those left homeless." }
+    ]
+  },
+  {
+    id: "CAM-003",
+    name: "Japan Earthquake Relief",
+    location: "Fukushima, Japan",
+    date: "July 12, 2026",
+    tiers: [
+      { amount: 50, label: "Hygiene & Sanitation Kit", description: "Supplies hygiene products and sanitizing items for evacuation centers." },
+      { amount: 100, label: "Warm Blankets & Apparel", description: "Provides thermal blankets and cold-weather clothing for survivors." },
+      { amount: 250, label: "Rescue Team Support", description: "Funds search-and-rescue teams and structural inspection gear." }
+    ]
+  },
+  {
+    id: "CAM-004",
+    name: "Turkey Earthquake Relief",
+    location: "Van Province, Turkey",
+    date: "August 5, 2026",
+    tiers: [
+      { amount: 50, label: "Warm Meals Distribution", description: "Funds hot meals for families in temporary refugee settlements." },
+      { amount: 100, label: "Clean Water Station", description: "Helps set up temporary clean water distribution points." },
+      { amount: 250, label: "Thermal Heating Unit", description: "Supplies heating equipment to keep families safe in freezing winter temperatures." }
+    ]
+  },
+  {
+    id: "CAM-005",
+    name: "Chile Earthquake Relief",
+    location: "Valparaiso, Chile",
+    date: "August 10, 2026",
+    tiers: [
+      { amount: 50, label: "First Aid & Triage Support", description: "Provides medical kits for triage centers." },
+      { amount: 100, label: "Baby & Toddler Support", description: "Funds baby formula, diapers, and nutrition packs." },
+      { amount: 250, label: "Debris & Emergency Tool Kit", description: "Provides shovels, helmets, and tools for clear-up teams." }
+    ]
+  },
+  {
+    id: "CAM-006",
+    name: "Colombia Earthquake Relief 2026",
+    location: "Bogota, Colombia",
+    date: "March 14, 2026",
+    tiers: [
+      { amount: 50, label: "Survival Food Package", description: "Supplies high-nutrition dry food rations for a family." },
+      { amount: 100, label: "First Response Medication", description: "Funds antibiotics, bandages, and critical medication." },
+      { amount: 250, label: "Rebuilding Supplies", description: "Contributes to building materials for homes destroyed by structural failure." }
+    ]
+  },
+  {
+    id: "CAM-007",
+    name: "Typhoon Saola Relief",
+    location: "Philippines & Taiwan",
+    date: "September 2026",
+    tiers: [
+      { amount: 50, label: "Flashlights & Emergency Batteries", description: "Supplies lighting and power sources to storm victims." },
+      { amount: 100, label: "Waterproof Tarp & Rope", description: "Provides immediate protection for homes with damaged roofs." },
+      { amount: 250, label: "Water Purification Systems", description: "Funds high-volume portable filtration systems." }
+    ]
+  },
+  {
+    id: "CAM-008",
+    name: "Mediterranean Wildfires Relief",
+    location: "Greece & Italy",
+    date: "August 2026",
+    tiers: [
+      { amount: 50, label: "Respiratory Protection Gear", description: "Supplies protective smoke masks and filters." },
+      { amount: 100, label: "Wildlife Rescue & Rehab", description: "Funds treatment for animals affected by forest fires." },
+      { amount: 250, label: "Firefighter Support Kit", description: "Provides cooling equipment and hydration for volunteer responders." }
+    ]
+  },
+  {
+    id: "CAM-009",
+    name: "Hawaii Storms (Hurricane Lala) Relief",
+    location: "Big Island, Hawaii",
+    date: "August 15, 2026",
+    tiers: [
+      { amount: 50, label: "Emergency Food & Water", description: "Provides immediate clean water and nutrition rations for families affected by Hurricane Lala." },
+      { amount: 100, label: "Flood Debris Removal", description: "Funds local clean-up crews and tools to clear roads and homes of landslide debris." },
+      { amount: 250, label: "Emergency Shelter Repair", description: "Provides emergency tarps, tools, and temporary shelter materials for damaged homes." }
+    ]
+  },
+  {
+    id: "CAM-010",
+    name: "Indiana Flooding Relief",
+    location: "Indianapolis & Surrounding Counties, Indiana",
+    date: "August 11, 2026",
+    tiers: [
+      { amount: 50, label: "Clean-up & Sanitation Supplies", description: "Provides disinfectant kits, gloves, and boots for families cleaning flooded homes." },
+      { amount: 100, label: "First Responder Rescue Support", description: "Supports local emergency search-and-rescue teams and boat deployment." },
+      { amount: 250, label: "Disaster Assistance & Recovery", description: "Funds basic household essentials and emergency financial aid for displaced residents." }
+    ]
+  },
+  {
+    id: "CAM-011",
+    name: "Spokane Wildfires Relief",
+    location: "Spokane County, Washington",
+    date: "August 1, 2026",
+    tiers: [
+      { amount: 50, label: "Respiratory & N95 Masks", description: "Supplies high-efficiency N95 masks to communities impacted by dense wildfire smoke." },
+      { amount: 100, label: "Evacuee Support Kits", description: "Provides hygiene products, blankets, and essential needs for residents in temporary shelters." },
+      { amount: 250, label: "Home Rebuilding Assistance", description: "Contributes to building supplies and long-term recovery efforts for lost structures." }
+    ]
+  }
+];
+
 export default function ResultsHomepageClient() {
   const { token } = useAuth();
 
   // ── State: section list & selection ──────────────────────────────────────
-  const [selectedSection, setSelectedSection] = useState<ResultsSectionKey>('hero');
+  const [selectedSection, setSelectedSection] = useState<ResultsSectionKey | 'disasters'>('hero');
 
   // ── State: metadata ───────────────────────────────────────────────────────
   const [meta, setMeta] = useState<ResultsMetaResponse['data'] | null>(null);
@@ -176,7 +300,7 @@ export default function ResultsHomepageClient() {
   };
 
   /* ─── Load section content ───────────────────────────────────────────────── */
-  const loadSection = useCallback(async (section: ResultsSectionKey) => {
+  const loadSection = useCallback(async (section: ResultsSectionKey | 'disasters') => {
     if (!token) return;
     setSectionLoading(true);
     setSectionError(null);
@@ -184,10 +308,23 @@ export default function ResultsHomepageClient() {
     setEditedContent(null);
     setIsDirty(false);
     try {
-      const res = await fetchResultsSection(section, token);
+      const targetSection = section === 'disasters' ? 'donate' : section;
+      const res = await fetchResultsSection(targetSection, token);
       if (res.success && res.data) {
-        setSectionContent(res.data.content);
-        setEditedContent(JSON.parse(JSON.stringify(res.data.content)));
+        if (section === 'disasters') {
+          let campaigns = (res.data.content as any).campaigns || [];
+          if (campaigns && !Array.isArray(campaigns) && (campaigns as any).campaigns) {
+            campaigns = (campaigns as any).campaigns;
+          }
+          if (!Array.isArray(campaigns) || campaigns.length === 0) {
+            campaigns = DEFAULT_RESULTS_CAMPAIGNS;
+          }
+          setSectionContent(campaigns);
+          setEditedContent(JSON.parse(JSON.stringify(campaigns)));
+        } else {
+          setSectionContent(res.data.content);
+          setEditedContent(JSON.parse(JSON.stringify(res.data.content)));
+        }
         setSectionVersion(res.data.version);
         setSectionUpdatedAt(res.data.updatedAt);
         setIsDirty(false);
@@ -205,7 +342,7 @@ export default function ResultsHomepageClient() {
   useEffect(() => { loadSection(selectedSection); }, [selectedSection, loadSection]);
 
   /* ─── Handle section switch (warn if dirty) ──────────────────────────────── */
-  const handleSectionSwitch = (section: ResultsSectionKey) => {
+  const handleSectionSwitch = (section: ResultsSectionKey | 'disasters') => {
     if (isDirty) {
       if (!confirm('You have unsaved changes. Switch sections and discard them?')) return;
     }
@@ -223,11 +360,22 @@ export default function ResultsHomepageClient() {
     if (!editedContent || !token) return;
     setSaving(true);
     try {
-      const res = await patchResultsSection(selectedSection, editedContent, token);
+      let res;
+      if (selectedSection === 'disasters') {
+        res = await patchResultsSection('donate', { campaigns: editedContent }, token);
+      } else {
+        res = await patchResultsSection(selectedSection, editedContent, token);
+      }
       if (res.success) {
         toast.success(res.message || `Section "${selectedSection}" saved! (v${res.data.version})`);
-        setSectionContent(res.data.content);
-        setEditedContent(JSON.parse(JSON.stringify(res.data.content)));
+        if (selectedSection === 'disasters') {
+          const campaigns = (res.data.content as any).campaigns || [];
+          setSectionContent(campaigns);
+          setEditedContent(JSON.parse(JSON.stringify(campaigns)));
+        } else {
+          setSectionContent(res.data.content);
+          setEditedContent(JSON.parse(JSON.stringify(res.data.content)));
+        }
         setSectionVersion(res.data.version);
         setSectionUpdatedAt(res.data.updatedAt);
         setIsDirty(false);
@@ -428,6 +576,35 @@ export default function ResultsHomepageClient() {
                 );
               })}
             </ul>
+            <div className="border-t border-[var(--border-color)] pt-3 mt-3">
+              <button
+                type="button"
+                onClick={() => handleSectionSwitch('disasters')}
+                className={`w-full text-left rounded-xl px-3 py-2.5 transition-all duration-200 border ${
+                  selectedSection === 'disasters'
+                    ? 'border-[#991B1B] bg-[#991B1B]/5 shadow-sm shadow-[#991B1B]/10 dark:bg-[#991B1B]/10'
+                    : 'border-transparent hover:border-[var(--border-color)] hover:bg-[var(--bg-secondary)]'
+                }`}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div
+                    className="w-2 h-2 rounded-full shrink-0 mt-1.5"
+                    style={{ backgroundColor: '#991B1B' }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-medium truncate ${selectedSection === 'disasters' ? 'text-[#991B1B]' : 'text-[var(--text-primary)]'}`}>
+                      🔥 Disasters Dropdown
+                    </p>
+                    <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 leading-relaxed mt-0.5">
+                      Manage disasters dropdown options and selection tiers
+                    </p>
+                  </div>
+                  {selectedSection === 'disasters' && (
+                    <CheckCircleIcon className="w-4 h-4 text-[#991B1B] shrink-0 mt-0.5" />
+                  )}
+                </div>
+              </button>
+            </div>
           </Card>
         </div>
 
@@ -439,7 +616,7 @@ export default function ResultsHomepageClient() {
               <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <div className="w-10 h-10 border-4 border-[#991B1B]/30 border-t-[#991B1B] rounded-full animate-spin" />
                 <p className="text-sm text-[var(--text-muted)] animate-pulse">
-                  Loading <strong>{RESULTS_SECTION_LABELS[selectedSection]}</strong>…
+                  Loading <strong>{selectedSection === 'disasters' ? 'Disasters Dropdown' : RESULTS_SECTION_LABELS[selectedSection]}</strong>…
                 </p>
               </div>
             ) : sectionError ? (
@@ -470,7 +647,7 @@ export default function ResultsHomepageClient() {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-lg font-bold text-[var(--text-primary)]">
-                        {RESULTS_SECTION_LABELS[selectedSection]}
+                        {selectedSection === 'disasters' ? '📋 Disasters Dropdown Options' : RESULTS_SECTION_LABELS[selectedSection]}
                       </h3>
                       {isDirty && (
                         <Badge variant="warning" className="text-[10px] animate-pulse">
@@ -488,7 +665,7 @@ export default function ResultsHomepageClient() {
                       )}
                     </p>
                     <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                      {RESULTS_SECTION_DESCRIPTIONS[selectedSection]}
+                      {selectedSection === 'disasters' ? 'Manage disasters dropdown list and impact tiers' : RESULTS_SECTION_DESCRIPTIONS[selectedSection]}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -524,7 +701,200 @@ export default function ResultsHomepageClient() {
 
                 {/* JSON Field Editor */}
                 <div className="max-h-[calc(100vh-320px)] overflow-y-auto pr-1 space-y-3">
-                  {selectedSection === 'news' && editedContent ? (
+                  {selectedSection === 'disasters' && Array.isArray(editedContent) ? (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-400">Disasters List Manager</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">Manage the list of active disasters and their contribution options.</p>
+                        </div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            const nextCampaigns = [
+                              ...editedContent,
+                              {
+                                id: '',
+                                name: '',
+                                location: '',
+                                date: '',
+                                tiers: []
+                              }
+                            ];
+                            handleContentChange(nextCampaigns);
+                          }}
+                          className="!bg-[#991B1B] hover:!bg-red-800 !text-white"
+                        >
+                          + Add New Disaster
+                        </Button>
+                      </div>
+
+                      {editedContent.map((campaign, cIdx) => (
+                        <Card key={campaign.id || cIdx} className="p-5 space-y-4 border-l-4 border-l-[#991B1B]">
+                          <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+                            <span className="text-sm font-black uppercase text-[#991B1B]">
+                              Disaster: {campaign.name || 'Unnamed'} ({campaign.id})
+                            </span>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete "${campaign.name}"?`)) {
+                                  const nextCampaigns = [...editedContent];
+                                  nextCampaigns.splice(cIdx, 1);
+                                  handleContentChange(nextCampaigns);
+                                }
+                              }}
+                            >
+                              Remove Disaster
+                            </Button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-[var(--text-muted)] uppercase mb-1">Campaign ID</label>
+                              <input
+                                type="text"
+                                value={campaign.id || ''}
+                                onChange={(e) => {
+                                  const nextCampaigns = [...editedContent];
+                                  nextCampaigns[cIdx] = { ...campaign, id: e.target.value };
+                                  handleContentChange(nextCampaigns);
+                                }}
+                                className="input-field text-sm w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-[var(--text-muted)] uppercase mb-1">Campaign Name</label>
+                              <input
+                                type="text"
+                                value={campaign.name || ''}
+                                onChange={(e) => {
+                                  const nextCampaigns = [...editedContent];
+                                  nextCampaigns[cIdx] = { ...campaign, name: e.target.value };
+                                  handleContentChange(nextCampaigns);
+                                }}
+                                className="input-field text-sm w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-[var(--text-muted)] uppercase mb-1">Location</label>
+                              <input
+                                type="text"
+                                value={campaign.location || ''}
+                                onChange={(e) => {
+                                  const nextCampaigns = [...editedContent];
+                                  nextCampaigns[cIdx] = { ...campaign, location: e.target.value };
+                                  handleContentChange(nextCampaigns);
+                                }}
+                                className="input-field text-sm w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-[var(--text-muted)] uppercase mb-1">Date</label>
+                              <input
+                                type="text"
+                                value={campaign.date || ''}
+                                onChange={(e) => {
+                                  const nextCampaigns = [...editedContent];
+                                  nextCampaigns[cIdx] = { ...campaign, date: e.target.value };
+                                  handleContentChange(nextCampaigns);
+                                }}
+                                className="input-field text-sm w-full"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Campaign Tiers */}
+                          <div className="mt-4 space-y-3">
+                            <div className="flex items-center justify-between border-t border-[var(--border-color)] pt-3">
+                              <span className="text-xs font-bold uppercase text-[var(--text-muted)]">Donation Options (Tiers)</span>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                  const nextTiers = [...(campaign.tiers || [])];
+                                  nextTiers.push({ amount: '', label: '', description: '' });
+                                  const nextCampaigns = [...editedContent];
+                                  nextCampaigns[cIdx] = { ...campaign, tiers: nextTiers };
+                                  handleContentChange(nextCampaigns);
+                                }}
+                              >
+                                + Add Option
+                              </Button>
+                            </div>
+
+                            {(campaign.tiers || []).map((tier, tIdx) => (
+                              <div key={tIdx} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start p-3 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
+                                <div className="sm:col-span-2">
+                                  <label className="block text-[10px] font-bold text-[var(--text-muted)] mb-1">Amount ($)</label>
+                                  <input
+                                    type="number"
+                                    value={tier.amount !== undefined ? tier.amount : ''}
+                                    onChange={(e) => {
+                                      const nextTiers = [...campaign.tiers];
+                                      nextTiers[tIdx] = { ...tier, amount: parseFloat(e.target.value) || 0 };
+                                      const nextCampaigns = [...editedContent];
+                                      nextCampaigns[cIdx] = { ...campaign, tiers: nextTiers };
+                                      handleContentChange(nextCampaigns);
+                                    }}
+                                    className="input-field text-sm w-full"
+                                  />
+                                </div>
+                                <div className="sm:col-span-3">
+                                  <label className="block text-[10px] font-bold text-[var(--text-muted)] mb-1">Label</label>
+                                  <input
+                                    type="text"
+                                    value={tier.label || ''}
+                                    onChange={(e) => {
+                                      const nextTiers = [...campaign.tiers];
+                                      nextTiers[tIdx] = { ...tier, label: e.target.value };
+                                      const nextCampaigns = [...editedContent];
+                                      nextCampaigns[cIdx] = { ...campaign, tiers: nextTiers };
+                                      handleContentChange(nextCampaigns);
+                                    }}
+                                    className="input-field text-sm w-full"
+                                  />
+                                </div>
+                                <div className="sm:col-span-6">
+                                  <label className="block text-[10px] font-bold text-[var(--text-muted)] mb-1">Description</label>
+                                  <input
+                                    type="text"
+                                    value={tier.description || ''}
+                                    onChange={(e) => {
+                                      const nextTiers = [...campaign.tiers];
+                                      nextTiers[tIdx] = { ...tier, description: e.target.value };
+                                      const nextCampaigns = [...editedContent];
+                                      nextCampaigns[cIdx] = { ...campaign, tiers: nextTiers };
+                                      handleContentChange(nextCampaigns);
+                                    }}
+                                    className="input-field text-sm w-full"
+                                  />
+                                </div>
+                                <div className="sm:col-span-1 pt-6 text-right">
+                                  <button
+                                    type="button"
+                                    className="text-red-500 hover:text-red-700 text-xs font-bold"
+                                    onClick={() => {
+                                      const nextTiers = [...campaign.tiers];
+                                      nextTiers.splice(tIdx, 1);
+                                      const nextCampaigns = [...editedContent];
+                                      nextCampaigns[cIdx] = { ...campaign, tiers: nextTiers };
+                                      handleContentChange(nextCampaigns);
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : selectedSection === 'news' && editedContent ? (
                     <div className="space-y-6">
                       {['leadStory', 'leadStories'].map(key => {
                         if (!(key in editedContent)) return null;
