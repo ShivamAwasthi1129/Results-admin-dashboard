@@ -827,7 +827,7 @@ export default function ResultsHomepageClient() {
                               </Button>
                             </div>
 
-                            {(campaign.tiers || []).map((tier, tIdx) => (
+                            {(campaign.tiers || []).map((tier: any, tIdx: number) => (
                               <div key={tIdx} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start p-3 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
                                 <div className="sm:col-span-2">
                                   <label className="block text-[10px] font-bold text-[var(--text-muted)] mb-1">Amount ($)</label>
