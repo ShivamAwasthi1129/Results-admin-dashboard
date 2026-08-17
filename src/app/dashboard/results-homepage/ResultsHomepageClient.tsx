@@ -1059,7 +1059,7 @@ export default function ResultsHomepageClient() {
                   <div className="flex items-center justify-between pt-4 border-t border-[var(--border-color)]">
                     <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
                       <SparklesIcon className="w-3.5 h-3.5 text-amber-500" />
-                      You have unsaved changes in <strong>{RESULTS_SECTION_LABELS[selectedSection]}</strong>
+                      You have unsaved changes in <strong>{selectedSection === 'disasters' ? '🔥 Disasters Dropdown' : RESULTS_SECTION_LABELS[selectedSection]}</strong>
                     </p>
                     <div className="flex items-center gap-2">
                       <button
