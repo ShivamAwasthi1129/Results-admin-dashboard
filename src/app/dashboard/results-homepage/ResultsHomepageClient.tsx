@@ -405,7 +405,8 @@ export default function ResultsHomepageClient() {
     if (!token) return null;
     setUploading(true);
     try {
-      const res = await uploadResultsMedia(file, selectedSection, token, fieldKey);
+      const targetSection = selectedSection === 'disasters' ? 'donate' : selectedSection;
+      const res = await uploadResultsMedia(file, targetSection, token, fieldKey);
       if (res.success) {
         toast.success('Media uploaded! URL ready to use.');
         navigator.clipboard.writeText(res.data.url).catch(() => { });
