@@ -13,6 +13,7 @@ interface DashboardLayoutProps {
   title?: string;
   subtitle?: string;
   icon?: React.ReactNode;
+  noPadding?: boolean;
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({
@@ -20,6 +21,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   title,
   subtitle,
   icon,
+  noPadding = false,
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
@@ -62,7 +64,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         />
         
         {/* Main Content - Scrollable */}
-        <main className="flex-1  overflow-auto">
+        <main className={`flex-1 overflow-auto ${noPadding ? '' : 'px-4 sm:px-6 lg:px-8 py-4'}`}>
           <div className="mx-auto animate-fade-in">
             {children}
           </div>

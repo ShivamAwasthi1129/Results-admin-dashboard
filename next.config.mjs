@@ -5,7 +5,14 @@ const getBackendUrl = () => {
   return raw.replace(/\/$/, '');
 };
 
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const nextConfig = {
+  outputFileTracingRoot: __dirname,
   serverExternalPackages: ['@prisma/client', '@prisma/adapter-pg', 'pg', 'bcryptjs', 'nodemailer', 'mongoose'],
   eslint: {
     ignoreDuringBuilds: true,

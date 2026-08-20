@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the CampaignDonation record and update the Campaign's raisedAmount in a transaction!
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Create donation record
       const donation = await (tx as any).campaignDonation.create({
         data: {

@@ -325,7 +325,7 @@ export default function CampaignWizard({ mode, campaignId }: { mode: "create" | 
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout noPadding>
       <div className="h-[calc(100vh-65px)] bg-slate-50 flex flex-col overflow-hidden">
         {/* Top bar */}
         <div className="h-14 shrink-0 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm z-30">
