@@ -37,6 +37,10 @@ import {
   ArchiveBoxIcon,
   EnvelopeIcon,
   Squares2X2Icon,
+  HeartIcon,
+  FilmIcon,
+  CurrencyDollarIcon,
+  RectangleStackIcon,
 } from '@heroicons/react/24/outline';
 import { Avatar } from '@/components/ui';
 import ResultsLogo from '@/Results_logo.png';
@@ -85,7 +89,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Broadcast', href: '/dashboard/broadcast', icon: MegaphoneIcon, roles: ['super_admin', 'admin'] as const, action: 'broadcast.list' },
     { name: 'Newsletter', href: '/dashboard/newsletter', icon: EnvelopeIcon, roles: ['super_admin', 'admin'] as const, action: 'newsletter.list' },
     { name: 'Results.com CMS', href: '/dashboard/homepage', icon: Squares2X2Icon, roles: ['super_admin', 'admin'] as const, action: 'landingContent.list' },
-    { name: 'Results.org CMS', href: '/dashboard/results-homepage', icon: GlobeAltIcon, roles: ['super_admin', 'admin'] as const, action: 'landingContent.list' },
+    {
+      name: 'R3sults.org CMS',
+      icon: HeartIcon,
+      roles: ['super_admin', 'admin'] as const,
+      children: [
+        { name: 'Website CMS', href: '/dashboard/results-homepage', icon: GlobeAltIcon, roles: ['super_admin', 'admin'] as const },
+        { name: 'Campaigns', href: '/dashboard/r3sults-cms', icon: RectangleStackIcon, roles: ['super_admin', 'admin'] as const },
+        { name: 'Donations', href: '/dashboard/r3sults-cms/donations', icon: CurrencyDollarIcon, roles: ['super_admin', 'admin'] as const },
+      ],
+    },
     { name: 'Adjusters', href: '/dashboard/adjusters', icon: ClipboardDocumentCheckIcon, roles: ['super_admin', 'admin'] as const, action: 'adjusters.list' },
     { name: 'In-Stock Management', href: '/dashboard/resources', icon: CubeIcon, roles: ['super_admin', 'admin'] as const, action: 'resources.list' },
     { name: 'Products', href: '/dashboard/merchandise', icon: ShoppingBagIcon, roles: ['super_admin', 'admin'] as const, action: 'products.list' },

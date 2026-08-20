@@ -51,7 +51,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, icon, onMenuClick }) =
 
   return (
     <header className="sticky top-0 z-30 bg-[var(--bg-secondary)]/80 backdrop-blur-xl border-b border-[var(--border-color)]">
-      <div className="flex items-center justify-between px-6 lg:px-8 py-5">
+      <div className="flex items-center justify-between px-6 lg:px-8 py-2">
         {/* Left: Menu + Title */}
         <div className="flex items-center gap-5">
           <button

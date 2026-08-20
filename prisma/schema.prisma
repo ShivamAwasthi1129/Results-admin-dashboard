@@ -1,5 +1,5 @@
-// Prisma schema for Results admin dashboard (PostgreSQL via driver adapter)
-// Run: npx prisma generate
+// Prisma schema for Results admin dashboard
+// URL is configured via prisma.config.ts (Prisma 7)
 
 generator client {
   provider        = "prisma-client-js"
@@ -8,7 +8,76 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("POSTGRES_URI")
+}
+
+model Campaign {
+  id              String             @id @default(cuid())
+  title           String
+  slug            String             @unique
+  subtitle        String?
+  type            String
+  category        String?
+  status          String             @default("DRAFT")
+  fontStyle       String?            @default("Classic")
+  primaryColor    String?            @default("#991B1B")
+  colorMode       String?            @default("Light")
+  backgroundStyle String?            @default("Simple")
+  backgroundTheme String?
+  organization    String?
+  location        String?
+  startDate       DateTime?
+  endDate         DateTime?
+  salesOpenDate   DateTime?
+  salesCloseDate  DateTime?
+  recurrence      String?            @default("once")
+  description     String?
+  bannerUrl       String?
+  bannerPublicId  String?
+  bannerType      String?            @default("image")
+  logoUrl         String?
+  logoPublicId    String?
+  goalAmount      Float?
+  raisedAmount    Float?             @default(0)
+  donationConfig  Json?
+  seoData         Json?
+  publishedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  media           CampaignMedia[]
+  donations       CampaignDonation[]
+}
+
+model CampaignMedia {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type        String
+  url         String
+  publicId    String
+  altText     String?
+  category    String?
+  sizeBytes   Int?
+  createdAt   DateTime @default(now())
+}
+
+model CampaignDonation {
+  id                String   @id @default(cuid())
+  campaignId        String
+  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  donorFirstName    String?
+  donorLastName     String?
+  donorEmail        String?
+  donorPhone        String?
+  amount            Float
+  currency          String   @default("usd")
+  recurring         Boolean  @default(false)
+  recurringInterval String?
+  stripeSessionId   String?
+  stripePaymentId   String?
+  status            String   @default("pending")
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model AdminShelter {

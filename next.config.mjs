@@ -6,6 +6,7 @@ const getBackendUrl = () => {
 };
 
 const nextConfig = {
+  serverExternalPackages: ['@prisma/client', '@prisma/adapter-pg', 'pg', 'bcryptjs', 'nodemailer', 'mongoose'],
   eslint: {
     ignoreDuringBuilds: true,
   },
