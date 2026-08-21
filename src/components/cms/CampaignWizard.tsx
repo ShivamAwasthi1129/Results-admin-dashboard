@@ -463,7 +463,7 @@ export default function CampaignWizard({ mode, campaignId }: { mode: "create" | 
                   ? "opacity-100 scale-100 pointer-events-auto z-10"
                   : "opacity-0 scale-95 pointer-events-none z-0"
               }`}>
-                <div className="h-[90%] max-h-[550px] min-h-[430px] aspect-[1/2] bg-[#101014] rounded-[40px] p-[6px] shadow-2xl relative border-2 border-[#2e2f33] flex flex-col mx-auto">
+                <div className="w-[270px] h-[540px] max-h-[90%] bg-[#101014] rounded-[40px] p-[6px] shadow-2xl relative border-2 border-[#2e2f33] flex flex-col mx-auto shrink-0 min-w-0">
                   {/* Dynamic Island pill notch */}
                   <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-[#101014] rounded-full z-30 flex items-center justify-between px-2">
                     <div className="w-2 h-2 rounded-full bg-[#18181b] border border-slate-800" />
@@ -592,6 +592,8 @@ function Step2Title({ data, up }: any) {
 
 // ─── Step 3: Dates ────────────────────────────────────────────────────────────
 function Step3Dates({ data, up }: any) {
+  const datesSelected = !!data.startDate && !!data.endDate;
+
   return (
     <div className="space-y-6">
       <div>
@@ -603,13 +605,41 @@ function Step3Dates({ data, up }: any) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Start Date</label>
-            <input type="datetime-local" value={data.startDate} onChange={e => up({ startDate: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:border-indigo-600 text-sm" />
+            <input 
+              type="datetime-local" 
+              value={data.startDate} 
+              onChange={e => {
+                const newStart = e.target.value;
+                const patch: any = { startDate: newStart };
+                if (data.salesOpenDate && newStart && data.salesOpenDate < newStart) {
+                  patch.salesOpenDate = newStart;
+                }
+                if (data.salesCloseDate && newStart && data.salesCloseDate < newStart) {
+                  patch.salesCloseDate = newStart;
+                }
+                up(patch);
+              }}
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:border-indigo-600 text-sm" 
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">End Date</label>
-            <input type="datetime-local" value={data.endDate} onChange={e => up({ endDate: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:border-indigo-600 text-sm" />
+            <input 
+              type="datetime-local" 
+              value={data.endDate} 
+              onChange={e => {
+                const newEnd = e.target.value;
+                const patch: any = { endDate: newEnd };
+                if (data.salesOpenDate && newEnd && data.salesOpenDate > newEnd) {
+                  patch.salesOpenDate = newEnd;
+                }
+                if (data.salesCloseDate && newEnd && data.salesCloseDate > newEnd) {
+                  patch.salesCloseDate = newEnd;
+                }
+                up(patch);
+              }}
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:border-indigo-600 text-sm" 
+            />
           </div>
         </div>
         <div>
@@ -623,19 +653,53 @@ function Step3Dates({ data, up }: any) {
           </select>
         </div>
       </div>
-      <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <span className="font-semibold text-slate-800 text-sm">Donation Window</span>
+      <div
+        className={`space-y-4 p-5 rounded-2xl border shadow-sm transition-all duration-300 ${
+          !datesSelected
+            ? "opacity-50 bg-slate-50 border-slate-100 cursor-not-allowed"
+            : "bg-white border-slate-200"
+        }`}
+      >
+        <span className={`font-semibold text-sm ${!datesSelected ? "text-slate-400" : "text-slate-800"}`}>Donation Window</span>
+        {!datesSelected && (
+          <p className="text-xs text-amber-600 font-medium">⚠️ Please select Campaign Start &amp; End Dates first to enable the donation window.</p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Donations Open</label>
-            <input type="datetime-local" value={data.salesOpenDate} onChange={e => up({ salesOpenDate: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:border-indigo-600 text-sm" />
+            <input 
+              type="datetime-local" 
+              value={data.salesOpenDate} 
+              disabled={!datesSelected}
+              min={data.startDate || undefined}
+              max={data.endDate || undefined}
+              onChange={e => {
+                let val = e.target.value;
+                if (data.startDate && val < data.startDate) val = data.startDate;
+                if (data.endDate && val > data.endDate) val = data.endDate;
+                up({ salesOpenDate: val });
+              }}
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:border-indigo-600 text-sm disabled:cursor-not-allowed disabled:opacity-60 disabled:pointer-events-none" 
+            />
             <p className="text-xs text-slate-400 mt-1">If empty, opens on campaign creation.</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Donations Close</label>
-            <input type="datetime-local" value={data.salesCloseDate} onChange={e => up({ salesCloseDate: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:border-indigo-600 text-sm" />
+            <input 
+              type="datetime-local" 
+              value={data.salesCloseDate} 
+              disabled={!datesSelected}
+              min={data.salesOpenDate || data.startDate || undefined}
+              max={data.endDate || undefined}
+              onChange={e => {
+                let val = e.target.value;
+                const minVal = data.salesOpenDate || data.startDate;
+                if (minVal && val < minVal) val = minVal;
+                if (data.endDate && val > data.endDate) val = data.endDate;
+                up({ salesCloseDate: val });
+              }}
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:border-indigo-600 text-sm disabled:cursor-not-allowed disabled:opacity-60" 
+            />
             <p className="text-xs text-slate-400 mt-1">If empty, closes when campaign ends.</p>
           </div>
         </div>
@@ -1003,8 +1067,9 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
   // ─── Desktop / Tablet View (2 Columns matching Zeffy desktop reference) ──────
   if (mode === "desktop") {
     return (
-      <div className="w-full min-h-full p-4 flex flex-col justify-between text-[11px]" style={bgStyle}>
-        <div className="grid grid-cols-2 gap-4 items-start">
+      <div className="w-full min-h-full p-4 flex flex-col justify-between text-[11px] relative overflow-hidden" style={bgStyle}>
+        <BackgroundEffects data={data} isDark={isDark} primaryColor={primaryColor} />
+        <div className="grid grid-cols-2 gap-4 items-start relative z-10">
           {/* Left Column: Banner + Hosted by + Description */}
           <div className="space-y-2.5">
             <div className="relative rounded-xl overflow-hidden aspect-[4/3]" style={{ background: data.bannerUrl ? undefined : `linear-gradient(135deg,${primaryColor}44,${primaryColor}11)` }}>
@@ -1026,7 +1091,7 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
             {/* Description */}
             <div className="space-y-1 pt-1">
               <p className="font-bold text-[10px]" style={{ color: textColor }}>About this event</p>
-              <p className="text-[9px] line-clamp-3 leading-relaxed" style={{ color: mutedColor }}>
+              <p className="text-[9px] line-clamp-3 leading-relaxed break-words" style={{ color: mutedColor }}>
                 {data.description || "Excitement is in the air! Get ready to be part of something extraordinary..."}
               </p>
             </div>
@@ -1035,12 +1100,12 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
           {/* Right Column: Title + Subtitle + Dates + Tickets / Donate */}
           <div className="space-y-2">
             <div>
-              <h2 className={`text-base font-extrabold leading-tight ${fontClass}`} style={{ color: textColor }}>
+              <h2 className={`text-base font-extrabold leading-tight break-words ${fontClass}`} style={{ color: textColor }}>
                 {data.title || "Campaign Title"}
               </h2>
               {/* Step 2 Subtitle / Tagline display */}
               {data.subtitle && (
-                <p className="text-[11px] font-medium leading-normal mt-1" style={{ color: primaryColor }}>
+                <p className="text-[11px] font-medium leading-normal mt-1 break-words" style={{ color: primaryColor }}>
                   {data.subtitle}
                 </p>
               )}
@@ -1079,11 +1144,11 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
             <div className="space-y-1.5">
               {data.tiers.slice(0, 2).map((tier: DonationTier) => (
                 <div key={tier.id} className="p-2 rounded-xl border flex items-center justify-between" style={{ borderColor: primaryColor + "33", background: "rgba(255,255,255,0.6)" }}>
-                  <div>
-                    <span className="text-[10px] font-bold block" style={{ color: textColor }}>{tier.name}</span>
+                  <div className="min-w-0 mr-2 flex-1">
+                    <span className="text-[10px] font-bold block truncate" style={{ color: textColor }}>{tier.name}</span>
                     <span className="text-[11px] font-extrabold" style={{ color: primaryColor }}>${tier.amount}</span>
                   </div>
-                  <button className="px-2.5 py-1 rounded-lg text-white text-[9px] font-bold shadow-sm" style={{ background: primaryColor }}>
+                  <button className="px-2.5 py-1 rounded-lg text-white text-[9px] font-bold shadow-sm shrink-0" style={{ background: primaryColor }}>
                     Select
                   </button>
                 </div>
@@ -1101,9 +1166,10 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
 
   // ─── Mobile View (Phone Frame matching Zeffy reference) ──────────────────────
   return (
-    <div className="w-full min-h-full flex flex-col" style={bgStyle}>
+    <div className="w-full min-h-full flex flex-col relative overflow-hidden min-w-0" style={bgStyle}>
+      <BackgroundEffects data={data} isDark={isDark} primaryColor={primaryColor} />
       {/* Banner image */}
-      <div className="relative overflow-hidden shrink-0" style={{ height: "170px", background: data.bannerUrl ? undefined : `linear-gradient(135deg,${primaryColor}66,${primaryColor}22)` }}>
+      <div className="relative overflow-hidden shrink-0 z-10" style={{ height: "170px", background: data.bannerUrl ? undefined : `linear-gradient(135deg,${primaryColor}66,${primaryColor}22)` }}>
         {data.bannerUrl
           ? (data.bannerType === "video"
             ? <video src={data.bannerUrl} className="w-full h-full object-cover" autoPlay loop muted />
@@ -1114,31 +1180,31 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-3 flex-1" style={{ color: textColor }}>
+      <div className="p-4 space-y-3 flex-1 relative z-10 min-w-0 w-full" style={{ color: textColor }}>
         {/* Organization row */}
         <div className="flex items-center gap-2">
           {data.logoUrl
-            ? <img src={data.logoUrl} alt="Logo" className="w-6 h-6 rounded-full object-cover border border-gray-200" />
-            : <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: primaryColor }}>{(data.organization || "R")[0]}</div>
+            ? <img src={data.logoUrl} alt="Logo" className="w-6 h-6 rounded-full object-cover border border-gray-200 shrink-0" />
+            : <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ background: primaryColor }}>{(data.organization || "R")[0]}</div>
           }
-          <span className="text-xs font-semibold" style={{ color: mutedColor }}>{data.organization || "r3sults"}</span>
+          <span className="text-xs font-semibold truncate" style={{ color: mutedColor }}>{data.organization || "r3sults"}</span>
         </div>
 
         {/* Sales badge */}
         {data.salesOpenDate && (
-          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium border" style={{ borderColor: primaryColor + "66", color: primaryColor, background: primaryColor + "11" }}>
-            <CalendarIcon className="w-3 h-3" /> Sales open on {new Date(data.salesOpenDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium border max-w-full" style={{ borderColor: primaryColor + "66", color: primaryColor, background: primaryColor + "11" }}>
+            <CalendarIcon className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Sales open on {new Date(data.salesOpenDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
           </div>
         )}
 
         {/* Title */}
-        <div>
-          <h3 className={`text-lg font-bold leading-tight ${fontClass}`} style={{ color: textColor }}>
+        <div className="min-w-0 w-full break-words">
+          <h3 className={`text-lg font-bold leading-tight break-words ${fontClass}`} style={{ color: textColor }}>
             {data.title || "Campaign Title"}
           </h3>
           {/* Step 2 Subtitle / Tagline display */}
           {data.subtitle && (
-            <p className="text-xs font-medium leading-normal mt-1" style={{ color: primaryColor }}>
+            <p className="text-xs font-medium leading-normal mt-1 break-words" style={{ color: primaryColor }}>
               {data.subtitle}
             </p>
           )}
@@ -1146,16 +1212,16 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
 
         {/* Date & Time card */}
         {data.startDate && (
-          <div className="flex items-center gap-3 text-xs p-2 rounded-xl border" style={{ borderColor: primaryColor + "22", background: primaryColor + "08" }}>
+          <div className="flex items-center gap-3 text-xs p-2 rounded-xl border min-w-0 w-full" style={{ borderColor: primaryColor + "22", background: primaryColor + "08" }}>
             <div className="flex flex-col items-center justify-center w-8 h-8 rounded-lg bg-white shadow-sm font-bold shrink-0" style={{ color: primaryColor }}>
               <span className="text-[8px] uppercase">{new Date(data.startDate).toLocaleDateString("en-US", { month: "short" })}</span>
               <span className="text-xs leading-none">{new Date(data.startDate).getDate()}</span>
             </div>
-            <div>
-              <p className="font-semibold text-xs" style={{ color: textColor }}>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-xs truncate" style={{ color: textColor }}>
                 {new Date(data.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
               </p>
-              <p className="text-[10px]" style={{ color: mutedColor }}>
+              <p className="text-[10px] truncate" style={{ color: mutedColor }}>
                 {new Date(data.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 {data.endDate && <> – {new Date(data.endDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>}
               </p>
@@ -1163,25 +1229,25 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
           </div>
         )}
 
-        {/* Location card */}
+        {/* Location card — text wraps, never overflows the phone frame */}
         {data.location && (
-          <div className="flex items-center gap-2 text-xs p-2 rounded-xl border" style={{ borderColor: primaryColor + "22", background: primaryColor + "08", color: mutedColor }}>
-            <MapPinIcon className="w-4 h-4 shrink-0" style={{ color: primaryColor }} />
-            <span className="truncate text-xs font-medium" style={{ color: textColor }}>{data.location}</span>
+          <div className="flex items-start gap-2 text-xs p-2 rounded-xl border min-w-0 w-full overflow-hidden" style={{ borderColor: primaryColor + "22", background: primaryColor + "08", color: mutedColor }}>
+            <MapPinIcon className="w-4 h-4 shrink-0 mt-0.5" style={{ color: primaryColor }} />
+            <span className="break-words whitespace-normal text-xs font-medium min-w-0 flex-1" style={{ color: textColor, wordBreak: "break-word", overflowWrap: "anywhere" }}>{data.location}</span>
           </div>
         )}
 
         {/* Description snippet */}
         {data.description && (
-          <p className="text-xs leading-relaxed line-clamp-2" style={{ color: mutedColor }}>{data.description}</p>
+          <p className="text-xs leading-relaxed line-clamp-2 break-words" style={{ color: mutedColor }}>{data.description}</p>
         )}
 
         {/* Goal Progress */}
         {data.goalAmount && (
-          <div>
+          <div className="w-full">
             <div className="flex justify-between text-xs mb-1" style={{ color: mutedColor }}>
-              <span className="font-bold" style={{ color: primaryColor }}>$0 raised</span>
-              <span>${parseFloat(data.goalAmount || "0").toLocaleString()} goal</span>
+              <span className="font-bold shrink-0" style={{ color: primaryColor }}>$0 raised</span>
+              <span className="truncate ml-2">${parseFloat(data.goalAmount || "0").toLocaleString()} goal</span>
             </div>
             <div className="h-1.5 rounded-full overflow-hidden" style={{ background: primaryColor + "22" }}>
               <div className="h-full rounded-full" style={{ background: primaryColor, width: "0%" }} />
@@ -1191,20 +1257,325 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
 
         {/* Tiers */}
         {data.tiers.slice(0, 2).map((tier: DonationTier) => (
-          <div key={tier.id} className="p-2.5 rounded-xl border flex items-center justify-between" style={{ borderColor: primaryColor + "33" }}>
-            <div>
-              <span className="text-xs font-semibold block" style={{ color: textColor }}>{tier.name}</span>
-              {tier.description && <p className="text-[10px] mt-0.5 line-clamp-1" style={{ color: mutedColor }}>{tier.description}</p>}
+          <div key={tier.id} className="p-2.5 rounded-xl border flex items-center justify-between min-w-0 w-full" style={{ borderColor: primaryColor + "33" }}>
+            <div className="min-w-0 flex-1 mr-2">
+              <span className="text-xs font-semibold block truncate" style={{ color: textColor }}>{tier.name}</span>
+              {tier.description && <p className="text-[10px] mt-0.5 truncate" style={{ color: mutedColor }}>{tier.description}</p>}
             </div>
-            <span className="text-sm font-bold" style={{ color: primaryColor }}>${tier.amount}</span>
+            <span className="text-sm font-bold shrink-0" style={{ color: primaryColor }}>${tier.amount}</span>
           </div>
         ))}
 
         {/* CTA Button */}
-        <button className="w-full py-2.5 rounded-xl text-white text-sm font-bold mt-1 shadow-md" style={{ background: primaryColor }}>
+        <button className="w-full py-2.5 rounded-xl text-white text-sm font-bold mt-1 shadow-md shrink-0" style={{ background: primaryColor }}>
           Donate Now
         </button>
       </div>
     </div>
+  );
+}
+
+// ─── Background Effects Component and Logic ─────────────────────────────────
+const BACKGROUND_ANIMATIONS_CSS = `
+  @keyframes drift-particle {
+    0% { transform: translateY(0) translateX(0); opacity: 0.1; }
+    50% { transform: translateY(-40px) translateX(20px); opacity: 0.5; }
+    100% { transform: translateY(-80px) translateX(-10px); opacity: 0.1; }
+  }
+  @keyframes twinkle-star {
+    0%, 100% { opacity: 0.2; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
+  @keyframes rise-bubble {
+    0% { transform: translateY(110%) scale(0.8); opacity: 0; }
+    10% { opacity: 0.4; }
+    90% { opacity: 0.4; }
+    100% { transform: translateY(-10%) scale(1.1); opacity: 0; }
+  }
+  @keyframes fall-confetti {
+    0% { transform: translateY(-20px) rotate(0deg) translateX(0px); opacity: 1; }
+    50% { transform: translateY(200px) rotate(180deg) translateX(15px); opacity: 0.8; }
+    100% { transform: translateY(400px) rotate(360deg) translateX(-15px); opacity: 0; }
+  }
+  @keyframes move-wave {
+    0% { transform: translateX(0) translateZ(0) scaleY(1); }
+    50% { transform: translateX(-25%) translateZ(0) scaleY(0.85); }
+    100% { transform: translateX(-50%) translateZ(0) scaleY(1); }
+  }
+`;
+
+function BackgroundEffects({ data, isDark, primaryColor }: { data: any; isDark: boolean; primaryColor: string }) {
+  const { backgroundStyle, backgroundTheme } = data;
+  if (backgroundStyle === "Simple" || !backgroundStyle) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
+      <style dangerouslySetInnerHTML={{ __html: BACKGROUND_ANIMATIONS_CSS }} />
+      {backgroundStyle === "Animated" && <AnimatedEffects theme={backgroundTheme} primaryColor={primaryColor} />}
+      {backgroundStyle === "Static shapes" && <StaticShapeEffects theme={backgroundTheme} primaryColor={primaryColor} isDark={isDark} />}
+    </div>
+  );
+}
+
+function AnimatedEffects({ theme, primaryColor }: { theme: string; primaryColor: string }) {
+  const particleConfig = useRef(Array.from({ length: 15 }).map((_, i) => ({
+    left: `${(i * 7 + 13) % 100}%`,
+    top: `${(i * 13 + 7) % 100}%`,
+    size: `${(i % 3) * 2 + 3}px`,
+    delay: `${(i * 0.3) % 5}s`,
+    duration: `${(i * 1.5) % 8 + 8}s`,
+  })));
+
+  const starConfig = useRef(Array.from({ length: 15 }).map((_, i) => ({
+    left: `${(i * 9 + 5) % 100}%`,
+    top: `${(i * 11 + 17) % 80}%`,
+    size: `${(i % 2) * 1.5 + 2}px`,
+    delay: `${(i * 0.4) % 4}s`,
+    duration: `${(i % 3) * 1 + 2}s`,
+  })));
+
+  const bubbleConfig = useRef(Array.from({ length: 12 }).map((_, i) => ({
+    left: `${(i * 8 + 6) % 100}%`,
+    size: `${(i % 3) * 4 + 8}px`,
+    delay: `${(i * 0.5) % 6}s`,
+    duration: `${(i * 1.2) % 6 + 6}s`,
+    drift: `${((i % 2 === 0 ? 1 : -1) * (i * 5 + 10))}px`,
+  })));
+
+  const confettiColors = ["#f43f5e", "#3b82f6", "#10b981", "#eab308", "#8b5cf6", "#f97316"];
+  const confettiConfig = useRef(Array.from({ length: 18 }).map((_, i) => ({
+    left: `${(i * 6 + 4) % 100}%`,
+    color: confettiColors[i % confettiColors.length],
+    w: `${(i % 3) * 2 + 6}px`,
+    h: `${(i % 4) * 3 + 8}px`,
+    delay: `${(i * 0.3) % 5}s`,
+    duration: `${(i * 0.8) % 4 + 4}s`,
+  })));
+
+  if (theme === "Particles") {
+    return (
+      <>
+        {particleConfig.current.map((p, idx) => (
+          <div
+            key={idx}
+            className="absolute rounded-full pointer-events-none"
+            style={{
+              left: p.left,
+              top: p.top,
+              width: p.size,
+              height: p.size,
+              backgroundColor: primaryColor,
+              opacity: 0.15,
+              animationName: "drift-particle",
+              animationDuration: p.duration,
+              animationTimingFunction: "linear",
+              animationIterationCount: "infinite",
+              animationDelay: p.delay,
+            }}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (theme === "Stars") {
+    return (
+      <>
+        {starConfig.current.map((s, idx) => (
+          <div
+            key={idx}
+            className="absolute pointer-events-none flex items-center justify-center animate-pulse"
+            style={{
+              left: s.left,
+              top: s.top,
+              width: s.size,
+              height: s.size,
+              animationName: "twinkle-star",
+              animationDuration: s.duration,
+              animationTimingFunction: "ease-in-out",
+              animationIterationCount: "infinite",
+              animationDelay: s.delay,
+            }}
+          >
+            <svg viewBox="0 0 24 24" className="w-full h-full fill-current animate-spin" style={{ color: primaryColor, animationDuration: "12s" }}>
+              <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5Z" />
+            </svg>
+          </div>
+        ))}
+      </>
+    );
+  }
+
+  if (theme === "Bubbles") {
+    return (
+      <>
+        {bubbleConfig.current.map((b, idx) => (
+          <div
+            key={idx}
+            className="absolute rounded-full border pointer-events-none"
+            style={{
+              left: b.left,
+              bottom: "-20px",
+              width: b.size,
+              height: b.size,
+              borderColor: `${primaryColor}44`,
+              background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.8) 0%, ${primaryColor}11 100%)`,
+              animationName: "rise-bubble",
+              animationDuration: b.duration,
+              animationTimingFunction: "ease-in",
+              animationIterationCount: "infinite",
+              animationDelay: b.delay,
+            }}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (theme === "Confetti") {
+    return (
+      <>
+        {confettiConfig.current.map((c, idx) => (
+          <div
+            key={idx}
+            className="absolute pointer-events-none"
+            style={{
+              left: c.left,
+              top: "-20px",
+              width: c.w,
+              height: c.h,
+              backgroundColor: c.color,
+              borderRadius: "2px",
+              animationName: "fall-confetti",
+              animationDuration: c.duration,
+              animationTimingFunction: "linear",
+              animationIterationCount: "infinite",
+              animationDelay: c.delay,
+            }}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (theme === "Waves") {
+    return (
+      <div className="absolute inset-x-0 bottom-0 h-20 overflow-hidden pointer-events-none opacity-20">
+        <svg className="absolute w-[200%] h-full bottom-0 left-0" viewBox="0 0 1200 120" preserveAspectRatio="none" style={{ animation: "move-wave 12s linear infinite" }}>
+          <path d="M0,60 C150,90 350,30 500,60 C650,90 850,30 1000,60 C1150,90 1350,30 1500,60 L1500,120 L0,120 Z" fill={primaryColor} />
+        </svg>
+        <svg className="absolute w-[200%] h-full bottom-0 left-0 opacity-70" viewBox="0 0 1200 120" preserveAspectRatio="none" style={{ animation: "move-wave 8s linear infinite", animationDirection: "reverse" }}>
+          <path d="M0,50 C180,80 380,20 540,50 C700,80 900,20 1060,50 C1220,80 1420,20 1580,50 L1580,120 L0,120 Z" fill={primaryColor} />
+        </svg>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function StaticShapeEffects({ theme, primaryColor, isDark }: { theme: string; primaryColor: string; isDark: boolean }) {
+  const opacityClass = isDark ? "opacity-[0.18]" : "opacity-[0.13]";
+  const strokeColor = primaryColor;
+
+  const renderIcon = (type: string) => {
+    switch (type) {
+      case "leaf":
+        return (
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z M12 2v20 M8 12h8" stroke={strokeColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        );
+      case "book":
+        return (
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5V4.5z" stroke={strokeColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        );
+      case "cap":
+        return (
+          <path d="M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M22 7v10" stroke={strokeColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        );
+      case "heart":
+        return (
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill={strokeColor} />
+        );
+      case "cross":
+        return (
+          <path d="M12 2v20 M7 8h10" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" />
+        );
+      case "aid-cross":
+        return (
+          <path d="M19 10.5h-5.5V5h-3v5.5H5v3h5.5V19h3v-5.5H19v-3z" fill={strokeColor} />
+        );
+      case "music":
+        return (
+          <path d="M9 18V5l12-2v13 M9 10l12-2 M9 21a3 3 0 1 1-3-3 3 3 0 0 1 3 3zm12-2a3 3 0 1 1-3-3 3 3 0 0 1 3 3z" stroke={strokeColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        );
+      case "paw":
+        return (
+          <path d="M12 14a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm-4-4a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-6-6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm4 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill={strokeColor} />
+        );
+      case "tree":
+        return (
+          <path d="M12 2L3 17h6v5h6v-5h6L12 2z" stroke={strokeColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        );
+      case "globe":
+        return (
+          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke={strokeColor} strokeWidth="1.5" fill="none" />
+        );
+      case "trophy":
+        return (
+          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-2.34M12 2a6 6 0 0 1 6 6v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z" stroke={strokeColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        );
+      case "circle":
+        return <circle cx="12" cy="12" r="10" stroke={strokeColor} strokeWidth="1.5" fill="none" />;
+      case "triangle":
+        return <path d="M12 2L2 22h20L12 2z" stroke={strokeColor} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
+      case "square":
+        return <rect x="3" y="3" width="18" height="18" rx="2" stroke={strokeColor} strokeWidth="1.5" fill="none" />;
+      default:
+        return <circle cx="12" cy="12" r="4" fill={strokeColor} />;
+    }
+  };
+
+  const getIconsForTheme = (t: string): string[] => {
+    switch (t) {
+      case "Abstract": return ["circle", "triangle", "square", "circle", "triangle", "square"];
+      case "School": return ["book", "cap", "book", "cap", "book", "cap"];
+      case "Animals": return ["paw", "leaf", "paw", "leaf", "paw", "leaf"];
+      case "Aid": return ["heart", "aid-cross", "heart", "aid-cross", "heart", "aid-cross"];
+      case "Theatre": return ["music", "circle", "music", "circle", "music", "circle"];
+      case "Faith": return ["cross", "circle", "cross", "circle", "cross", "circle"];
+      case "Environment": return ["leaf", "tree", "globe", "leaf", "tree", "globe"];
+      case "Health": return ["heart", "aid-cross", "heart", "aid-cross", "heart", "aid-cross"];
+      case "Sports": return ["trophy", "circle", "trophy", "circle", "trophy", "circle"];
+      default: return ["circle", "triangle", "square", "circle", "triangle", "square"];
+    }
+  };
+
+  const icons = getIconsForTheme(theme);
+
+  const positions = [
+    { top: "5%",  left: "5%",  transform: "rotate(15deg) scale(4)" },
+    { top: "10%", right: "5%", transform: "rotate(-25deg) scale(5)" },
+    { top: "45%", left: "2%",  transform: "rotate(10deg) scale(3.5)" },
+    { top: "40%", right: "2%", transform: "rotate(-15deg) scale(3.5)" },
+    { bottom: "10%", left: "8%",  transform: "rotate(-10deg) scale(4)" },
+    { bottom: "5%",  right: "8%", transform: "rotate(30deg) scale(3.5)" },
+  ];
+
+  return (
+    <>
+      {positions.map((pos, idx) => (
+        <svg
+          key={idx}
+          viewBox="0 0 24 24"
+          className={`absolute pointer-events-none w-8 h-8 ${opacityClass}`}
+          style={{
+            ...pos,
+            transition: "all 0.5s ease",
+          } as any}
+        >
+          {renderIcon(icons[idx % icons.length])}
+        </svg>
+      ))}
+    </>
   );
 }

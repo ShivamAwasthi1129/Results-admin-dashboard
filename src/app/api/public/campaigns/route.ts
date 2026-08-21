@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
         title: true,
         slug: true,
         subtitle: true,
+        description: true,
         type: true,
         category: true,
         organization: true,

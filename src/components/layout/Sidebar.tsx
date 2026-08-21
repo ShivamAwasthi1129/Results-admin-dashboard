@@ -192,10 +192,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     setExpandedItems(newExpanded);
   };
 
+  // Routes that are prefixes of sibling routes need exact matching to avoid
+  // multiple items lighting up at once (e.g. /dashboard/r3sults-cms vs /dashboard/r3sults-cms/donations)
+  const EXACT_MATCH_ROUTES = [
+    '/dashboard/r3sults-cms',
+    '/dashboard/results-homepage',
+    '/dashboard/r3sults-cms/donations',
+    '/dashboard/r3sults-cms/media',
+  ];
+
   const isActive = (href?: string) => {
     if (!href) return false;
     if (href === '/dashboard') {
       return pathname === '/dashboard';
+    }
+    // Use exact match for routes that share a common prefix with siblings
+    if (EXACT_MATCH_ROUTES.includes(href)) {
+      return pathname === href || pathname === href + '/';
     }
     return pathname.startsWith(href);
   };

@@ -2,7 +2,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout";
 import { useAuth } from "@/context/AuthContext";
-import { CurrencyDollarIcon, ArrowDownTrayIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import {
+  CurrencyDollarIcon,
+  ArrowDownTrayIcon,
+  MagnifyingGlassIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 
 interface Donation {
   id: string;
@@ -36,6 +41,13 @@ export default function DonationsClient() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [totalRaised, setTotalRaised] = useState(0);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToastMsg({ text, type });
+    setTimeout(() => setToastMsg(null), 3000);
+  };
 
   const fetchDonations = useCallback(async () => {
     setIsLoading(true);
@@ -77,6 +89,33 @@ export default function DonationsClient() {
       fetchDonations();
     }
   }, [fetchDonations, authToken]);
+
+  const handleDeleteDonation = async (d: Donation) => {
+    const donorName = `${d.donorFirstName || ""} ${d.donorLastName || ""}`.trim() || d.donorEmail || "this donation";
+    if (!confirm(`Are you sure you want to delete the $${d.amount} donation from ${donorName}? This will deduct $${d.amount} from the campaign's raised total.`)) {
+      return;
+    }
+
+    setActionLoading(d.id);
+    try {
+      const res = await fetch(`/api/cms/donations?id=${d.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const result = await res.json();
+      if (result.success) {
+        setDonations(prev => prev.filter(item => item.id !== d.id));
+        setTotalRaised(prev => Math.max(0, prev - d.amount));
+        showToast("Donation deleted and campaign amount updated successfully");
+      } else {
+        showToast(result.error || "Failed to delete donation", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Network error deleting donation", "error");
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleExportCSV = () => {
     if (donations.length === 0) return;
@@ -196,6 +235,7 @@ export default function DonationsClient() {
                     <th className="px-6 py-4">Type</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-color)]">
@@ -247,6 +287,16 @@ export default function DonationsClient() {
                           minute: "2-digit",
                         })}
                       </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => handleDeleteDonation(d)}
+                          disabled={actionLoading === d.id}
+                          className="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all disabled:opacity-50"
+                          title="Delete donation and deduct from campaign"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -254,7 +304,15 @@ export default function DonationsClient() {
             </div>
           )}
         </div>
+
+        {/* Toast */}
+        {toastMsg && (
+          <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl text-sm font-medium ${toastMsg.type === "success" ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}>
+            {toastMsg.text}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
 }
+

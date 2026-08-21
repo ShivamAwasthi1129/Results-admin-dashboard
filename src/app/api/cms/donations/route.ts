@@ -53,3 +53,56 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: "Donation ID is required" }, { status: 400 });
+    }
+
+    const prisma = await getPrismaClient();
+
+    // 1. Find donation record
+    const donation = await (prisma as any).campaignDonation.findUnique({
+      where: { id },
+      include: { campaign: true },
+    });
+
+    if (!donation) {
+      return NextResponse.json({ success: false, error: "Donation not found" }, { status: 404 });
+    }
+
+    // 2. Perform transaction: delete donation and decrement campaign raisedAmount
+    await prisma.$transaction(async (tx: any) => {
+      await (tx as any).campaignDonation.delete({
+        where: { id },
+      });
+
+      if (donation.campaignId && donation.amount > 0) {
+        const campaign = await (tx as any).campaign.findUnique({
+          where: { id: donation.campaignId },
+        });
+
+        if (campaign) {
+          const newRaised = Math.max(0, (campaign.raisedAmount || 0) - donation.amount);
+          await (tx as any).campaign.update({
+            where: { id: donation.campaignId },
+            data: { raisedAmount: newRaised },
+          });
+        }
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Donation deleted and campaign total updated successfully",
+    });
+  } catch (error: any) {
+    console.error("DELETE /api/cms/donations error:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
