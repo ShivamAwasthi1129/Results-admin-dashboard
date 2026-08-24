@@ -851,11 +851,11 @@ function Step7Media({ data, up, onBannerUpload, onLogoUpload, bannerInputRef, lo
         <input ref={bannerInputRef} type="file" accept={data.bannerType === "image" ? "image/*" : "video/*"}
           className="hidden" onChange={e => e.target.files?.[0] && onBannerUpload(e.target.files[0])} />
         {data.bannerUrl ? (
-          <div className="relative rounded-xl overflow-hidden aspect-video border border-slate-200">
+          <div className="relative rounded-xl overflow-hidden aspect-video border border-slate-200 bg-slate-950 flex items-center justify-center">
             {data.bannerType === "video"
-              ? <video src={data.bannerUrl} className="w-full h-full object-cover" controls />
-              : <img src={data.bannerUrl} alt="Banner" className="w-full h-full object-cover" />}
-            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+              ? <video src={data.bannerUrl} className="w-full h-full object-contain" controls />
+              : <img src={data.bannerUrl} alt="Banner" className="w-full h-full object-contain" />}
+            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-10">
               <button onClick={() => bannerInputRef.current?.click()} className="px-3 py-1.5 bg-white text-black rounded-xl text-xs font-semibold">Replace</button>
               <button onClick={() => up({ bannerUrl: "", bannerPublicId: "" })} className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-semibold">Delete</button>
             </div>
@@ -1072,18 +1072,23 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
         <div className="grid grid-cols-2 gap-4 items-start relative z-10">
           {/* Left Column: Banner + Hosted by + Description */}
           <div className="space-y-2.5">
-            <div className="relative rounded-xl overflow-hidden aspect-[4/3]" style={{ background: data.bannerUrl ? undefined : `linear-gradient(135deg,${primaryColor}44,${primaryColor}11)` }}>
-              {data.bannerUrl
-                ? (data.bannerType === "video"
-                  ? <video src={data.bannerUrl} className="w-full h-full object-cover" autoPlay loop muted />
-                  : <img src={data.bannerUrl} alt={data.title || "Banner"} className="w-full h-full object-cover" />)
-                : <div className="flex items-center justify-center h-full"><HeartIcon className="w-10 h-10 opacity-30" style={{ color: primaryColor }} /></div>
-              }
+            <div className="relative rounded-xl overflow-hidden bg-slate-950 flex flex-col items-center justify-center" style={{ background: data.bannerUrl ? "#090d16" : `linear-gradient(135deg,${primaryColor}44,${primaryColor}11)` }}>
+              {data.bannerUrl ? (
+                <>
+                  {data.bannerType === "video" ? (
+                    <video src={data.bannerUrl} className="relative z-10 w-full h-auto max-h-[400px] object-contain" autoPlay loop muted />
+                  ) : (
+                    <img src={data.bannerUrl} alt={data.title || "Banner"} className="relative z-10 w-full h-auto max-h-[400px] object-contain" />
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center justify-center w-full aspect-[4/3]"><HeartIcon className="w-10 h-10 opacity-30" style={{ color: primaryColor }} /></div>
+              )}
             </div>
             {/* Hosted by */}
             <div className="flex items-center gap-1.5">
               {data.logoUrl
-                ? <img src={data.logoUrl} alt="Logo" className="w-4 h-4 rounded-full object-cover" />
+                ? <img src={data.logoUrl} alt="Logo" className="w-4 h-4 rounded-full object-contain bg-white p-0.5" />
                 : <div className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: primaryColor }}>{(data.organization || "R")[0]}</div>
               }
               <span className="text-[10px] font-semibold" style={{ color: mutedColor }}>Hosted by {data.organization || "r3sults"}</span>
@@ -1169,14 +1174,19 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
     <div className="w-full min-h-full flex flex-col relative overflow-hidden min-w-0" style={bgStyle}>
       <BackgroundEffects data={data} isDark={isDark} primaryColor={primaryColor} />
       {/* Banner image */}
-      <div className="relative overflow-hidden shrink-0 z-10" style={{ height: "170px", background: data.bannerUrl ? undefined : `linear-gradient(135deg,${primaryColor}66,${primaryColor}22)` }}>
-        {data.bannerUrl
-          ? (data.bannerType === "video"
-            ? <video src={data.bannerUrl} className="w-full h-full object-cover" autoPlay loop muted />
-            : <img src={data.bannerUrl} alt={data.title || "Banner"} className="w-full h-full object-cover" />)
-          : <div className="flex items-center justify-center h-full"><HeartIcon className="w-12 h-12 opacity-30" style={{ color: primaryColor }} /></div>
-        }
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+      <div className="relative overflow-hidden shrink-0 z-10 flex flex-col items-center justify-center" style={{ background: data.bannerUrl ? "transparent" : `linear-gradient(135deg,${primaryColor}66,${primaryColor}22)` }}>
+        {data.bannerUrl ? (
+          <>
+            {data.bannerType === "video" ? (
+              <video src={data.bannerUrl} className="relative z-10 w-full h-auto max-h-[350px] object-contain block" autoPlay loop muted />
+            ) : (
+              <img src={data.bannerUrl} alt={data.title || "Banner"} className="relative z-10 w-full h-auto max-h-[350px] object-contain block" />
+            )}
+          </>
+        ) : (
+          <div className="flex items-center justify-center w-full h-[170px]"><HeartIcon className="w-12 h-12 opacity-30" style={{ color: primaryColor }} /></div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none z-20" />
       </div>
 
       {/* Content */}
@@ -1184,7 +1194,7 @@ function CampaignPreviewCard({ data, mode }: { data: any; mode: "mobile" | "desk
         {/* Organization row */}
         <div className="flex items-center gap-2">
           {data.logoUrl
-            ? <img src={data.logoUrl} alt="Logo" className="w-6 h-6 rounded-full object-cover border border-gray-200 shrink-0" />
+            ? <img src={data.logoUrl} alt="Logo" className="w-6 h-6 rounded-full object-contain bg-white p-0.5 border border-gray-200 shrink-0" />
             : <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ background: primaryColor }}>{(data.organization || "R")[0]}</div>
           }
           <span className="text-xs font-semibold truncate" style={{ color: mutedColor }}>{data.organization || "r3sults"}</span>
