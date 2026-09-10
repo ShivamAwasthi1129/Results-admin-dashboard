@@ -1,23 +1,39 @@
-﻿// src/app/api/public/maintenance/route.ts
+// src/app/api/public/maintenance/route.ts
 // Public API - No auth required. Used by results.org middleware to check maintenance state.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import path from 'path';
+import os from 'os';
 
-const CONFIG_PATH = path.join(process.cwd(), 'src', 'data', 'maintenance-config.json');
+const BUNDLED_PATH = path.join(process.cwd(), 'src', 'data', 'maintenance-config.json');
+const TMP_PATH = path.join(os.tmpdir(), 'maintenance-config.json');
 
-const DEFAULT_CONFIG = {
-  globalMaintenance: false,
-  routes: {},
-};
+let inMemoryConfig: any = null;
+
+async function readConfig() {
+  if (inMemoryConfig) return inMemoryConfig;
+
+  try {
+    const raw = await readFile(TMP_PATH, 'utf-8');
+    inMemoryConfig = JSON.parse(raw);
+    return inMemoryConfig;
+  } catch {}
+
+  try {
+    const raw = await readFile(BUNDLED_PATH, 'utf-8');
+    inMemoryConfig = JSON.parse(raw);
+    return inMemoryConfig;
+  } catch {}
+
+  return { globalMaintenance: false, routes: {} };
+}
 
 export async function GET(_req: NextRequest) {
   try {
-    const raw = await readFile(CONFIG_PATH, 'utf-8');
-    const config = JSON.parse(raw);
+    const config = await readConfig();
     return NextResponse.json(
-      { success: true, globalMaintenance: config.globalMaintenance, routes: config.routes },
+      { success: true, globalMaintenance: !!config.globalMaintenance, routes: config.routes || {} },
       { headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } }
     );
   } catch {
