@@ -1,0 +1,25 @@
+{
+  "globalMaintenance": false,
+  "routes": {
+    "/": false,
+    "/about": false,
+    "/campaigns": false,
+    "/disasters": false,
+    "/contact": false,
+    "/corporate-giving": false,
+    "/donation": false,
+    "/financials": false,
+    "/impact": false,
+    "/leadership": false,
+    "/partner": false,
+    "/preparedness": false,
+    "/press": false,
+    "/privacy": false,
+    "/stories": false,
+    "/terms": false,
+    "/transparency": false,
+    "/volunteer": false
+  },
+  "updatedAt": "2026-09-10T17:56:11.697Z",
+  "updatedBy": "admin"
+}

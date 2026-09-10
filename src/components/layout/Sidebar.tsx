@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -97,6 +97,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         { name: 'Website CMS', href: '/dashboard/results-homepage', icon: GlobeAltIcon, roles: ['super_admin', 'admin'] as const },
         { name: 'Campaigns', href: '/dashboard/r3sults-cms', icon: RectangleStackIcon, roles: ['super_admin', 'admin'] as const },
         { name: 'Donations', href: '/dashboard/r3sults-cms/donations', icon: CurrencyDollarIcon, roles: ['super_admin', 'admin'] as const },
+        { name: 'Maintenance Page', href: '/dashboard/maintenance', icon: WrenchScrewdriverIcon, roles: ['super_admin', 'admin'] as const },
       ],
     },
     { name: 'Adjusters', href: '/dashboard/adjusters', icon: ClipboardDocumentCheckIcon, roles: ['super_admin', 'admin'] as const, action: 'adjusters.list' },
@@ -199,6 +200,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     '/dashboard/results-homepage',
     '/dashboard/r3sults-cms/donations',
     '/dashboard/r3sults-cms/media',
+    '/dashboard/maintenance',
   ];
 
   const isActive = (href?: string) => {

@@ -5,7 +5,7 @@
     "notes": [
       "This file focuses on editable content. Styling classes and layout-only values are intentionally excluded.",
       "SVG icon paths can be managed as icon keys or raw SVG in CMS depending on admin capability.",
-      "Home uses shared components (testimonials, guides, community, footer) included below."
+      "Home uses shared components (testimonials, guides, community,   footer) included below."
     ]
   },
   "shared": {
