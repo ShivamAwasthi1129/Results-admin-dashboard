@@ -1,13 +1,7 @@
-// src/app/api/results-cms/maintenance/route.ts
-// Private API: GET and POST for the admin dashboard Maintenance Page UI
-
 import { NextRequest, NextResponse } from 'next/server';
-import { readFile, writeFile } from 'fs/promises';
-import path from 'path';
-import os from 'os';
+import { PrismaClient } from '@prisma/client';
 
-const BUNDLED_PATH = path.join(process.cwd(), 'src', 'data', 'maintenance-config.json');
-const TMP_PATH = path.join(os.tmpdir(), 'maintenance-config.json');
+const prisma = new PrismaClient();
 
 const DEFAULT_CONFIG = {
   globalMaintenance: false,
@@ -31,44 +25,15 @@ const DEFAULT_CONFIG = {
     '/transparency': false,
     '/volunteer': false,
   },
-  updatedAt: null as string | null,
-  updatedBy: null as string | null,
+  updatedAt: null,
+  updatedBy: null,
 };
 
-let inMemoryConfig: any = null;
-
 async function readConfig() {
-  if (inMemoryConfig) return inMemoryConfig;
-
-  try {
-    const raw = await readFile(TMP_PATH, 'utf-8');
-    inMemoryConfig = JSON.parse(raw);
-    return inMemoryConfig;
-  } catch {}
-
-  try {
-    const raw = await readFile(BUNDLED_PATH, 'utf-8');
-    inMemoryConfig = JSON.parse(raw);
-    return inMemoryConfig;
-  } catch {}
-
-  return DEFAULT_CONFIG;
-}
-
-async function writeConfig(newConfig: any) {
-  inMemoryConfig = newConfig;
-
-  // 1. Write to /tmp (always writable in Vercel / serverless functions)
-  try {
-    await writeFile(TMP_PATH, JSON.stringify(newConfig, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('[maintenance] Failed to write to /tmp:', err);
-  }
-
-  // 2. Write to project src/data/ (works in local dev, fails silently on Vercel read-only FS)
-  try {
-    await writeFile(BUNDLED_PATH, JSON.stringify(newConfig, null, 2), 'utf-8');
-  } catch {}
+  const setting = await prisma.systemSetting.findUnique({
+    where: { id: 'maintenance_config' },
+  });
+  return setting ? setting.value : DEFAULT_CONFIG;
 }
 
 export async function GET(_req: NextRequest) {
@@ -98,17 +63,11 @@ export async function POST(req: NextRequest) {
       updatedBy: body.updatedBy || 'admin',
     };
 
-    await writeConfig(updated);
-
-    // Sync with local client app (results.org) if running on local environment
-    try {
-      const clientConfigPath = path.join(process.cwd(), '..', 'results.org', 'maintenance-config.json');
-      await writeFile(
-        clientConfigPath,
-        JSON.stringify({ globalMaintenance: updated.globalMaintenance, routes: updated.routes }, null, 2),
-        'utf-8'
-      );
-    } catch {}
+    await prisma.systemSetting.upsert({
+      where: { id: 'maintenance_config' },
+      update: { value: updated },
+      create: { id: 'maintenance_config', value: updated },
+    });
 
     return NextResponse.json({ success: true, config: updated });
   } catch (error: any) {

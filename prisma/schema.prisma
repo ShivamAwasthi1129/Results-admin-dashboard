@@ -105,3 +105,8 @@ model AdminShelter {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+model SystemSetting {
+  id        String   @id @default("maintenance_config")
+  value     Json
+  updatedAt DateTime @updatedAt
+}
