@@ -1,15 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-let prisma: PrismaClient | undefined;
-function getPrisma() {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
+import { getPrismaClient } from '@/lib/prisma';
 
 const DEFAULT_CONFIG = {
   globalMaintenance: false,
@@ -38,7 +30,7 @@ const DEFAULT_CONFIG = {
 };
 
 async function readConfig() {
-  const db = getPrisma();
+  const db = await getPrismaClient();
   const setting = await db.systemSetting.findUnique({
     where: { id: 'maintenance_config' },
   });
@@ -72,7 +64,7 @@ export async function POST(req: NextRequest) {
       updatedBy: body.updatedBy || 'admin',
     };
 
-    const db = getPrisma();
+    const db = await getPrismaClient();
     await db.systemSetting.upsert({
       where: { id: 'maintenance_config' },
       update: { value: updated },
