@@ -9,10 +9,10 @@ export async function GET(_req: NextRequest) {
       where: { id: 'maintenance_config' },
     });
     
-    const config = setting ? setting.value : { globalMaintenance: false, routes: {} };
+    const config: any = setting ? setting.value : { globalMaintenance: false, routes: {} };
 
     return NextResponse.json(
-      { success: true, globalMaintenance: !!config.globalMaintenance, routes: config.routes || {} },
+      { success: true, globalMaintenance: !!config?.globalMaintenance, routes: config?.routes || {} },
       { headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } }
     );
   } catch (err) {

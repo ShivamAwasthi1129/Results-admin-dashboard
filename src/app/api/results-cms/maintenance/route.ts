@@ -33,7 +33,7 @@ async function readConfig() {
   const setting = await prisma.systemSetting.findUnique({
     where: { id: 'maintenance_config' },
   });
-  return setting ? setting.value : DEFAULT_CONFIG;
+  return setting ? (setting.value as any) : DEFAULT_CONFIG;
 }
 
 export async function GET(_req: NextRequest) {
@@ -51,14 +51,14 @@ export async function GET(_req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const current = await readConfig();
+    const current: any = await readConfig();
 
     const updated = {
       globalMaintenance:
         typeof body.globalMaintenance === 'boolean'
           ? body.globalMaintenance
-          : current.globalMaintenance,
-      routes: { ...current.routes, ...(body.routes || {}) },
+          : current?.globalMaintenance,
+      routes: { ...(current?.routes || {}), ...(body.routes || {}) },
       updatedAt: new Date().toISOString(),
       updatedBy: body.updatedBy || 'admin',
     };
