@@ -3,11 +3,18 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient | undefined;
+function getPrisma() {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
+  return prisma;
+}
 
 export async function GET(_req: NextRequest) {
   try {
-    const setting = await prisma.systemSetting.findUnique({
+    const db = getPrisma();
+    const setting = await db.systemSetting.findUnique({
       where: { id: 'maintenance_config' },
     });
     
