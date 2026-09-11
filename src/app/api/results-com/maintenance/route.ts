@@ -1,0 +1,85 @@
+﻿export const dynamic = 'force-dynamic';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getPrismaClient } from '@/lib/prisma';
+
+const DEFAULT_CONFIG = {
+  globalMaintenance: false,
+  routes: {
+    '/': false,
+    '/about': false,
+    '/contact': false,
+    '/login': false,
+    '/register': false,
+    '/signup': false,
+    '/shop': false,
+    '/merch': false,
+    '/news': false,
+    '/news-and-media': false,
+    '/privacy-policy': false,
+    '/terms-and-condition': false,
+    '/checkout': false,
+    '/checkout-access': false,
+  },
+  updatedAt: null,
+  updatedBy: null,
+};
+
+async function readConfig() {
+  const db = await getPrismaClient();
+  const setting = await db.systemSetting.findUnique({
+    where: { id: 'results_com_maintenance_config' },
+  });
+  return setting ? (setting.value as any) : DEFAULT_CONFIG;
+}
+
+export async function GET(_req: NextRequest) {
+  try {
+    const config = await readConfig();
+    return NextResponse.json(
+      { success: true, config },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const current: any = await readConfig();
+
+    const updated = {
+      globalMaintenance:
+        typeof body.globalMaintenance === 'boolean'
+          ? body.globalMaintenance
+          : current?.globalMaintenance,
+      routes: { ...(current?.routes || {}), ...(body.routes || {}) },
+      updatedAt: new Date().toISOString(),
+      updatedBy: body.updatedBy || 'admin',
+    };
+
+    const db = await getPrismaClient();
+    await db.systemSetting.upsert({
+      where: { id: 'results_com_maintenance_config' },
+      update: { value: updated },
+      create: { id: 'results_com_maintenance_config', value: updated },
+    });
+
+    return NextResponse.json({ success: true, config: updated });
+  } catch (error: any) {
+    console.error('[results-com maintenance POST error]', error);
+    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+  }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}

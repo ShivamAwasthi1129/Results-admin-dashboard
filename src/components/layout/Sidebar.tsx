@@ -88,7 +88,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     { name: 'Damage Reports', href: '/dashboard/damage-reports', icon: DocumentTextIcon, roles: ['super_admin', 'admin'] as const, action: 'damageReports.list' },
     { name: 'Broadcast', href: '/dashboard/broadcast', icon: MegaphoneIcon, roles: ['super_admin', 'admin'] as const, action: 'broadcast.list' },
     { name: 'Newsletter', href: '/dashboard/newsletter', icon: EnvelopeIcon, roles: ['super_admin', 'admin'] as const, action: 'newsletter.list' },
-    { name: 'Results.com CMS', href: '/dashboard/homepage', icon: Squares2X2Icon, roles: ['super_admin', 'admin'] as const, action: 'landingContent.list' },
+    {
+      name: 'Results.com CMS',
+      icon: Squares2X2Icon,
+      roles: ['super_admin', 'admin'] as const,
+      children: [
+        { name: 'Homepage', href: '/dashboard/homepage', icon: GlobeAltIcon, roles: ['super_admin', 'admin'] as const, action: 'landingContent.list' },
+        { name: 'Maintenance Page', href: '/dashboard/results-com-maintenance', icon: WrenchScrewdriverIcon, roles: ['super_admin', 'admin'] as const },
+      ],
+    },
     {
       name: 'R3sults.org CMS',
       icon: HeartIcon,
@@ -201,6 +209,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     '/dashboard/r3sults-cms/donations',
     '/dashboard/r3sults-cms/media',
     '/dashboard/maintenance',
+    '/dashboard/results-com-maintenance',
+    '/dashboard/homepage',
   ];
 
   const isActive = (href?: string) => {
@@ -380,3 +390,4 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
 };
 
 export default Sidebar;
+
